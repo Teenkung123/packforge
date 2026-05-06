@@ -20,6 +20,9 @@
 		],
 		"client": [
 			"com.teenkung.packforge.client.PackForgeClient"
+		],
+		"modmenu": [
+			"com.teenkung.packforge.client.config.PackForgeModMenuApi"
 		]
 	},
 	"mixins": [

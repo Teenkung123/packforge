@@ -5,6 +5,7 @@
 	"mixins": [
 		"loader.CompositePackResourcesMixin",
 		"loader.FilePackResourcesMixin",
+		"loader.SharedZipFileAccessAccessor",
 		"loader.SharedZipFileAccessMixin",
 		"observe.ReloadableResourceManagerMixin",
 		"observe.SimpleReloadInstanceMixin"

@@ -2,6 +2,7 @@ package com.teenkung.packforge.config;
 
 public final class FeatureFlags {
 	public static boolean loaderIndexEnabled() { return PackForgeConfig.get().loaderIndexEnabled; }
+	public static boolean loaderZipPoolEnabled() { return PackForgeConfig.get().loaderZipPoolEnabled; }
 	public static boolean loaderTimingsEnabled() { return PackForgeConfig.get().loaderTimingsEnabled; }
 	public static boolean reloadListenerTimingsEnabled() { return PackForgeConfig.get().reloadListenerTimingsEnabled; }
 	public static boolean loadingStatusOverlayEnabled() { return PackForgeConfig.get().loadingStatusOverlayEnabled; }

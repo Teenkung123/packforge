@@ -4,6 +4,7 @@ import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.loader.LoaderTimings;
 import com.teenkung.packforge.loader.PackIndex;
 import com.teenkung.packforge.loader.PackIndexCache;
+import com.teenkung.packforge.loader.ZipFilePools;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.FilePackResources;
 import net.minecraft.server.packs.PackResources;
@@ -49,7 +50,7 @@ public abstract class FilePackResourcesMixin {
 		String full = packforge$addPrefix(type.getDirectory() + "/" + id.getNamespace() + "/" + id.getPath());
 		ZipEntry entry = idx.entryFor(full);
 		LoaderTimings.recordGetResource();
-		cir.setReturnValue(entry == null ? null : IoSupplier.create(idx.zipFile(), entry));
+		cir.setReturnValue(entry == null ? null : ZipFilePools.supplier(this.zipFileAccess, full, idx.zipFile(), entry));
 	}
 
 	@Inject(method = "getNamespaces", at = @At("HEAD"), cancellable = true)
@@ -71,7 +72,7 @@ public abstract class FilePackResourcesMixin {
 		idx.forEachWithPrefix(prefix, (name, entry) -> {
 			String path = name.substring(root.length());
 			Identifier built = Identifier.tryBuild(namespace, path);
-			if (built != null) output.accept(built, IoSupplier.create(idx.zipFile(), entry));
+			if (built != null) output.accept(built, ZipFilePools.supplier(this.zipFileAccess, name, idx.zipFile(), entry));
 		});
 		ci.cancel();
 	}
