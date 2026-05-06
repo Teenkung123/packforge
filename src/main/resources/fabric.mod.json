@@ -1,0 +1,39 @@
+{
+	"schemaVersion": 1,
+	"id": "packforge",
+	"version": "${version}",
+	"name": "PackForge",
+	"description": "Faster pack reloads and atlas overflow recovery for large resource packs.",
+	"authors": [
+		"teenkung"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/packforge/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"main": [
+			"com.teenkung.packforge.PackForge"
+		],
+		"client": [
+			"com.teenkung.packforge.client.PackForgeClient"
+		]
+	},
+	"mixins": [
+		"packforge.mixins.json",
+		{
+			"config": "packforge.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"accessWidener": "packforge.accesswidener",
+	"depends": {
+		"fabricloader": ">=0.19.2",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
