@@ -19,6 +19,12 @@ public final class PackForgeConfig {
 		public boolean loaderIndexEnabled = true;
 		public boolean loaderZipPoolEnabled = false;
 		public boolean loaderTimingsEnabled = false;
+		public boolean reloadListenerTimingsEnabled = true;
+		public boolean loadingStatusOverlayEnabled = true;
+		public boolean modelUvTransparencyClampEnabled = true;
+		public boolean fontReloadDiagnosticsEnabled = true;
+		public boolean fontPrepareProviderSelectionEnabled = true;
+		public boolean fontBitmapProviderCacheEnabled = false;
 		public boolean atlasCapEnabled = true;
 		public int atlasCapPx = 256;
 		public List<String> atlasExcludeIds = new ArrayList<>(List.of("minecraft:gui"));
