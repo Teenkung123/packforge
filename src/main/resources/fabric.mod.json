@@ -5,7 +5,7 @@
 	"name": "PackForge",
 	"description": "Faster pack reloads and atlas overflow recovery for large resource packs.",
 	"authors": [
-		"teenkung"
+		"Teenkung123"
 	],
 	"contact": {
 		"homepage": "https://fabricmc.net/",
@@ -32,7 +32,7 @@
 	"accessWidener": "packforge.accesswidener",
 	"depends": {
 		"fabricloader": ">=0.19.2",
-		"minecraft": "~26.1",
+		"minecraft": ">=26.1",
 		"java": ">=25",
 		"fabric-api": "*"
 	}

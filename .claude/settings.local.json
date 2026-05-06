@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem *)",
-      "Bash(./gradlew --no-daemon compileJava compileClientJava)"
+      "Bash(./gradlew --no-daemon compileJava compileClientJava)",
+      "Bash(./gradlew compileJava compileClientJava --console=plain)"
     ]
   }
 }
