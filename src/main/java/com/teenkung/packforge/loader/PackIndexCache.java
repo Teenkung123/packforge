@@ -15,15 +15,23 @@ public final class PackIndexCache {
 		if (zf == null) return null;
 		PackIndex existing = CACHE.get(access);
 		if (existing != null && existing.zipFile() == zf) return existing;
-		PackIndex built;
-		try {
-			built = PackIndex.build(zf);
-		} catch (Throwable t) {
-			PackForge.LOGGER.warn("PackIndex build failed; falling back to vanilla", t);
-			return null;
+
+		synchronized (access) {
+			zf = access.getOrCreateZipFile();
+			if (zf == null) return null;
+			existing = CACHE.get(access);
+			if (existing != null && existing.zipFile() == zf) return existing;
+
+			PackIndex built;
+			try {
+				built = PackIndex.build(zf);
+			} catch (Throwable t) {
+				PackForge.LOGGER.warn("PackIndex build failed; falling back to vanilla", t);
+				return null;
+			}
+			CACHE.put(access, built);
+			return built;
 		}
-		CACHE.put(access, built);
-		return built;
 	}
 
 	public static void invalidate(FilePackResources.SharedZipFileAccess access) {
