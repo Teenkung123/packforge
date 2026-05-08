@@ -1,0 +1,19 @@
+pluginManagement {
+	def rootProperties = new Properties()
+	file("../../gradle.properties").withInputStream { rootProperties.load(it) }
+
+	repositories {
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+
+	plugins {
+		id 'net.fabricmc.fabric-loom' version rootProperties.getProperty("loom_version")
+	}
+}
+
+rootProject.name = 'packforge-fabric'

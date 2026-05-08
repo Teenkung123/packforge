@@ -1,0 +1,113 @@
+plugins {
+	id 'net.fabricmc.fabric-loom'
+	id 'maven-publish'
+}
+
+def rootProperties = new Properties()
+file("../../gradle.properties").withInputStream { rootProperties.load(it) }
+def rootProperty = { String name -> rootProperties.getProperty(name) ?: project.findProperty(name) }
+
+version = rootProperty("mod_version")
+group = rootProperty("maven_group")
+def javaTarget = (rootProperty("java_version") as int)
+
+repositories {
+	maven {
+		name = "Terraformers"
+		url = "https://maven.terraformersmc.com/"
+	}
+}
+
+loom {
+	splitEnvironmentSourceSets()
+
+	accessWidenerPath = file("src/main/resources/packforge.accesswidener")
+
+	mods {
+		"packforge" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+sourceSets {
+	main {
+		java {
+			srcDir "../../common/src/main/java"
+			srcDir "src/main/java"
+		}
+		resources {
+			srcDir "../../common/src/main/resources"
+			srcDir "src/main/resources"
+		}
+	}
+	client {
+		java {
+			srcDir "../../common/src/client/java"
+			srcDir "src/client/java"
+		}
+		resources {
+			srcDir "../../common/src/client/resources"
+			srcDir "src/client/resources"
+		}
+	}
+}
+
+fabricApi {
+	configureDataGeneration {
+		client = true
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${rootProperty("minecraft_version")}"
+	implementation "net.fabricmc:fabric-loader:${rootProperty("loader_version")}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${rootProperty("fabric_api_version")}"
+	implementation "com.terraformersmc:modmenu:${rootProperty("modmenu_version")}"
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = javaTarget
+}
+
+java {
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.toVersion(javaTarget)
+	targetCompatibility = JavaVersion.toVersion(javaTarget)
+}
+
+jar {
+	inputs.property "projectName", project.name
+	archiveFileName = "packforge-fabric-${project.version}.jar"
+
+	from("../../LICENSE") {
+		rename { "${it}_${project.name}"}
+	}
+}
+
+tasks.named("sourcesJar") {
+	archiveFileName = "packforge-fabric-${project.version}-sources.jar"
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			from components.java
+		}
+	}
+
+	repositories {
+	}
+}

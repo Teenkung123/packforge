@@ -31,6 +31,22 @@ tasks.withType(JavaCompile).configureEach {
 minecraft {
 	mappings channel: "official", version: rootProperty("minecraft_version")
 	dependency "net.minecraftforge:forge:${rootProperty("forge_version")}"
+
+	runs {
+		client {
+			workingDir = file("run")
+			client = true
+			systemProperties = [
+				"forge.logging.console.level": "debug"
+			]
+
+			mods {
+				packforge {
+					source sourceSets.main
+				}
+			}
+		}
+	}
 }
 
 repositories {
@@ -43,30 +59,25 @@ repositories {
 sourceSets {
 	main {
 		java {
-			srcDir "../../src/main/java"
-			srcDir "../../src/client/java"
+			srcDir "../../common/src/main/java"
+			srcDir "../../common/src/client/java"
 			srcDir "src/main/java"
 		}
 		resources {
 			setSrcDirs([])
-			srcDir "../../src/main/resources"
-			srcDir "../../src/client/resources"
+			srcDir "../../common/src/main/resources"
+			srcDir "../../common/src/client/resources"
 			srcDir "src/main/resources"
 			exclude "fabric.mod.json"
 			exclude "packforge.accesswidener"
 			exclude "META-INF/accesstransformer.cfg"
 		}
+		output.resourcesDir = layout.buildDirectory.dir("classes/java/main").get().asFile
 	}
 }
 
 tasks.named("compileJava", JavaCompile) {
-	source = fileTree("../../src/main/java") {
-		exclude "com/teenkung/packforge/fabric/**"
-	} + fileTree("../../src/client/java") {
-		exclude "com/teenkung/packforge/fabric/**"
-		exclude "com/teenkung/packforge/client/config/PackForgeModMenuApi.java"
-		exclude "com/teenkung/packforge/client/atlas/CappedSpriteResourceLoader.java"
-	} + fileTree("src/main/java")
+	source = fileTree("../../common/src/main/java") + fileTree("../../common/src/client/java") + fileTree("src/main/java")
 }
 
 dependencies {
