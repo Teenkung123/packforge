@@ -3,21 +3,26 @@ plugins {
 	id "net.neoforged.moddev" version "2.0.141"
 }
 
-version = "1.1.0"
-group = "com.teenkung"
+def rootProperties = new Properties()
+file("../../gradle.properties").withInputStream { rootProperties.load(it) }
+def rootProperty = { String name -> rootProperties.getProperty(name) ?: project.findProperty(name) }
+
+version = rootProperty("mod_version")
+group = rootProperty("maven_group")
+def javaTarget = (rootProperty("java_version") as int)
 
 base {
 	archivesName = "packforge"
 }
 
 java {
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+	sourceCompatibility = JavaVersion.toVersion(javaTarget)
+	targetCompatibility = JavaVersion.toVersion(javaTarget)
 	withSourcesJar()
 }
 
 tasks.withType(JavaCompile).configureEach {
-	options.release = 25
+	options.release = javaTarget
 }
 
 sourceSets {
@@ -49,7 +54,7 @@ tasks.named("compileJava", JavaCompile) {
 }
 
 neoForge {
-	version = "26.1.0.19-beta"
+	version = rootProperty("neoforge_version")
 	validateAccessTransformers = false
 
 	mods {

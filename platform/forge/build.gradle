@@ -3,8 +3,13 @@ plugins {
 	id "net.minecraftforge.gradle" version "7.0.25"
 }
 
-version = "1.1.0"
-group = "com.teenkung"
+def rootProperties = new Properties()
+file("../../gradle.properties").withInputStream { rootProperties.load(it) }
+def rootProperty = { String name -> rootProperties.getProperty(name) ?: project.findProperty(name) }
+
+version = rootProperty("mod_version")
+group = rootProperty("maven_group")
+def javaTarget = (rootProperty("java_version") as int)
 
 base {
 	archivesName = "packforge"
@@ -12,20 +17,20 @@ base {
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(25)
+		languageVersion = JavaLanguageVersion.of(javaTarget)
 	}
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+	sourceCompatibility = JavaVersion.toVersion(javaTarget)
+	targetCompatibility = JavaVersion.toVersion(javaTarget)
 	withSourcesJar()
 }
 
 tasks.withType(JavaCompile).configureEach {
-	options.release = 25
+	options.release = javaTarget
 }
 
 minecraft {
-	mappings channel: "official", version: "26.1"
-	dependency "net.minecraftforge:forge:26.1-62.0.9"
+	mappings channel: "official", version: rootProperty("minecraft_version")
+	dependency "net.minecraftforge:forge:${rootProperty("forge_version")}"
 }
 
 repositories {
