@@ -1,6 +1,7 @@
 package com.teenkung.packforge.mixin.observe;
 
 import com.teenkung.packforge.PackForge;
+import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.loader.LoaderTimings;
 import com.teenkung.packforge.loader.ReloadStatus;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
@@ -33,26 +34,54 @@ public abstract class SimpleReloadInstanceMixin {
 		Executor reloadExecutor
 	) {
 		String name = listener.getName();
+		if (!FeatureFlags.reloadListenerTimingsEnabled() && !FeatureFlags.loadingStatusOverlayEnabled()) {
+			return packforge$invokeCreate(stateFactory, sharedState, barrier, listener, taskExecutor, reloadExecutor, name, false);
+		}
 		Executor trackedTaskExecutor = command -> taskExecutor.execute(() -> {
-			ReloadStatus.prepareStarted(name);
-			long startNs = System.nanoTime();
+			if (FeatureFlags.loadingStatusOverlayEnabled()) {
+				ReloadStatus.prepareStarted(name);
+			}
+			long startNs = FeatureFlags.reloadListenerTimingsEnabled() ? System.nanoTime() : 0L;
 			try {
 				command.run();
 			} finally {
-				LoaderTimings.recordListenerPrepare(name, System.nanoTime() - startNs);
-				ReloadStatus.prepareFinished();
+				if (FeatureFlags.reloadListenerTimingsEnabled()) {
+					LoaderTimings.recordListenerPrepare(name, System.nanoTime() - startNs);
+				}
+				if (FeatureFlags.loadingStatusOverlayEnabled()) {
+					ReloadStatus.prepareFinished();
+				}
 			}
 		});
 		Executor trackedReloadExecutor = command -> reloadExecutor.execute(() -> {
-			ReloadStatus.applyStarted(name);
-			long startNs = System.nanoTime();
+			if (FeatureFlags.loadingStatusOverlayEnabled()) {
+				ReloadStatus.applyStarted(name);
+			}
+			long startNs = FeatureFlags.reloadListenerTimingsEnabled() ? System.nanoTime() : 0L;
 			try {
 				command.run();
 			} finally {
-				LoaderTimings.recordListenerApply(name, System.nanoTime() - startNs);
-				ReloadStatus.applyFinished();
+				if (FeatureFlags.reloadListenerTimingsEnabled()) {
+					LoaderTimings.recordListenerApply(name, System.nanoTime() - startNs);
+				}
+				if (FeatureFlags.loadingStatusOverlayEnabled()) {
+					ReloadStatus.applyFinished();
+				}
 			}
 		});
+		return packforge$invokeCreate(stateFactory, sharedState, barrier, listener, trackedTaskExecutor, trackedReloadExecutor, name, FeatureFlags.reloadListenerTimingsEnabled());
+	}
+
+	private CompletableFuture<?> packforge$invokeCreate(
+		Object stateFactory,
+		PreparableReloadListener.SharedState sharedState,
+		PreparableReloadListener.PreparationBarrier barrier,
+		PreparableReloadListener listener,
+		Executor taskExecutor,
+		Executor reloadExecutor,
+		String name,
+		boolean recordWall
+	) {
 		try {
 			Method create = stateFactory.getClass().getMethod(
 				"create",
@@ -63,9 +92,9 @@ public abstract class SimpleReloadInstanceMixin {
 				Executor.class
 			);
 			create.setAccessible(true);
-			long startNs = System.nanoTime();
-			CompletableFuture<?> future = (CompletableFuture<?>) create.invoke(stateFactory, sharedState, barrier, listener, trackedTaskExecutor, trackedReloadExecutor);
-			return future.whenComplete((result, error) -> LoaderTimings.recordListenerWall(name, System.nanoTime() - startNs));
+			long startNs = recordWall ? System.nanoTime() : 0L;
+			CompletableFuture<?> future = (CompletableFuture<?>) create.invoke(stateFactory, sharedState, barrier, listener, taskExecutor, reloadExecutor);
+			return recordWall ? future.whenComplete((result, error) -> LoaderTimings.recordListenerWall(name, System.nanoTime() - startNs)) : future;
 		} catch (NoSuchMethodException | IllegalAccessException e) {
 			throw new IllegalStateException("PackForge could not wrap reload listener status", e);
 		} catch (InvocationTargetException e) {

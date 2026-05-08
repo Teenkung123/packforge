@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="CC0-1.0"
+issueTrackerURL="https://github.com/Teenkung/PackForge/issues"
+
+[[mods]]
+modId="packforge"
+version="${version}"
+displayName="PackForge"
+displayURL="https://github.com/Teenkung/PackForge"
+logoFile="assets/packforge/icon.png"
+authors="Teenkung123"
+description="Faster pack reloads and atlas overflow recovery for large resource packs."
+
+[[dependencies.packforge]]
+modId="forge"
+mandatory=true
+versionRange="[60.0.0,)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.packforge]]
+modId="minecraft"
+mandatory=true
+versionRange="[26.1,)"
+ordering="NONE"
+side="CLIENT"

@@ -24,27 +24,33 @@ public record FontPreparedSelection(
 ) {
 	public static FontPreparedSelection compute(List<GlyphProvider.Conditional> providers, Set<FontOption> options) {
 		long startNs = System.nanoTime();
-		IntOpenHashSet supportedGlyphs = new IntOpenHashSet();
 		ArrayList<GlyphProvider> selectedProviders = new ArrayList<>();
 		for (GlyphProvider.Conditional conditionalProvider : providers) {
 			if (!conditionalProvider.filter().apply(options)) continue;
 			GlyphProvider provider = conditionalProvider.provider();
 			selectedProviders.add(provider);
-			supportedGlyphs.addAll((IntCollection)provider.getSupportedGlyphs());
 		}
 
+		IntOpenHashSet seenGlyphs = new IntOpenHashSet();
 		HashSet<GlyphProvider> usedProviders = new HashSet<>();
 		Int2ObjectOpenHashMap<IntList> glyphsByWidth = new Int2ObjectOpenHashMap<>();
-		supportedGlyphs.forEach(codepoint -> {
-			for (GlyphProvider provider : selectedProviders) {
+		for (GlyphProvider provider : selectedProviders) {
+			IntCollection supportedGlyphs = (IntCollection)provider.getSupportedGlyphs();
+			supportedGlyphs.forEach(codepoint -> {
+				if (!seenGlyphs.add(codepoint)) {
+					return;
+				}
 				var glyph = provider.getGlyph(codepoint);
-				if (glyph == null) continue;
+				if (glyph == null) {
+					return;
+				}
 				usedProviders.add(provider);
-				if (glyph.info() == SpecialGlyphs.MISSING) break;
+				if (glyph.info() == SpecialGlyphs.MISSING) {
+					return;
+				}
 				glyphsByWidth.computeIfAbsent(Mth.ceil(glyph.info().getAdvance(false)), ignored -> new IntArrayList()).add(codepoint);
-				break;
-			}
-		});
+			});
+		}
 
 		List<GlyphProvider> activeProviders = selectedProviders.stream().filter(usedProviders::contains).toList();
 		return new FontPreparedSelection(providers, activeProviders, glyphsByWidth, System.nanoTime() - startNs);

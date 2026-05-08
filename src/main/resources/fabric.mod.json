@@ -16,25 +16,25 @@
 	"environment": "client",
 	"entrypoints": {
 		"main": [
-			"com.teenkung.packforge.PackForge"
+			"com.teenkung.packforge.fabric.PackForgeFabric"
 		],
 		"client": [
-			"com.teenkung.packforge.client.PackForgeClient"
+			"com.teenkung.packforge.fabric.PackForgeFabricClient"
 		],
 		"modmenu": [
 			"com.teenkung.packforge.client.config.PackForgeModMenuApi"
 		]
 	},
 	"mixins": [
-		"packforge.mixins.json",
+		"packforge.fabric.mixins.json",
 		{
-			"config": "packforge.client.mixins.json",
+			"config": "packforge.fabric.client.mixins.json",
 			"environment": "client"
 		}
 	],
 	"accessWidener": "packforge.accesswidener",
 	"depends": {
-		"fabricloader": ">=0.19.2",
+		"fabricloader": ">=0.17.2",
 		"minecraft": ">=26.1",
 		"java": ">=25",
 		"fabric-api": "*"

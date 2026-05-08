@@ -31,7 +31,7 @@ public abstract class FontManagerMixin {
 		}
 		Set<FontOption> options = packforge$fontOptions(Minecraft.getInstance().options);
 		CompletableFuture<?> original = cir.getReturnValue();
-		cir.setReturnValue(original.thenApply(preparation -> FontSelectionRegistry.prepare(preparation, options)));
+		cir.setReturnValue(original.thenCompose(preparation -> FontSelectionRegistry.prepareAsync(preparation, options, executor)));
 	}
 
 	@Inject(method = "apply", at = @At("HEAD"))

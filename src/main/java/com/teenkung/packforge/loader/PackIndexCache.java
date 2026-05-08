@@ -1,23 +1,23 @@
 package com.teenkung.packforge.loader;
 
 import com.teenkung.packforge.PackForge;
-import net.minecraft.server.packs.FilePackResources;
+import com.teenkung.packforge.mixin.loader.SharedZipFileAccessAccessor;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.ZipFile;
 
 public final class PackIndexCache {
-	private static final Map<FilePackResources.SharedZipFileAccess, PackIndex> CACHE = new ConcurrentHashMap<>();
+	private static final Map<Object, PackIndex> CACHE = new ConcurrentHashMap<>();
 
-	public static PackIndex getOrBuild(FilePackResources.SharedZipFileAccess access) {
-		ZipFile zf = access.getOrCreateZipFile();
+	public static PackIndex getOrBuild(Object access) {
+		ZipFile zf = ((SharedZipFileAccessAccessor) access).packforge$getOrCreateZipFile();
 		if (zf == null) return null;
 		PackIndex existing = CACHE.get(access);
 		if (existing != null && existing.zipFile() == zf) return existing;
 
 		synchronized (access) {
-			zf = access.getOrCreateZipFile();
+			zf = ((SharedZipFileAccessAccessor) access).packforge$getOrCreateZipFile();
 			if (zf == null) return null;
 			existing = CACHE.get(access);
 			if (existing != null && existing.zipFile() == zf) return existing;
@@ -34,7 +34,7 @@ public final class PackIndexCache {
 		}
 	}
 
-	public static void invalidate(FilePackResources.SharedZipFileAccess access) {
+	public static void invalidate(Object access) {
 		CACHE.remove(access);
 	}
 

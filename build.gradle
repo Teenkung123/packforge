@@ -77,10 +77,46 @@ java {
 jar {
 	def projectName = project.name
 	inputs.property "projectName", projectName
+	archiveFileName = "packforge-fabric-${project.version}.jar"
 
 	from("LICENSE") {
 		rename { "${it}_$projectName"}
 	}
+}
+
+tasks.named("sourcesJar") {
+	archiveFileName = "packforge-fabric-${project.version}-sources.jar"
+}
+
+def gradlew = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows") ? "gradlew.bat" : "./gradlew"
+
+tasks.register("buildNeoForgePlatform", Exec) {
+	group = "build"
+	description = "Builds the NeoForge PackForge jar."
+	commandLine gradlew, "-p", "platform/neoforge", "build"
+}
+
+tasks.register("buildForgePlatform", Exec) {
+	group = "build"
+	description = "Builds the Forge PackForge jar."
+	commandLine gradlew, "-p", "platform/forge", "build"
+}
+
+tasks.register("collectPlatformJars", Copy) {
+	group = "build"
+	description = "Collects all platform jars into root build/libs."
+	dependsOn tasks.named("jar"), tasks.named("buildNeoForgePlatform"), tasks.named("buildForgePlatform")
+	from("platform/neoforge/build/libs") {
+		include "packforge-neoforge-${project.version}.jar"
+	}
+	from("platform/forge/build/libs") {
+		include "packforge-forge-${project.version}.jar"
+	}
+	into layout.buildDirectory.dir("libs")
+}
+
+tasks.named("build") {
+	dependsOn tasks.named("collectPlatformJars")
 }
 
 // configure the maven publication

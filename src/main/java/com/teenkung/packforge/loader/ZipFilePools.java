@@ -3,7 +3,6 @@ package com.teenkung.packforge.loader;
 import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.mixin.loader.SharedZipFileAccessAccessor;
-import net.minecraft.server.packs.FilePackResources;
 import net.minecraft.server.packs.resources.IoSupplier;
 
 import java.io.IOException;
@@ -14,9 +13,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public final class ZipFilePools {
-	private static final Map<FilePackResources.SharedZipFileAccess, Pool> POOLS = new ConcurrentHashMap<>();
+	private static final Map<Object, Pool> POOLS = new ConcurrentHashMap<>();
 
-	public static IoSupplier<InputStream> supplier(FilePackResources.SharedZipFileAccess access, String path, ZipFile fallbackZip, ZipEntry fallbackEntry) {
+	public static IoSupplier<InputStream> supplier(Object access, String path, ZipFile fallbackZip, ZipEntry fallbackEntry) {
 		if (!FeatureFlags.loaderZipPoolEnabled()) {
 			return IoSupplier.create(fallbackZip, fallbackEntry);
 		}
@@ -34,14 +33,14 @@ public final class ZipFilePools {
 		};
 	}
 
-	public static void close(FilePackResources.SharedZipFileAccess access) {
+	public static void close(Object access) {
 		Pool pool = POOLS.remove(access);
 		if (pool != null) {
 			pool.close();
 		}
 	}
 
-	private static Pool createPool(FilePackResources.SharedZipFileAccess access) {
+	private static Pool createPool(Object access) {
 		try {
 			return new Pool(((SharedZipFileAccessAccessor) access).packforge$file());
 		} catch (Throwable t) {

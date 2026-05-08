@@ -20,23 +20,48 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 
 @Mixin(FilePackResources.class)
 public abstract class FilePackResourcesMixin {
-	@Shadow @Final private FilePackResources.SharedZipFileAccess zipFileAccess;
 	@Shadow @Final private String prefix;
+
+	@Unique
+	private static final Field packforge$zipFileAccessField = packforge$findZipFileAccessField();
 
 	@Unique
 	private PackIndex packforge$index() {
 		if (!FeatureFlags.loaderIndexEnabled()) return null;
-		return PackIndexCache.getOrBuild(this.zipFileAccess);
+		Object access = packforge$zipFileAccess();
+		return access == null ? null : PackIndexCache.getOrBuild(access);
 	}
 
 	@Unique
 	private String packforge$addPrefix(String path) {
 		return this.prefix.isEmpty() ? path : this.prefix + "/" + path;
+	}
+
+	@Unique
+	private Object packforge$zipFileAccess() {
+		if (packforge$zipFileAccessField == null) return null;
+		try {
+			return packforge$zipFileAccessField.get(this);
+		} catch (IllegalAccessException e) {
+			return null;
+		}
+	}
+
+	@Unique
+	private static Field packforge$findZipFileAccessField() {
+		try {
+			Field field = FilePackResources.class.getDeclaredField("zipFileAccess");
+			field.setAccessible(true);
+			return field;
+		} catch (NoSuchFieldException e) {
+			return null;
+		}
 	}
 
 	@Inject(
@@ -50,7 +75,8 @@ public abstract class FilePackResourcesMixin {
 		String full = packforge$addPrefix(type.getDirectory() + "/" + id.getNamespace() + "/" + id.getPath());
 		ZipEntry entry = idx.entryFor(full);
 		LoaderTimings.recordGetResource();
-		cir.setReturnValue(entry == null ? null : ZipFilePools.supplier(this.zipFileAccess, full, idx.zipFile(), entry));
+		Object access = packforge$zipFileAccess();
+		cir.setReturnValue(entry == null || access == null ? null : ZipFilePools.supplier(access, full, idx.zipFile(), entry));
 	}
 
 	@Inject(method = "getNamespaces", at = @At("HEAD"), cancellable = true)
@@ -72,7 +98,8 @@ public abstract class FilePackResourcesMixin {
 		idx.forEachWithPrefix(prefix, (name, entry) -> {
 			String path = name.substring(root.length());
 			Identifier built = Identifier.tryBuild(namespace, path);
-			if (built != null) output.accept(built, ZipFilePools.supplier(this.zipFileAccess, name, idx.zipFile(), entry));
+			Object access = packforge$zipFileAccess();
+			if (built != null && access != null) output.accept(built, ZipFilePools.supplier(access, name, idx.zipFile(), entry));
 		});
 		ci.cancel();
 	}

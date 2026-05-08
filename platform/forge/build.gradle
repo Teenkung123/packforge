@@ -1,0 +1,90 @@
+plugins {
+	id "java"
+	id "net.minecraftforge.gradle" version "7.0.25"
+}
+
+version = "1.1.0"
+group = "com.teenkung"
+
+base {
+	archivesName = "packforge"
+}
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+	withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+	options.release = 25
+}
+
+minecraft {
+	mappings channel: "official", version: "26.1"
+	dependency "net.minecraftforge:forge:26.1-62.0.9"
+}
+
+repositories {
+	maven fg.forgeMaven
+	maven fg.minecraftLibsMaven
+	minecraft.mavenizer(repositories)
+	mavenCentral()
+}
+
+sourceSets {
+	main {
+		java {
+			srcDir "../../src/main/java"
+			srcDir "../../src/client/java"
+			srcDir "src/main/java"
+		}
+		resources {
+			setSrcDirs([])
+			srcDir "../../src/main/resources"
+			srcDir "../../src/client/resources"
+			srcDir "src/main/resources"
+			exclude "fabric.mod.json"
+			exclude "packforge.accesswidener"
+			exclude "META-INF/accesstransformer.cfg"
+		}
+	}
+}
+
+tasks.named("compileJava", JavaCompile) {
+	source = fileTree("../../src/main/java") {
+		exclude "com/teenkung/packforge/fabric/**"
+	} + fileTree("../../src/client/java") {
+		exclude "com/teenkung/packforge/fabric/**"
+		exclude "com/teenkung/packforge/client/config/PackForgeModMenuApi.java"
+		exclude "com/teenkung/packforge/client/atlas/CappedSpriteResourceLoader.java"
+	} + fileTree("src/main/java")
+}
+
+dependencies {
+	implementation minecraft.dependency
+}
+
+processResources {
+	inputs.property "version", project.version
+	filesMatching("META-INF/mods.toml") {
+		expand "version": project.version
+	}
+}
+
+jar {
+	archiveFileName = "packforge-forge-${project.version}.jar"
+	manifest {
+		attributes([
+			"MixinConfigs": "packforge.fabric.mixins.json,packforge.fabric.client.mixins.json"
+		])
+	}
+}
+
+tasks.named("sourcesJar") {
+	archiveFileName = "packforge-forge-${project.version}-sources.jar"
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

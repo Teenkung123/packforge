@@ -13,6 +13,10 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.LongAdder;
 
 public final class FontSelectionRegistry {
 	private static final ThreadLocal<FontPreparationBundle> APPLYING = new ThreadLocal<>();
@@ -40,6 +44,40 @@ public final class FontSelectionRegistry {
 			PREPARED.put(preparation, new FontPreparationBundle(Set.copyOf(options), selections, snapshot));
 		}
 		return preparation;
+	}
+
+	public static CompletableFuture<Object> prepareAsync(Object preparation, Set<FontOption> options, Executor executor) {
+		if (!FeatureFlags.fontPrepareProviderSelectionEnabled() && !FeatureFlags.fontReloadDiagnosticsEnabled()) {
+			return CompletableFuture.completedFuture(preparation);
+		}
+		Map<Identifier, List<GlyphProvider.Conditional>> fontSets = fontSets(preparation);
+		if (fontSets == null) {
+			return CompletableFuture.completedFuture(preparation);
+		}
+		ConcurrentHashMap<Identifier, FontPreparedSelection> selections = new ConcurrentHashMap<>();
+		ConcurrentHashMap<List<GlyphProvider.Conditional>, FontPreparedSelection> memoizedStacks = new ConcurrentHashMap<>();
+		LongAdder selectionNs = new LongAdder();
+		CompletableFuture<?>[] tasks;
+		if (FeatureFlags.fontPrepareProviderSelectionEnabled()) {
+			tasks = fontSets.entrySet().stream()
+				.map(entry -> CompletableFuture.runAsync(() -> {
+					List<GlyphProvider.Conditional> providers = Lists.reverse(entry.getValue());
+					List<GlyphProvider.Conditional> key = List.copyOf(providers);
+					FontPreparedSelection selection = memoizedStacks.computeIfAbsent(key, ignored -> FontPreparedSelection.compute(providers, options));
+					selectionNs.add(selection.elapsedNs());
+					selections.put(entry.getKey(), selection);
+				}, executor))
+				.toArray(CompletableFuture[]::new);
+		} else {
+			tasks = new CompletableFuture<?>[0];
+		}
+		return CompletableFuture.allOf(tasks).thenApply(ignored -> {
+			FontReloadDiagnostics.Snapshot snapshot = FontReloadDiagnostics.snapshot(fontSets, selectionNs.sum());
+			synchronized (PREPARED) {
+				PREPARED.put(preparation, new FontPreparationBundle(Set.copyOf(options), new HashMap<>(selections), snapshot));
+			}
+			return preparation;
+		});
 	}
 
 	public static void beginApply(Object preparation) {

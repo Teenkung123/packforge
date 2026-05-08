@@ -1,12 +1,15 @@
 {
 	"required": true,
 	"package": "com.teenkung.packforge.client.mixin",
-	"compatibilityLevel": "JAVA_25",
+	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"atlas.SpriteLoaderMixin",
+		"atlas.TextureAtlasMixin",
+		"font.BitmapProviderDefinitionMixin",
 		"font.FontManagerMixin",
 		"font.FontSetMixin",
 		"model.FaceBakeryMixin",
+		"model.ModelManagerMixin",
 		"ui.LoadingOverlayMixin"
 	],
 	"injectors": {

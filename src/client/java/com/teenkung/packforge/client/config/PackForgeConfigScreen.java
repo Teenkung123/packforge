@@ -21,6 +21,7 @@ import java.util.Locale;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public final class PackForgeConfigScreen extends Screen {
@@ -112,12 +113,20 @@ public final class PackForgeConfigScreen extends Screen {
 			() -> cfg.fontPrepareProviderSelectionEnabled, value -> cfg.fontPrepareProviderSelectionEnabled = value, () -> defaults.fontPrepareProviderSelectionEnabled);
 		booleanRow(CATEGORY_RELOAD, "Fonts", "Bitmap provider cache", "Experimental. Keep off until font resource fingerprinting is proven stable.",
 			() -> cfg.fontBitmapProviderCacheEnabled, value -> cfg.fontBitmapProviderCacheEnabled = value, () -> defaults.fontBitmapProviderCacheEnabled);
+		booleanRow(CATEGORY_RELOAD, "Models", "Model parse batching", "Batch block-model parse jobs to reduce executor overhead on large packs.",
+			() -> cfg.modelParseBatchingEnabled, value -> cfg.modelParseBatchingEnabled = value, () -> defaults.modelParseBatchingEnabled);
+		intRow(CATEGORY_RELOAD, "Models", "Model parse batch size", "Number of block model JSON files parsed per worker task.",
+			() -> cfg.modelParseBatchSize, value -> cfg.modelParseBatchSize = clamp(value, 8, 1024), () -> defaults.modelParseBatchSize);
+		booleanRow(CATEGORY_RELOAD, "Models", "Duplicate model parse cache", "Experimental. Reload-scoped cache for exact duplicate immutable model JSON parses.",
+			() -> cfg.modelDuplicateParseCacheEnabled, value -> cfg.modelDuplicateParseCacheEnabled = value, () -> defaults.modelDuplicateParseCacheEnabled);
 		booleanRow(CATEGORY_RELOAD, "Logging", "Loader timings", "Debug log for PackForge resource index counters. Development use.",
 			() -> cfg.loaderTimingsEnabled, value -> cfg.loaderTimingsEnabled = value, () -> defaults.loaderTimingsEnabled);
 		booleanRow(CATEGORY_RELOAD, "Logging", "Reload listener timings", "Debug loading summary and CSV listener timings. Development use.",
 			() -> cfg.reloadListenerTimingsEnabled, value -> cfg.reloadListenerTimingsEnabled = value, () -> defaults.reloadListenerTimingsEnabled);
 		booleanRow(CATEGORY_RELOAD, "Logging", "Font reload diagnostics", "Debug font provider counts and CSV font timings. Development use.",
 			() -> cfg.fontReloadDiagnosticsEnabled, value -> cfg.fontReloadDiagnosticsEnabled = value, () -> defaults.fontReloadDiagnosticsEnabled);
+		booleanRow(CATEGORY_RELOAD, "Logging", "Atlas phase timings", "Development use. Logs source, decode, stitch, mip, and upload atlas timings.",
+			() -> cfg.atlasPhaseTimingsEnabled, value -> cfg.atlasPhaseTimingsEnabled = value, () -> defaults.atlasPhaseTimingsEnabled);
 
 		booleanRow(CATEGORY_ATLAS, "General", "Enable large atlas fixer", "Master switch for atlas overflow and atlas-related resource-pack compatibility fixes. Child settings stay saved while this is off.",
 			() -> cfg.largeAtlasFixerEnabled, value -> cfg.largeAtlasFixerEnabled = value, () -> defaults.largeAtlasFixerEnabled);
@@ -135,6 +144,26 @@ public final class PackForgeConfigScreen extends Screen {
 			() -> cfg.atlasRetryMaxAttempts, value -> cfg.atlasRetryMaxAttempts = clamp(value, 1, 10), () -> defaults.atlasRetryMaxAttempts);
 		booleanRow(CATEGORY_ATLAS, "Atlas retry", "Disable retry with Iris", "Force atlas retry off when Iris is installed, unless you want to test risky behavior.",
 			() -> cfg.forceDisablePartIIIWithIris, value -> cfg.forceDisablePartIIIWithIris = value, () -> defaults.forceDisablePartIIIWithIris);
+		booleanRow(CATEGORY_ATLAS, "Atlas mipmaps", "Parallel mip generation", "Experimental. Split atlas mipmap generation into bounded worker batches.",
+			() -> cfg.atlasMipParallelEnabled, value -> cfg.atlasMipParallelEnabled = value, () -> defaults.atlasMipParallelEnabled);
+		intRow(CATEGORY_ATLAS, "Atlas mipmaps", "Mipmap batch size", "Sprites processed per mipmap worker batch.",
+			() -> cfg.atlasMipBatchSize, value -> cfg.atlasMipBatchSize = clamp(value, 16, 4096), () -> defaults.atlasMipBatchSize);
+		booleanRow(CATEGORY_ATLAS, "Experimental split", "Atlas split gate", "Reserved guard for future item/particle split experiments. Blocks are always rejected.",
+			() -> cfg.experimentalAtlasSplit, value -> cfg.experimentalAtlasSplit = value, () -> defaults.experimentalAtlasSplit);
+		textListRow(CATEGORY_ATLAS, "Experimental split", "Atlas split targets", "Comma-separated safe targets. Only minecraft:items and minecraft:particles are accepted.",
+			() -> String.join(", ", cfg.atlasSplitTargets), value -> cfg.atlasSplitTargets = parseSafeSplitTargets(value), () -> String.join(", ", defaults.atlasSplitTargets));
+		intRow(CATEGORY_ATLAS, "Experimental split", "Atlas split max tiers", "Reserved tier count for future item/particle overflow atlases.",
+			() -> cfg.atlasSplitMaxTiers, value -> cfg.atlasSplitMaxTiers = clamp(value, 1, 4), () -> defaults.atlasSplitMaxTiers);
+		booleanRow(CATEGORY_ATLAS, "Experimental split", "Split fallback downscale", "Keep downscale/cap fallback active for any unsafe split case.",
+			() -> cfg.atlasSplitFallbackToDownscale, value -> cfg.atlasSplitFallbackToDownscale = value, () -> defaults.atlasSplitFallbackToDownscale);
+		booleanRow(CATEGORY_ATLAS, "Experimental split", "Disable split with Iris", "Compatibility guard for shader stacks. Default on.",
+			() -> cfg.atlasSplitDisableWithIris, value -> cfg.atlasSplitDisableWithIris = value, () -> defaults.atlasSplitDisableWithIris);
+		booleanRow(CATEGORY_ATLAS, "Experimental split", "Disable split with Sodium", "Extra compatibility guard. Default off so item experiments can be tested.",
+			() -> cfg.atlasSplitDisableWithSodium, value -> cfg.atlasSplitDisableWithSodium = value, () -> defaults.atlasSplitDisableWithSodium);
+		booleanRow(CATEGORY_ATLAS, "Experimental split", "Split model coherence", "Reserved guard: route all textures for one item model together when split exists.",
+			() -> cfg.atlasSplitModelCoherence, value -> cfg.atlasSplitModelCoherence = value, () -> defaults.atlasSplitModelCoherence);
+		booleanRow(CATEGORY_ATLAS, "Experimental split", "Split diagnostics", "Reserved logging/reporting switch for future split experiments.",
+			() -> cfg.atlasSplitDiagnostics, value -> cfg.atlasSplitDiagnostics = value, () -> defaults.atlasSplitDiagnostics);
 	}
 
 	private Button categoryButton(String category, int x, int y) {
@@ -186,18 +215,22 @@ public final class PackForgeConfigScreen extends Screen {
 	}
 
 	private void textRow(String category, String section, String name, String description, Supplier<String> getter, Supplier<String> defaultGetter) {
+		textListRow(category, section, name, description, getter, value -> cfg.atlasExcludeIds = parseList(value), defaultGetter);
+	}
+
+	private void textListRow(String category, String section, String name, String description, Supplier<String> getter, Consumer<String> setter, Supplier<String> defaultGetter) {
 		rows.add(new RowSpec(category, section, name, description, () -> {
 			EditBox box = new EditBox(this.font, 0, 0, 180, 20, Component.literal(name));
 			box.setMaxLength(512);
 			box.setValue(getter.get());
 			box.setTooltip(Tooltip.create(Component.literal(description)));
 			box.setResponder(value -> {
-				cfg.atlasExcludeIds = parseList(value);
+				setter.accept(value);
 				PackForgeConfig.save();
 			});
 			return box;
 		}, () -> {
-			cfg.atlasExcludeIds = parseList(defaultGetter.get());
+			setter.accept(defaultGetter.get());
 			PackForgeConfig.save();
 		}));
 	}
@@ -222,12 +255,26 @@ public final class PackForgeConfigScreen extends Screen {
 		cfg.fontReloadDiagnosticsEnabled = defaults.fontReloadDiagnosticsEnabled;
 		cfg.fontPrepareProviderSelectionEnabled = defaults.fontPrepareProviderSelectionEnabled;
 		cfg.fontBitmapProviderCacheEnabled = defaults.fontBitmapProviderCacheEnabled;
+		cfg.atlasPhaseTimingsEnabled = defaults.atlasPhaseTimingsEnabled;
+		cfg.atlasMipParallelEnabled = defaults.atlasMipParallelEnabled;
+		cfg.atlasMipBatchSize = defaults.atlasMipBatchSize;
+		cfg.modelParseBatchingEnabled = defaults.modelParseBatchingEnabled;
+		cfg.modelParseBatchSize = defaults.modelParseBatchSize;
+		cfg.modelDuplicateParseCacheEnabled = defaults.modelDuplicateParseCacheEnabled;
 		cfg.atlasCapEnabled = defaults.atlasCapEnabled;
 		cfg.atlasCapPx = defaults.atlasCapPx;
 		cfg.atlasExcludeIds = new ArrayList<>(defaults.atlasExcludeIds);
 		cfg.atlasRetryEnabled = defaults.atlasRetryEnabled;
 		cfg.atlasRetryMaxAttempts = defaults.atlasRetryMaxAttempts;
 		cfg.forceDisablePartIIIWithIris = defaults.forceDisablePartIIIWithIris;
+		cfg.experimentalAtlasSplit = defaults.experimentalAtlasSplit;
+		cfg.atlasSplitTargets = new ArrayList<>(defaults.atlasSplitTargets);
+		cfg.atlasSplitMaxTiers = defaults.atlasSplitMaxTiers;
+		cfg.atlasSplitFallbackToDownscale = defaults.atlasSplitFallbackToDownscale;
+		cfg.atlasSplitDisableWithIris = defaults.atlasSplitDisableWithIris;
+		cfg.atlasSplitDisableWithSodium = defaults.atlasSplitDisableWithSodium;
+		cfg.atlasSplitModelCoherence = defaults.atlasSplitModelCoherence;
+		cfg.atlasSplitDiagnostics = defaults.atlasSplitDiagnostics;
 	}
 
 	private static int clamp(int value, int min, int max) {
@@ -239,6 +286,17 @@ public final class PackForgeConfigScreen extends Screen {
 		for (String part : value.split(",")) {
 			String trimmed = part.trim();
 			if (!trimmed.isEmpty()) {
+				result.add(trimmed);
+			}
+		}
+		return result;
+	}
+
+	private static List<String> parseSafeSplitTargets(String value) {
+		List<String> result = new ArrayList<>();
+		for (String part : value.split(",")) {
+			String trimmed = part.trim().toLowerCase(Locale.ROOT);
+			if ((trimmed.equals("minecraft:items") || trimmed.equals("minecraft:particles")) && !result.contains(trimmed)) {
 				result.add(trimmed);
 			}
 		}
@@ -284,9 +342,11 @@ public final class PackForgeConfigScreen extends Screen {
 
 	private static final class SectionEntry extends ConfigEntry {
 		private final StringWidget label;
+		private final int textWidth;
 
 		SectionEntry(String name, net.minecraft.client.gui.Font font) {
 			this.label = new StringWidget(0, 0, 260, 20, Component.literal(name), font);
+			this.textWidth = font.width(name);
 		}
 
 		@Override
@@ -313,7 +373,7 @@ public final class PackForgeConfigScreen extends Screen {
 		}
 
 		private void place() {
-			label.setX(getContentX());
+			label.setX(getContentXMiddle() - textWidth / 2);
 			label.setY(getContentY() + 5);
 		}
 	}
