@@ -17,11 +17,13 @@ import java.util.List;
 
 public final class PackForgeConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	private static final int CURRENT_VERSION = 2;
+	private static final int CURRENT_VERSION = 3;
 	private static volatile Cfg INSTANCE;
 
 	public static final class Cfg {
 		public int configVersion = CURRENT_VERSION;
+		public boolean reloadOptimizerEnabled = true;
+		public boolean largeAtlasFixerEnabled = true;
 		public boolean loaderIndexEnabled = true;
 		public boolean loaderZipPoolEnabled = false;
 		public boolean loaderTimingsEnabled = false;
@@ -96,6 +98,8 @@ public final class PackForgeConfig {
 			changed = true;
 		}
 		if (!root.has("loaderIndexEnabled")) { cfg.loaderIndexEnabled = defaults.loaderIndexEnabled; changed = true; }
+		if (!root.has("reloadOptimizerEnabled")) { cfg.reloadOptimizerEnabled = defaults.reloadOptimizerEnabled; changed = true; }
+		if (!root.has("largeAtlasFixerEnabled")) { cfg.largeAtlasFixerEnabled = defaults.largeAtlasFixerEnabled; changed = true; }
 		if (!root.has("loaderZipPoolEnabled")) { cfg.loaderZipPoolEnabled = defaults.loaderZipPoolEnabled; changed = true; }
 		if (!root.has("loaderTimingsEnabled")) { cfg.loaderTimingsEnabled = defaults.loaderTimingsEnabled; changed = true; }
 		if (!root.has("reloadListenerTimingsEnabled")) { cfg.reloadListenerTimingsEnabled = defaults.reloadListenerTimingsEnabled; changed = true; }

@@ -80,6 +80,7 @@ public final class CappedSpriteResourceLoader implements SpriteResourceLoader {
 				image.resizeSubRectTo(0, 0, image.getWidth(), image.getHeight(), scaled);
 			} catch (Throwable t) {
 				LOGGER.warn("PackForge cap failed for {}; keeping original size", spriteLocation, t);
+				maybeRetain(spriteLocation, image, frameSize, animationInfo, additionalMetadata, textureInfo, 1);
 				return new SpriteContents(spriteLocation, frameSize, image, animationInfo, additionalMetadata, textureInfo);
 			}
 			int origFW = frameSize.width();
@@ -90,6 +91,23 @@ public final class CappedSpriteResourceLoader implements SpriteResourceLoader {
 			image = scaled;
 		}
 
+		maybeRetain(spriteLocation, image, frameSize, animationInfo, additionalMetadata, textureInfo, scale);
 		return new SpriteContents(spriteLocation, frameSize, image, animationInfo, additionalMetadata, textureInfo);
+	}
+
+	private void maybeRetain(Identifier sprite, NativeImage image, FrameSize frameSize,
+	                         Optional<AnimationMetadataSection> animationInfo,
+	                         List<MetadataSectionType.WithValue<?>> additionalMetadata,
+	                         Optional<TextureMetadataSection> textureInfo,
+	                         int appliedScale) {
+		if (!FeatureFlags.atlasRetryEnabled()) return;
+		try {
+			NativeImage clone = new NativeImage(image.getWidth(), image.getHeight(), false);
+			image.resizeSubRectTo(0, 0, image.getWidth(), image.getHeight(), clone);
+			SpriteMetadataCache.retain(new SpriteMetadataCache.RetainedSprite(
+				sprite, atlasId, clone, frameSize, animationInfo, additionalMetadata, textureInfo, appliedScale));
+		} catch (Throwable t) {
+			LOGGER.warn("PackForge retain failed for {}", sprite, t);
+		}
 	}
 }

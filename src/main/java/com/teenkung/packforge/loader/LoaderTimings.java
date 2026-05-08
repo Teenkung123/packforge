@@ -39,6 +39,7 @@ public final class LoaderTimings {
 	}
 
 	public static void onReloadStart() {
+		ReloadHooks.fireStart();
 		if (!FeatureFlags.loaderTimingsEnabled() && !FeatureFlags.reloadListenerTimingsEnabled()) return;
 		reloadStartNs = System.nanoTime();
 		getResourceCalls.set(0);

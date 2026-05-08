@@ -24,6 +24,8 @@ import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 public final class PackForgeConfigScreen extends Screen {
+	private static final String CATEGORY_RELOAD = "Reload Optimizer";
+	private static final String CATEGORY_ATLAS = "Large Atlas Fixer";
 	private final Screen parent;
 	private final PackForgeConfig.Cfg cfg;
 	private final PackForgeConfig.Cfg defaults = new PackForgeConfig.Cfg();
@@ -31,6 +33,7 @@ public final class PackForgeConfigScreen extends Screen {
 	private EditBox searchBox;
 	private ConfigList list;
 	private String filter = "";
+	private String activeCategory = CATEGORY_RELOAD;
 
 	public PackForgeConfigScreen(Screen parent) {
 		super(Component.literal("PackForge Config"));
@@ -50,7 +53,10 @@ public final class PackForgeConfigScreen extends Screen {
 		});
 		addRenderableWidget(searchBox);
 
-		list = new ConfigList(this.minecraft, this.width, this.height - 92, 52, 26);
+		addRenderableWidget(categoryButton(CATEGORY_RELOAD, this.width / 2 - 154, 50));
+		addRenderableWidget(categoryButton(CATEGORY_ATLAS, this.width / 2 + 4, 50));
+
+		list = new ConfigList(this.minecraft, this.width, this.height - 118, 78, 26);
 		addRenderableWidget(list);
 		rebuildList();
 
@@ -79,6 +85,9 @@ public final class PackForgeConfigScreen extends Screen {
 		list.clear();
 		String currentSection = "";
 		for (RowSpec row : rows) {
+			if (!row.category.equals(activeCategory)) {
+				continue;
+			}
 			if (!row.matches(filter)) {
 				continue;
 			}
@@ -91,40 +100,60 @@ public final class PackForgeConfigScreen extends Screen {
 	}
 
 	private void defineRows() {
-		booleanRow("Loader", "Index packs", "Build per-pack resource indexes. Main optimization for getResource/listResources namespace lookups.",
+		booleanRow(CATEGORY_RELOAD, "General", "Enable reload optimizer", "Master switch for PackForge reload-speed optimizations. Child settings stay saved while this is off.",
+			() -> cfg.reloadOptimizerEnabled, value -> cfg.reloadOptimizerEnabled = value, () -> defaults.reloadOptimizerEnabled);
+		booleanRow(CATEGORY_RELOAD, "Pack index", "Index packs", "Build per-pack resource indexes. Main optimization for getResource/listResources namespace lookups.",
 			() -> cfg.loaderIndexEnabled, value -> cfg.loaderIndexEnabled = value, () -> defaults.loaderIndexEnabled);
-		booleanRow("Loader", "ZIP read pool", "Experimental. Open per-thread ZIP handles for parallel resource reads. Default off until benchmarked.",
+		booleanRow(CATEGORY_RELOAD, "Pack index", "ZIP read pool", "Experimental. Open per-thread ZIP handles for parallel resource reads. Default off until benchmarked.",
 			() -> cfg.loaderZipPoolEnabled, value -> cfg.loaderZipPoolEnabled = value, () -> defaults.loaderZipPoolEnabled);
-		booleanRow("Loader", "Loading status overlay", "Show current reload listener on Mojang loading overlay.",
+		booleanRow(CATEGORY_RELOAD, "Reload UI", "Loading status overlay", "Show current reload listener on Mojang loading overlay.",
 			() -> cfg.loadingStatusOverlayEnabled, value -> cfg.loadingStatusOverlayEnabled = value, () -> defaults.loadingStatusOverlayEnabled);
-		booleanRow("Compatibility", "Clamp model UV transparency probe", "Avoid crashes from resource packs with tiny negative UVs during translucency checks.",
-			() -> cfg.modelUvTransparencyClampEnabled, value -> cfg.modelUvTransparencyClampEnabled = value, () -> defaults.modelUvTransparencyClampEnabled);
-		booleanRow("Fonts", "Prepare font provider selection", "Move CPU-only FontSet provider selection off render-thread apply. Big freeze reducer.",
+		booleanRow(CATEGORY_RELOAD, "Fonts", "Prepare font provider selection", "Move CPU-only FontSet provider selection off render-thread apply. Big freeze reducer.",
 			() -> cfg.fontPrepareProviderSelectionEnabled, value -> cfg.fontPrepareProviderSelectionEnabled = value, () -> defaults.fontPrepareProviderSelectionEnabled);
-		booleanRow("Fonts", "Bitmap provider cache", "Experimental. Keep off until font resource fingerprinting is proven stable.",
+		booleanRow(CATEGORY_RELOAD, "Fonts", "Bitmap provider cache", "Experimental. Keep off until font resource fingerprinting is proven stable.",
 			() -> cfg.fontBitmapProviderCacheEnabled, value -> cfg.fontBitmapProviderCacheEnabled = value, () -> defaults.fontBitmapProviderCacheEnabled);
-		booleanRow("Atlas", "Atlas cap", "Cap oversized sprite frames before atlas stitching to prevent atlas overflow.",
-			() -> cfg.atlasCapEnabled, value -> cfg.atlasCapEnabled = value, () -> defaults.atlasCapEnabled);
-		intRow("Atlas", "Atlas cap pixels", "Maximum sprite frame size when atlas cap is enabled.",
-			() -> cfg.atlasCapPx, value -> cfg.atlasCapPx = clamp(value, 16, 8192), () -> defaults.atlasCapPx);
-		textRow("Atlas", "Atlas exclude ids", "Comma-separated atlas ids excluded from sprite capping.",
-			() -> String.join(", ", cfg.atlasExcludeIds), () -> String.join(", ", defaults.atlasExcludeIds));
-		booleanRow("Atlas", "Atlas retry", "Experimental retry path for atlas overflow recovery.",
-			() -> cfg.atlasRetryEnabled, value -> cfg.atlasRetryEnabled = value, () -> defaults.atlasRetryEnabled);
-		intRow("Atlas", "Atlas retry attempts", "Maximum atlas retry attempts.",
-			() -> cfg.atlasRetryMaxAttempts, value -> cfg.atlasRetryMaxAttempts = clamp(value, 1, 10), () -> defaults.atlasRetryMaxAttempts);
-		booleanRow("Atlas", "Disable retry with Iris", "Force atlas retry off when Iris is installed, unless you want to test risky behavior.",
-			() -> cfg.forceDisablePartIIIWithIris, value -> cfg.forceDisablePartIIIWithIris = value, () -> defaults.forceDisablePartIIIWithIris);
-		booleanRow("Logging", "Loader timings", "Debug log for PackForge resource index counters. Development use.",
+		booleanRow(CATEGORY_RELOAD, "Logging", "Loader timings", "Debug log for PackForge resource index counters. Development use.",
 			() -> cfg.loaderTimingsEnabled, value -> cfg.loaderTimingsEnabled = value, () -> defaults.loaderTimingsEnabled);
-		booleanRow("Logging", "Reload listener timings", "Debug loading summary and CSV listener timings. Development use.",
+		booleanRow(CATEGORY_RELOAD, "Logging", "Reload listener timings", "Debug loading summary and CSV listener timings. Development use.",
 			() -> cfg.reloadListenerTimingsEnabled, value -> cfg.reloadListenerTimingsEnabled = value, () -> defaults.reloadListenerTimingsEnabled);
-		booleanRow("Logging", "Font reload diagnostics", "Debug font provider counts and CSV font timings. Development use.",
+		booleanRow(CATEGORY_RELOAD, "Logging", "Font reload diagnostics", "Debug font provider counts and CSV font timings. Development use.",
 			() -> cfg.fontReloadDiagnosticsEnabled, value -> cfg.fontReloadDiagnosticsEnabled = value, () -> defaults.fontReloadDiagnosticsEnabled);
+
+		booleanRow(CATEGORY_ATLAS, "General", "Enable large atlas fixer", "Master switch for atlas overflow and atlas-related resource-pack compatibility fixes. Child settings stay saved while this is off.",
+			() -> cfg.largeAtlasFixerEnabled, value -> cfg.largeAtlasFixerEnabled = value, () -> defaults.largeAtlasFixerEnabled);
+		booleanRow(CATEGORY_ATLAS, "Compatibility", "Clamp model UV transparency probe", "Avoid crashes from resource packs with tiny negative UVs during translucency checks.",
+			() -> cfg.modelUvTransparencyClampEnabled, value -> cfg.modelUvTransparencyClampEnabled = value, () -> defaults.modelUvTransparencyClampEnabled);
+		booleanRow(CATEGORY_ATLAS, "Atlas cap", "Atlas cap", "Cap oversized sprite frames before atlas stitching to prevent atlas overflow.",
+			() -> cfg.atlasCapEnabled, value -> cfg.atlasCapEnabled = value, () -> defaults.atlasCapEnabled);
+		intRow(CATEGORY_ATLAS, "Atlas cap", "Atlas cap pixels", "Maximum sprite frame size when atlas cap is enabled.",
+			() -> cfg.atlasCapPx, value -> cfg.atlasCapPx = clamp(value, 16, 8192), () -> defaults.atlasCapPx);
+		textRow(CATEGORY_ATLAS, "Atlas cap", "Atlas exclude ids", "Comma-separated atlas ids excluded from sprite capping.",
+			() -> String.join(", ", cfg.atlasExcludeIds), () -> String.join(", ", defaults.atlasExcludeIds));
+		booleanRow(CATEGORY_ATLAS, "Atlas retry", "Atlas retry", "Experimental retry path for atlas overflow recovery.",
+			() -> cfg.atlasRetryEnabled, value -> cfg.atlasRetryEnabled = value, () -> defaults.atlasRetryEnabled);
+		intRow(CATEGORY_ATLAS, "Atlas retry", "Atlas retry attempts", "Maximum atlas retry attempts.",
+			() -> cfg.atlasRetryMaxAttempts, value -> cfg.atlasRetryMaxAttempts = clamp(value, 1, 10), () -> defaults.atlasRetryMaxAttempts);
+		booleanRow(CATEGORY_ATLAS, "Atlas retry", "Disable retry with Iris", "Force atlas retry off when Iris is installed, unless you want to test risky behavior.",
+			() -> cfg.forceDisablePartIIIWithIris, value -> cfg.forceDisablePartIIIWithIris = value, () -> defaults.forceDisablePartIIIWithIris);
 	}
 
-	private void booleanRow(String section, String name, String description, BooleanSupplier getter, BoolSetter setter, BooleanSupplier defaultGetter) {
-		rows.add(new RowSpec(section, name, description, () -> {
+	private Button categoryButton(String category, int x, int y) {
+		Button button = Button.builder(categoryText(category), widget -> {
+			activeCategory = category;
+			rebuildWidgets();
+		}).bounds(x, y, 150, 20).build();
+		button.setTooltip(Tooltip.create(Component.literal(category.equals(CATEGORY_RELOAD)
+			? "Options that reduce resource-pack reload time and show reload diagnostics."
+			: "Options that prevent oversized atlas crashes and related pack compatibility failures.")));
+		return button;
+	}
+
+	private Component categoryText(String category) {
+		return Component.literal(category).withStyle(category.equals(activeCategory) ? ChatFormatting.GREEN : ChatFormatting.WHITE);
+	}
+
+	private void booleanRow(String category, String section, String name, String description, BooleanSupplier getter, BoolSetter setter, BooleanSupplier defaultGetter) {
+		rows.add(new RowSpec(category, section, name, description, () -> {
 			Button button = Button.builder(booleanText(getter.getAsBoolean()), widget -> {
 				boolean next = !getter.getAsBoolean();
 				setter.accept(next);
@@ -143,8 +172,8 @@ public final class PackForgeConfigScreen extends Screen {
 		return Component.literal(value ? "ON" : "OFF").withStyle(value ? ChatFormatting.GREEN : ChatFormatting.RED);
 	}
 
-	private void intRow(String section, String name, String description, IntSupplier getter, IntConsumer setter, IntSupplier defaultGetter) {
-		rows.add(new RowSpec(section, name, description, () -> {
+	private void intRow(String category, String section, String name, String description, IntSupplier getter, IntConsumer setter, IntSupplier defaultGetter) {
+		rows.add(new RowSpec(category, section, name, description, () -> {
 			EditBox box = new EditBox(this.font, 0, 0, 120, 20, Component.literal(name));
 			box.setValue(Integer.toString(getter.getAsInt()));
 			box.setTooltip(Tooltip.create(Component.literal(description)));
@@ -156,8 +185,8 @@ public final class PackForgeConfigScreen extends Screen {
 		}));
 	}
 
-	private void textRow(String section, String name, String description, Supplier<String> getter, Supplier<String> defaultGetter) {
-		rows.add(new RowSpec(section, name, description, () -> {
+	private void textRow(String category, String section, String name, String description, Supplier<String> getter, Supplier<String> defaultGetter) {
+		rows.add(new RowSpec(category, section, name, description, () -> {
 			EditBox box = new EditBox(this.font, 0, 0, 180, 20, Component.literal(name));
 			box.setMaxLength(512);
 			box.setValue(getter.get());
@@ -182,6 +211,8 @@ public final class PackForgeConfigScreen extends Screen {
 	}
 
 	private void copyDefaults() {
+		cfg.reloadOptimizerEnabled = defaults.reloadOptimizerEnabled;
+		cfg.largeAtlasFixerEnabled = defaults.largeAtlasFixerEnabled;
 		cfg.loaderIndexEnabled = defaults.loaderIndexEnabled;
 		cfg.loaderZipPoolEnabled = defaults.loaderZipPoolEnabled;
 		cfg.loaderTimingsEnabled = defaults.loaderTimingsEnabled;
@@ -219,7 +250,7 @@ public final class PackForgeConfigScreen extends Screen {
 		void accept(boolean value);
 	}
 
-	private record RowSpec(String section, String name, String description, Supplier<AbstractWidget> controlFactory, Runnable reset) {
+	private record RowSpec(String category, String section, String name, String description, Supplier<AbstractWidget> controlFactory, Runnable reset) {
 		boolean matches(String filter) {
 			return filter.isEmpty()
 				|| section.toLowerCase(Locale.ROOT).contains(filter)
