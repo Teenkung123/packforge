@@ -13,10 +13,10 @@ authors="Teenkung123"
 description="Faster pack reloads and atlas overflow recovery for large resource packs."
 
 [[mixins]]
-config="packforge.fabric.mixins.json"
+config="${main_mixin_config}"
 
 [[mixins]]
-config="packforge.fabric.client.mixins.json"
+config="${client_mixin_config}"
 
 [[dependencies.packforge]]
 modId="neoforge"

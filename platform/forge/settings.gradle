@@ -10,4 +10,17 @@ plugins {
 	id "org.gradle.toolchains.foojay-resolver-convention" version "1.0.0"
 }
 
+def repositoryRoot = settingsDir.parentFile.parentFile
+def registry = new groovy.json.JsonSlurper().parse(new File(repositoryRoot, "gradle/minecraft-targets.json"))
+def rootProperties = new Properties()
+new File(repositoryRoot, "gradle.properties").withInputStream { rootProperties.load(it) }
+def targetKey = gradle.startParameter.projectProperties.get("packforge_target") ?: rootProperties.getProperty("packforge_target") ?: registry.defaultTarget
+def target = registry.targets.find { it.key == targetKey }
+if (target == null) {
+	throw new GradleException("Unknown PackForge target '${targetKey}'.")
+}
+if (target.platforms.forge == null) {
+	throw new GradleException("PackForge target '${targetKey}' does not support Forge.")
+}
+
 rootProject.name = "packforge-forge"

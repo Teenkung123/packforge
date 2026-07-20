@@ -2,7 +2,6 @@ package com.teenkung.packforge.forge;
 
 import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.platform.PackForgePlatform;
-import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.nio.file.Path;
@@ -17,7 +16,7 @@ public final class ForgePackForgePlatform implements PackForgePlatform {
 
 	@Override
 	public boolean isModLoaded(String modId) {
-		return ModList.isLoaded(modId);
+		return ForgeModListCompat.isLoaded(modId);
 	}
 
 	@Override

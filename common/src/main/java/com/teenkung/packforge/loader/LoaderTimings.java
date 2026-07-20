@@ -55,15 +55,15 @@ public final class LoaderTimings {
 		listenerTimings.clear();
 	}
 
-	public static void onReloadEnd() {
+	public static void onReloadEnd(Throwable error) {
 		if (!FeatureFlags.loaderTimingsEnabled()) return;
 		long elapsedMs = (System.nanoTime() - reloadStartNs) / 1_000_000L;
 		long gr = getResourceCalls.get();
 		long gn = getNamespacesCalls.get();
 		long lr = listResourcesCalls.get();
 		long avoided = fullScansAvoided.get();
-		PackForge.LOGGER.info("PackForge reload: id={} elapsed={}ms getResource={} getNamespaces={} listResources={} fullScansAvoided={}",
-			reloadSessionId, elapsedMs, gr, gn, lr, avoided);
+		PackForge.LOGGER.info("PackForge reload complete: id={} elapsed={}ms status={} getResource={} getNamespaces={} listResources={} fullScansAvoided={}",
+			reloadSessionId, elapsedMs, error == null ? "ok" : "failed", gr, gn, lr, avoided);
 		writeReloadCountersCsvAsync(reloadSessionId, elapsedMs, gr, gn, lr, avoided);
 	}
 

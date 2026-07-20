@@ -1,122 +1,268 @@
 plugins {
-	id 'net.fabricmc.fabric-loom'
-	id 'maven-publish'
+	id "fabric-loom" apply false
+	id "net.fabricmc.fabric-loom" apply false
+	id "maven-publish"
 }
 
-def rootProperties = new Properties()
-file("../../gradle.properties").withInputStream { rootProperties.load(it) }
-def rootProperty = { String name -> project.findProperty(name) ?: rootProperties.getProperty(name) }
+ext.packforgePlatformId = "fabric"
+apply from: "../../gradle/packforge-target.gradle"
+apply plugin: packforgePlatform.mappingMode == "named" ? "fabric-loom" : "net.fabricmc.fabric-loom"
 
-version = rootProperty("mod_version")
-group = rootProperty("maven_group")
-def javaTarget = (rootProperty("java_version") as int)
-def targetKey = rootProperty("packforge_mc_key") ?: "mc${rootProperty("minecraft_version").replace(".", "_")}"
-def targetMinecraft = rootProperty("packforge_mc_target") ?: rootProperty("minecraft_version")
-def versionSourceDir = file("../../versions/${targetKey}/src")
-def minecraftDependencyMin = rootProperty("minecraft_dependency_min") ?: targetMinecraft
-def minecraftDependencyMax = rootProperty("minecraft_dependency_max")
-def minecraftDependency = rootProperty("minecraft_dependency") ?: (minecraftDependencyMax ? ">=${minecraftDependencyMin} <${minecraftDependencyMax}" : ">=${minecraftDependencyMin}")
-def fabricLoaderDependencyMin = rootProperty("fabric_loader_dependency_min") ?: rootProperty("loader_version")
-def fabricLoaderDependency = rootProperty("fabric_loader_dependency") ?: ">=${fabricLoaderDependencyMin}"
+version = packforgeModVersion
+group = packforgeMavenGroup
+
+def target = packforgeTarget
+def loaderConfig = packforgePlatform
+def javaTarget = target.javaVersion as int
+def accessWidenerFile = new File(packforgeRepositoryRoot, loaderConfig.accessWidener.toString())
+def mainMixinConfig = target.mixinConfigs.main.toString()
+def clientMixinConfig = target.mixinConfigs.client.toString()
+def artifactSmoke = providers.gradleProperty("packforge_artifact_smoke").map(Boolean::parseBoolean).orElse(false).get()
+
+layout.buildDirectory.set(file("build/${target.key}"))
 
 repositories {
 	maven {
 		name = "Terraformers"
 		url = "https://maven.terraformersmc.com/"
 	}
+	mavenCentral()
 }
 
 loom {
 	splitEnvironmentSourceSets()
+	accessWidenerPath = accessWidenerFile
 
-	accessWidenerPath = file("src/main/resources/packforge.accesswidener")
+	if (!artifactSmoke) {
+		mods {
+			"packforge" {
+				sourceSet sourceSets.main
+				sourceSet sourceSets.client
+			}
+		}
+	}
 
-	mods {
-		"packforge" {
-			sourceSet sourceSets.main
-			sourceSet sourceSets.client
+	runs {
+		client {
+			runDir("run/${target.key}")
 		}
 	}
 }
+
+def mainJavaDirs = [
+	new File(packforgeCommonRoot, "src/main/java"),
+	new File(packforgeAdapterCommonRoot, "src/main/java"),
+	file("src/main/java"),
+	new File(packforgeAdapterPlatformRoot, "src/main/java")
+]
+def mainResourceDirs = [
+	new File(packforgeCommonRoot, "src/main/resources"),
+	new File(packforgeAdapterCommonRoot, "src/main/resources"),
+	file("src/main/resources"),
+	new File(packforgeAdapterPlatformRoot, "src/main/resources")
+]
+def clientJavaDirs = [
+	new File(packforgeCommonRoot, "src/client/java"),
+	new File(packforgeAdapterCommonRoot, "src/client/java"),
+	file("src/client/java"),
+	new File(packforgeAdapterPlatformRoot, "src/client/java")
+]
+def clientResourceDirs = [
+	new File(packforgeCommonRoot, "src/client/resources"),
+	new File(packforgeAdapterCommonRoot, "src/client/resources"),
+	file("src/client/resources"),
+	new File(packforgeAdapterPlatformRoot, "src/client/resources")
+]
+def testJavaDirs = [
+	new File(packforgeCommonRoot, "src/test/java"),
+	new File(packforgeAdapterCommonRoot, "src/test/java"),
+	file("src/test/java"),
+	new File(packforgeAdapterPlatformRoot, "src/test/java")
+]
+def testResourceDirs = [
+	new File(packforgeCommonRoot, "src/test/resources"),
+	new File(packforgeAdapterCommonRoot, "src/test/resources"),
+	file("src/test/resources"),
+	new File(packforgeAdapterPlatformRoot, "src/test/resources")
+]
 
 sourceSets {
 	main {
-		java {
-			srcDir "../../common/src/main/java"
-			srcDir "${versionSourceDir}/main/java"
-			srcDir "src/main/java"
-		}
-		resources {
-			srcDir "../../common/src/main/resources"
-			srcDir "${versionSourceDir}/main/resources"
-			srcDir "src/main/resources"
-		}
+		java.setSrcDirs(mainJavaDirs)
+		resources.setSrcDirs(mainResourceDirs)
 	}
 	client {
-		java {
-			srcDir "../../common/src/client/java"
-			srcDir "${versionSourceDir}/client/java"
-			srcDir "src/client/java"
-		}
-		resources {
-			srcDir "../../common/src/client/resources"
-			srcDir "${versionSourceDir}/client/resources"
-			srcDir "src/client/resources"
-		}
+		java.setSrcDirs(clientJavaDirs)
+		resources.setSrcDirs(clientResourceDirs)
 	}
-}
-
-fabricApi {
-	configureDataGeneration {
-		client = true
+	test {
+		java.setSrcDirs(testJavaDirs)
+		resources.setSrcDirs(testResourceDirs)
 	}
 }
 
 dependencies {
-	minecraft "com.mojang:minecraft:${rootProperty("minecraft_version")}"
-	implementation "net.fabricmc:fabric-loader:${rootProperty("loader_version")}"
-	implementation "net.fabricmc.fabric-api:fabric-api:${rootProperty("fabric_api_version")}"
-	implementation "com.terraformersmc:modmenu:${rootProperty("modmenu_version")}"
+	minecraft "com.mojang:minecraft:${target.minecraftVersion}"
+	if (loaderConfig.mappingMode == "named") {
+		mappings loom.officialMojangMappings()
+	}
+	if (loaderConfig.mappingMode == "named") {
+		modImplementation "net.fabricmc:fabric-loader:${loaderConfig.loaderVersion}"
+	} else {
+		implementation "net.fabricmc:fabric-loader:${loaderConfig.loaderVersion}"
+		["asm", "asm-analysis", "asm-commons", "asm-tree", "asm-util"].each { module ->
+			runtimeOnly "org.ow2.asm:${module}:${packforgeRegistry.fabricAsmVersion}"
+		}
+		runtimeOnly "net.fabricmc:sponge-mixin:${packforgeRegistry.fabricMixinVersion}"
+	}
+	if (loaderConfig.mappingMode == "named") {
+		compileOnly "net.fabricmc:sponge-mixin:${packforgeRegistry.fabricMixinVersion}"
+	}
+	// Loom/Fabric API can inject compile-time interfaces into Minecraft classes.
+	// Keep those types available to javac without making Fabric API a runtime dependency.
+	if (loaderConfig.fabricApiVersion != null) {
+		compileOnly "net.fabricmc.fabric-api:fabric-api:${loaderConfig.fabricApiVersion}"
+	}
+	if (loaderConfig.modMenuEntrypoint) {
+		compileOnly "com.terraformersmc:modmenu:${loaderConfig.modMenuVersion}"
+		runtimeOnly "com.terraformersmc:modmenu:${loaderConfig.modMenuVersion}"
+	}
+
+	implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${packforgeMixinExtrasVersion}"))
+	include "io.github.llamalad7:mixinextras-fabric:${packforgeMixinExtrasVersion}"
+
+	testImplementation platform("org.junit:junit-bom:5.11.4")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testImplementation "org.apache.commons:commons-compress:1.27.1"
+	testImplementation "com.google.code.gson:gson:2.11.0"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 processResources {
-	def version = project.version
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	exclude "pack.mcmeta"
+	exclude "fabric.mod.json"
+	inputs.file packforgeRegistryFile
+	inputs.file accessWidenerFile
 	def properties = [
-		"version": version,
-		"minecraft_dependency": minecraftDependency,
-		"fabric_loader_dependency": fabricLoaderDependency,
-		"java_dependency": ">=${javaTarget}"
+		"version": project.version,
+		"minecraft_dependency": loaderConfig.minecraftDependency,
+		"fabric_loader_dependency": loaderConfig.loaderDependency,
+		"java_dependency": ">=${javaTarget}",
+		"main_mixin_config": mainMixinConfig,
+		"client_mixin_config": clientMixinConfig,
+		"mixin_compatibility": target.mixinCompatibility
 	]
 	inputs.properties properties
 
-	filesMatching("fabric.mod.json") {
+	filesMatching([mainMixinConfig, clientMixinConfig]) {
 		expand properties
+	}
+
+	doLast {
+		def outputDirectory = destinationDir
+		packforgeWriteGeneratedResources(outputDirectory)
+
+		def entrypoints = [
+			main: ["com.teenkung.packforge.fabric.PackForgeFabric"],
+			client: ["com.teenkung.packforge.fabric.PackForgeFabricClient"]
+		]
+		if (loaderConfig.modMenuEntrypoint) {
+			entrypoints.modmenu = ["com.teenkung.packforge.client.config.PackForgeModMenuApi"]
+		}
+		def metadata = [
+			schemaVersion: 1,
+			id: "packforge",
+			version: project.version.toString(),
+			name: "PackForge",
+			description: "Faster pack reloads and atlas overflow recovery for large resource packs.",
+			authors: ["Teenkung123"],
+			contact: [
+				homepage: "https://github.com/Teenkung/PackForge",
+				sources: "https://github.com/Teenkung/PackForge"
+			],
+			license: "MIT",
+			icon: "assets/packforge/icon.png",
+			environment: "client",
+			entrypoints: entrypoints,
+			mixins: [
+				mainMixinConfig,
+				[config: clientMixinConfig, environment: "client"]
+			],
+			accessWidener: "packforge.accesswidener",
+			depends: [
+				fabricloader: loaderConfig.loaderDependency.toString(),
+				minecraft: loaderConfig.minecraftDependency.toString(),
+				java: ">=${javaTarget}"
+			]
+		]
+		if (loaderConfig.modMenuEntrypoint) {
+			metadata.suggests = [modmenu: "*"]
+		}
+		def metadataJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(metadata))
+		new File(outputDirectory, "fabric.mod.json").setText(metadataJson + System.lineSeparator(), "UTF-8")
+	}
+}
+
+tasks.named("processClientResources") {
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	inputs.file packforgeRegistryFile
+	inputs.property "mixin_compatibility", target.mixinCompatibility
+	filesMatching(clientMixinConfig) {
+		expand "mixin_compatibility": target.mixinCompatibility
 	}
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = javaTarget
+	options.release = javaTarget
+	options.encoding = "UTF-8"
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}
+
+tasks.register("benchmarkPackIndex", JavaExec) {
+	group = "verification"
+	description = "Runs the deterministic, non-gating PackIndex microbenchmark."
+	dependsOn tasks.named("testClasses")
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = "com.teenkung.packforge.loader.PackIndexBenchmark"
+	args layout.buildDirectory.dir("benchmark").get().asFile.absolutePath,
+		java.util.Base64.encoder.encodeToString(groovy.json.JsonOutput.toJson(packforgeBuildPackMetadata(true)).getBytes("UTF-8"))
 }
 
 java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(javaTarget)
+	}
 	withSourcesJar()
-
 	sourceCompatibility = JavaVersion.toVersion(javaTarget)
 	targetCompatibility = JavaVersion.toVersion(javaTarget)
 }
 
 jar {
 	inputs.property "projectName", project.name
-	archiveFileName = "packforge-fabric-${project.version}-mc${targetMinecraft}.jar"
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	archiveFileName = "packforge-fabric-${project.version}-mc${target.artifactMinecraft}.jar"
 
 	from("../../LICENSE") {
-		rename { "${it}_${project.name}"}
+		rename { "${it}_${project.name}" }
 	}
 }
 
 tasks.named("sourcesJar") {
-	archiveFileName = "packforge-fabric-${project.version}-mc${targetMinecraft}-sources.jar"
-	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	archiveFileName = "packforge-fabric-${project.version}-mc${target.artifactMinecraft}-sources.jar"
+}
+
+if (loaderConfig.mappingMode == "named") {
+	tasks.named("remapJar") {
+		archiveFileName = "packforge-fabric-${project.version}-mc${target.artifactMinecraft}.jar"
+	}
+	tasks.named("remapSourcesJar") {
+		archiveFileName = "packforge-fabric-${project.version}-mc${target.artifactMinecraft}-sources.jar"
+	}
 }
 
 publishing {
@@ -125,7 +271,6 @@ publishing {
 			from components.java
 		}
 	}
-
 	repositories {
 	}
 }

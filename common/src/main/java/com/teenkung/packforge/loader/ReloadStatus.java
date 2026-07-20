@@ -67,7 +67,7 @@ public final class ReloadStatus {
 	}
 
 	public static String line(float progress) {
-		int percent = Math.clamp(Math.round(progress * 100.0f), 0, 100);
+		int percent = Math.max(0, Math.min(100, Math.round(progress * 100.0f)));
 		long elapsedMs = startNs == 0L ? 0L : (System.nanoTime() - startNs) / 1_000_000L;
 		return "Loading resources - " + percent + "% - " + elapsedMs + "ms";
 	}

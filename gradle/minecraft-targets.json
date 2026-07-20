@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 1,
+  "defaultTarget": "mc26_1_to_26_2",
+  "mixinExtrasVersion": "0.5.4",
+  "fabricAsmVersion": "9.10.1",
+  "fabricMixinVersion": "0.17.3+mixin.0.8.7",
+  "targets": [
+    {
+      "key": "mc26_1_to_26_2",
+      "taskSuffix": "Mc26_1To26_2",
+      "minecraftVersion": "26.1",
+      "artifactMinecraft": "26.1-26.2",
+      "apiAdapter": "mc26",
+      "javaVersion": 25,
+      "mixinCompatibility": "JAVA_21",
+      "legacyApi": false,
+      "packMetadata": {
+        "schema": "range",
+        "minFormat": [84, 0],
+        "maxFormat": [88, 0]
+      },
+      "mixinConfigs": {
+        "main": "packforge.fabric.mixins.json",
+        "client": "packforge.fabric.client.mixins.json"
+      },
+      "capabilities": [
+        "RESOURCE_PACK_INDEX",
+        "ZIP_READ_POOL",
+        "LOADER_TIMINGS",
+        "RELOAD_LISTENER_TIMINGS",
+        "SHADER_STALL_DIAGNOSTICS",
+        "IMMEDIATELY_FAST_FONT_ATLAS_COMPAT",
+        "LOADING_STATUS_OVERLAY",
+        "LOADING_FADE_CONTROL",
+        "RELOAD_SUMMARY_TOAST",
+        "MODEL_UV_TRANSPARENCY_CLAMP",
+        "FONT_RELOAD_DIAGNOSTICS",
+        "FONT_PROVIDER_PRESELECTION",
+        "FONT_BITMAP_CACHE",
+        "ATLAS_PHASE_TIMINGS",
+        "ATLAS_MIP_PARALLEL",
+        "ATLAS_DECODE_BATCHING",
+        "MODEL_PARSE_BATCHING",
+        "MODEL_PARSE_TIMINGS",
+        "MODEL_ADAPTIVE_BATCHING",
+        "MODEL_DUPLICATE_CACHE",
+        "ATLAS_CAP",
+        "ATLAS_RETRY",
+        "STARTUP_OPTIMIZER",
+        "STARTUP_TIMINGS",
+        "STARTUP_STATUS_OVERLAY",
+        "STARTUP_EXECUTOR_TUNING",
+        "STARTUP_ASYNC_DATA",
+        "STARTUP_ASYNC_CLASS_SCAN",
+        "STARTUP_ASYNC_FONT_ATLAS"
+      ],
+      "platforms": {
+        "fabric": {
+          "maturity": "stable",
+          "versionSuffix": "",
+          "loomVersion": "1.17.16",
+          "loaderVersion": "0.19.3",
+          "loaderDependency": ">=0.19.3",
+          "fabricApiVersion": "0.145.1+26.1",
+          "minecraftDependency": ">=26.1 <26.3",
+          "mappingMode": "official",
+          "accessWidener": "versions/mc26/fabric/src/main/resources/packforge.accesswidener",
+          "modMenuVersion": "18.0.0-alpha.8",
+          "modMenuEntrypoint": true
+        },
+        "forge": {
+          "maturity": "stable",
+          "versionSuffix": "",
+          "version": "26.1-62.0.9",
+          "versionRange": "[62.0.9,66.0.0)",
+          "minecraftVersionRange": "[26.1,26.3)"
+        },
+        "neoforge": {
+          "maturity": "stable",
+          "versionSuffix": "",
+          "version": "26.1.0.19-beta",
+          "versionRange": "[26.1.0.19-beta,26.3)",
+          "minecraftVersionRange": "[26.1,26.3)"
+        }
+      }
+    },
+    {
+      "key": "mc1_21_1",
+      "taskSuffix": "Mc1_21_1",
+      "minecraftVersion": "1.21.1",
+      "artifactMinecraft": "1.21.1",
+      "apiAdapter": "mc1_21_1",
+      "javaVersion": 21,
+      "mixinCompatibility": "JAVA_21",
+      "legacyApi": true,
+      "packMetadata": {
+        "schema": "single",
+        "packFormat": 34
+      },
+      "mixinConfigs": {
+        "main": "packforge.fabric.mixins.json",
+        "client": "packforge.fabric.client.mixins.json"
+      },
+      "capabilities": [
+        "RESOURCE_PACK_INDEX",
+        "ZIP_READ_POOL",
+        "LOADER_TIMINGS"
+      ],
+      "platforms": {
+        "fabric": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "loomVersion": "1.17.16",
+          "loaderVersion": "0.19.3",
+          "loaderDependency": ">=0.19.3",
+          "minecraftDependency": "=1.21.1",
+          "mappingMode": "named",
+          "accessWidener": "versions/mc1_21_1/fabric/src/main/resources/packforge.accesswidener",
+          "modMenuVersion": "11.0.4",
+          "modMenuEntrypoint": false
+        },
+        "forge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "version": "1.21.1-52.1.15",
+          "versionRange": "[52.1.15,53)",
+          "minecraftVersionRange": "[1.21.1]"
+        },
+        "neoforge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "version": "21.1.241",
+          "versionRange": "[21.1.241,21.2)",
+          "minecraftVersionRange": "[1.21.1]"
+        }
+      }
+    },
+    {
+      "key": "mc1_21_4",
+      "taskSuffix": "Mc1_21_4",
+      "minecraftVersion": "1.21.4",
+      "artifactMinecraft": "1.21.4",
+      "apiAdapter": "mc1_21_4",
+      "javaVersion": 21,
+      "mixinCompatibility": "JAVA_21",
+      "legacyApi": true,
+      "packMetadata": {
+        "schema": "single",
+        "packFormat": 46
+      },
+      "mixinConfigs": {
+        "main": "packforge.fabric.mixins.json",
+        "client": "packforge.fabric.client.mixins.json"
+      },
+      "capabilities": [
+        "RESOURCE_PACK_INDEX",
+        "ZIP_READ_POOL",
+        "LOADER_TIMINGS"
+      ],
+      "platforms": {
+        "fabric": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "loomVersion": "1.17.16",
+          "loaderVersion": "0.19.3",
+          "loaderDependency": ">=0.19.3",
+          "minecraftDependency": "=1.21.4",
+          "mappingMode": "named",
+          "accessWidener": "versions/mc1_21_4/fabric/src/main/resources/packforge.accesswidener",
+          "modMenuVersion": "13.0.4",
+          "modMenuEntrypoint": false
+        },
+        "forge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "version": "1.21.4-54.1.17",
+          "versionRange": "[54.1.17,55)",
+          "minecraftVersionRange": "[1.21.4]"
+        },
+        "neoforge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "version": "21.4.157",
+          "versionRange": "[21.4.157,21.5)",
+          "minecraftVersionRange": "[1.21.4]"
+        }
+      }
+    },
+    {
+      "key": "mc1_21_8",
+      "taskSuffix": "Mc1_21_8",
+      "minecraftVersion": "1.21.8",
+      "artifactMinecraft": "1.21.8",
+      "apiAdapter": "mc1_21_8",
+      "javaVersion": 21,
+      "mixinCompatibility": "JAVA_21",
+      "legacyApi": true,
+      "packMetadata": {
+        "schema": "single",
+        "packFormat": 64
+      },
+      "mixinConfigs": {
+        "main": "packforge.fabric.mixins.json",
+        "client": "packforge.fabric.client.mixins.json"
+      },
+      "capabilities": [
+        "RESOURCE_PACK_INDEX",
+        "ZIP_READ_POOL",
+        "LOADER_TIMINGS"
+      ],
+      "platforms": {
+        "fabric": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "loomVersion": "1.17.16",
+          "loaderVersion": "0.19.3",
+          "loaderDependency": ">=0.19.3",
+          "minecraftDependency": "=1.21.8",
+          "mappingMode": "named",
+          "accessWidener": "versions/mc1_21_8/fabric/src/main/resources/packforge.accesswidener",
+          "modMenuVersion": "15.0.2",
+          "modMenuEntrypoint": false
+        },
+        "forge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "version": "1.21.8-58.1.19",
+          "versionRange": "[58.1.19,59)",
+          "minecraftVersionRange": "[1.21.8]"
+        },
+        "neoforge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "version": "21.8.54",
+          "versionRange": "[21.8.54,21.9)",
+          "minecraftVersionRange": "[1.21.8]"
+        }
+      }
+    },
+    {
+      "key": "mc1_21_11",
+      "taskSuffix": "Mc1_21_11",
+      "minecraftVersion": "1.21.11",
+      "artifactMinecraft": "1.21.11",
+      "apiAdapter": "mc1_21_11",
+      "javaVersion": 21,
+      "mixinCompatibility": "JAVA_21",
+      "legacyApi": true,
+      "packMetadata": {
+        "schema": "range",
+        "minFormat": [75, 0],
+        "maxFormat": [75, 0]
+      },
+      "mixinConfigs": {
+        "main": "packforge.fabric.mixins.json",
+        "client": "packforge.fabric.client.mixins.json"
+      },
+      "capabilities": [
+        "RESOURCE_PACK_INDEX",
+        "ZIP_READ_POOL",
+        "LOADER_TIMINGS"
+      ],
+      "platforms": {
+        "fabric": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "loomVersion": "1.17.16",
+          "loaderVersion": "0.19.3",
+          "loaderDependency": ">=0.19.3",
+          "minecraftDependency": "=1.21.11",
+          "mappingMode": "named",
+          "accessWidener": "versions/mc1_21_11/fabric/src/main/resources/packforge.accesswidener",
+          "modMenuVersion": "17.0.0",
+          "modMenuEntrypoint": false
+        },
+        "forge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "version": "1.21.11-61.1.9",
+          "versionRange": "[61.1.9,62)",
+          "minecraftVersionRange": "[1.21.11]"
+        },
+        "neoforge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "version": "21.11.44",
+          "versionRange": "[21.11.44,21.12)",
+          "minecraftVersionRange": "[1.21.11]"
+        }
+      }
+    },
+    {
+      "key": "mc1_20_1",
+      "taskSuffix": "Mc1_20_1",
+      "minecraftVersion": "1.20.1",
+      "artifactMinecraft": "1.20.1",
+      "apiAdapter": "mc1_20_1",
+      "javaVersion": 17,
+      "mixinCompatibility": "JAVA_17",
+      "legacyApi": true,
+      "packMetadata": {
+        "schema": "single",
+        "packFormat": 15
+      },
+      "mixinConfigs": {
+        "main": "packforge.fabric.mixins.json",
+        "client": "packforge.fabric.client.mixins.json"
+      },
+      "capabilities": [
+        "RESOURCE_PACK_INDEX",
+        "ZIP_READ_POOL",
+        "LOADER_TIMINGS"
+      ],
+      "platforms": {
+        "fabric": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "loomVersion": "1.17.16",
+          "loaderVersion": "0.19.3",
+          "loaderDependency": ">=0.19.3",
+          "minecraftDependency": "=1.20.1",
+          "mappingMode": "named",
+          "accessWidener": "versions/mc1_20_1/fabric/src/main/resources/packforge.accesswidener",
+          "modMenuVersion": "7.2.2",
+          "modMenuEntrypoint": false
+        },
+        "forge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.1",
+          "version": "1.20.1-47.4.21",
+          "versionRange": "[47.4.21,48)",
+          "minecraftVersionRange": "[1.20.1]"
+        }
+      }
+    }
+  ]
+}

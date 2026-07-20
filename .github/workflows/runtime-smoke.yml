@@ -1,0 +1,114 @@
+name: Runtime client smoke
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: ${{ matrix.target }} / ${{ matrix.platform }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: mc26_1_to_26_2, platform: fabric }
+          - { target: mc26_1_to_26_2, platform: forge }
+          - { target: mc26_1_to_26_2, platform: neoforge }
+          - { target: mc1_21_1, platform: fabric }
+          - { target: mc1_21_1, platform: forge }
+          - { target: mc1_21_1, platform: neoforge }
+          - { target: mc1_21_4, platform: fabric }
+          - { target: mc1_21_4, platform: forge }
+          - { target: mc1_21_4, platform: neoforge }
+          - { target: mc1_21_8, platform: fabric }
+          - { target: mc1_21_8, platform: forge }
+          - { target: mc1_21_8, platform: neoforge }
+          - { target: mc1_21_11, platform: fabric }
+          - { target: mc1_21_11, platform: forge }
+          - { target: mc1_21_11, platform: neoforge }
+          - { target: mc1_20_1, platform: fabric }
+          - { target: mc1_20_1, platform: forge }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Install virtual display controls
+        run: sudo apt-get update && sudo apt-get install -y xvfb xdotool openbox
+
+      - name: Restore target-scoped runtime cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            platform/forge/.gradle/mavenizer
+          key: packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          restore-keys: |
+            packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-
+
+      - name: Boot, reload twice, and exit cleanly
+        run: |
+          chmod +x gradlew scripts/smoke-client.sh
+          ./scripts/smoke-client.sh "${{ matrix.platform }}" "${{ matrix.target }}" 900
+
+      - name: Upload client logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.target }}-${{ matrix.platform }}
+          path: |
+            platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/latest.log
+            platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/packforge-smoke-gradle.log
+          if-no-files-found: warn
+
+  benchmark:
+    name: 1.21.1 Fabric release benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Install virtual display controls
+        run: sudo apt-get update && sudo apt-get install -y xvfb xdotool openbox
+
+      - name: Restore benchmark cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: packforge-benchmark-${{ runner.os }}-mc1_21_1-fabric-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          restore-keys: |
+            packforge-benchmark-${{ runner.os }}-mc1_21_1-fabric-
+
+      - name: Enforce warm, cold, and resource-equivalence gates
+        run: |
+          chmod +x gradlew scripts/smoke-client.sh scripts/benchmark-client.sh
+          ./scripts/benchmark-client.sh fabric mc1_21_1 build/runtime-benchmark/mc1_21_1-fabric 900
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-mc1_21_1-fabric
+          path: build/runtime-benchmark/mc1_21_1-fabric
+          if-no-files-found: warn

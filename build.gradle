@@ -1,5 +1,30 @@
+import groovy.json.JsonSlurper
+import java.util.zip.ZipFile
+
 version = project.mod_version
 group = project.maven_group
+
+def registryFile = file("gradle/minecraft-targets.json")
+def registry = new JsonSlurper().parse(registryFile)
+if (registry.schemaVersion != 1) {
+	throw new GradleException("Unsupported PackForge target registry schema: ${registry.schemaVersion}")
+}
+
+def targets = registry.targets
+def targetKeys = targets.collect { it.key }
+if (targetKeys.size() != targetKeys.toSet().size()) {
+	throw new GradleException("PackForge target keys must be unique.")
+}
+def taskSuffixes = targets.collect { it.taskSuffix }
+if (taskSuffixes.size() != taskSuffixes.toSet().size()) {
+	throw new GradleException("PackForge target task suffixes must be unique.")
+}
+
+def selectedTargetKey = providers.gradleProperty("packforge_target").orElse(registry.defaultTarget).get()
+def selectedTarget = targets.find { it.key == selectedTargetKey }
+if (selectedTarget == null) {
+	throw new GradleException("Unknown PackForge target '${selectedTargetKey}'. Valid targets: ${targetKeys.join(', ')}")
+}
 
 def gradlew = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows") ? "gradlew.bat" : "./gradlew"
 def platformBuilds = [
@@ -8,145 +33,305 @@ def platformBuilds = [
 	[name: "Forge", id: "forge", path: "platform/forge"]
 ]
 
-def supportedMinecraftTargets = [
-	[
-		key: "mc26_1",
-		taskSuffix: "Mc26_1",
-		minecraftVersion: "26.1",
-		minecraftDependencyMin: "26.1",
-		minecraftDependencyMax: "26.1.1",
-		minecraftVersionRange: "[26.1,26.1.1)",
-		loaderVersion: "0.19.3",
-		fabricLoaderDependencyMin: "0.19.3",
-		fabricApiVersion: "0.145.1+26.1",
-		loomVersion: "1.17.13",
-		forgeVersion: "26.1-62.0.9",
-		forgeVersionRange: "[62.0.9,63.0.0)",
-		neoforgeVersion: "26.1.0.19-beta",
-		neoforgeVersionRange: "[26.1.0.19-beta,26.1.1)"
-	],
-	[
-		key: "mc26_1_1",
-		taskSuffix: "Mc26_1_1",
-		minecraftVersion: "26.1.1",
-		minecraftDependencyMin: "26.1.1",
-		minecraftDependencyMax: "26.1.2",
-		minecraftVersionRange: "[26.1.1,26.1.2)",
-		loaderVersion: "0.19.3",
-		fabricLoaderDependencyMin: "0.19.3",
-		fabricApiVersion: "0.145.4+26.1.1",
-		loomVersion: "1.17.13",
-		forgeVersion: "26.1.1-63.0.2",
-		forgeVersionRange: "[63.0.2,64.0.0)",
-		neoforgeVersion: "26.1.1.15-beta",
-		neoforgeVersionRange: "[26.1.1.15-beta,26.1.2)"
-	],
-	[
-		key: "mc26_1_2",
-		taskSuffix: "Mc26_1_2",
-		minecraftVersion: "26.1.2",
-		minecraftDependencyMin: "26.1.2",
-		minecraftDependencyMax: "26.2",
-		minecraftVersionRange: "[26.1.2,26.2)",
-		loaderVersion: "0.19.3",
-		fabricLoaderDependencyMin: "0.19.3",
-		fabricApiVersion: "0.154.2+26.1.2",
-		loomVersion: "1.17.13",
-		forgeVersion: "26.1.2-64.0.11",
-		forgeVersionRange: "[64.0.11,65.0.0)",
-		neoforgeVersion: "26.1.2.78",
-		neoforgeVersionRange: "[26.1.2.78,26.2)"
-	],
-	[
-		key: "mc26_2",
-		taskSuffix: "Mc26_2",
-		minecraftVersion: "26.2",
-		minecraftDependencyMin: "26.2",
-		minecraftDependencyMax: "26.3",
-		minecraftVersionRange: "[26.2,26.3)",
-		loaderVersion: "0.19.3",
-		fabricLoaderDependencyMin: "0.19.3",
-		fabricApiVersion: "0.154.2+26.2",
-		loomVersion: "1.17.13",
-		forgeVersion: "26.2-65.0.3",
-		forgeVersionRange: "[65.0.3,66.0.0)",
-		neoforgeVersion: "26.2.0.8-beta",
-		neoforgeVersionRange: "[26.2.0.8-beta,26.3)"
-	]
-]
-
-def targetPropertyArgs = { target ->
-	[
-		"packforge_mc_key": target.key,
-		"packforge_mc_target": target.minecraftVersion,
-		"minecraft_version": target.minecraftVersion,
-		"minecraft_dependency_min": target.minecraftDependencyMin,
-		"minecraft_dependency_max": target.minecraftDependencyMax,
-		"minecraft_version_range": target.minecraftVersionRange,
-		"loader_version": target.loaderVersion,
-		"fabric_loader_dependency_min": target.fabricLoaderDependencyMin,
-		"fabric_api_version": target.fabricApiVersion,
-		"loom_version": target.loomVersion,
-		"forge_version": target.forgeVersion,
-		"forge_version_range": target.forgeVersionRange,
-		"neoforge_version": target.neoforgeVersion,
-		"neoforge_version_range": target.neoforgeVersionRange
-	].collect { name, value -> "-P${name}=${value}" }
+def targetSupports = { target, platform -> target.platforms[platform.id] != null }
+def artifactName = { target, platform ->
+	def loader = target.platforms[platform.id]
+	"packforge-${platform.id}-${project.version}${loader.versionSuffix}-mc${target.artifactMinecraft}.jar"
 }
 
-def defaultTarget = supportedMinecraftTargets.find { it.key == "mc26_1_2" }
+def readZipText = { ZipFile archive, String path ->
+	def entry = archive.getEntry(path)
+	if (entry == null) {
+		throw new GradleException("Artifact is missing '${path}'.")
+	}
+	archive.getInputStream(entry).withCloseable { input ->
+		new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+	}
+}
+
+def verifyArtifact = { target, platform, File artifact ->
+	if (!artifact.isFile()) {
+		throw new GradleException("Expected PackForge artifact was not produced: ${artifact}")
+	}
+	def loader = target.platforms[platform.id]
+	new ZipFile(artifact).withCloseable { archive ->
+		def names = archive.entries().toList().collect { it.name }
+		def duplicates = names.countBy { it }.findAll { name, count -> count > 1 }.keySet()
+		if (!duplicates.isEmpty()) {
+			throw new GradleException("${artifact.name} contains duplicate entries: ${duplicates.sort().join(', ')}")
+		}
+
+		def forbiddenBridgePaths = [
+			"com/teenkung/packforge/mixin/loader/SharedZipFileAccessBridge.class",
+			"com/teenkung/packforge/loader/SharedZipFileAccessBridge.class"
+		]
+		def forbiddenBridge = forbiddenBridgePaths.find { names.contains(it) }
+		if (forbiddenBridge != null) {
+			throw new GradleException("${artifact.name} packages the shared ZIP bridge at a forbidden path: ${forbiddenBridge}")
+		}
+		if (target.key != "mc1_20_1"
+			&& !names.contains("com/teenkung/packforge/internal/loader/SharedZipFileAccessBridge.class")) {
+			throw new GradleException("${artifact.name} is missing the shared ZIP access bridge outside its Mixin package.")
+		}
+
+		def expectedMixinExtras = "mixinextras-${platform.id}-${registry.mixinExtrasVersion}.jar"
+		def nestedMixinExtras = names.find { it.endsWith("/${expectedMixinExtras}") }
+		if (nestedMixinExtras == null) {
+			throw new GradleException("${artifact.name} does not embed pinned MixinExtras ${registry.mixinExtrasVersion}.")
+		}
+
+		def packMetadata = new JsonSlurper().parseText(readZipText(archive, "pack.mcmeta")).pack
+		if (target.packMetadata.schema == "single") {
+			if ((packMetadata.pack_format as int) != (target.packMetadata.packFormat as int)) {
+				throw new GradleException("${artifact.name} has the wrong resource-pack format.")
+			}
+		} else {
+			def actualMin = packMetadata.min_format.collect { it as int }
+			def actualMax = packMetadata.max_format.collect { it as int }
+			def expectedMin = target.packMetadata.minFormat.collect { it as int }
+			def expectedMax = target.packMetadata.maxFormat.collect { it as int }
+			if (actualMin != expectedMin || actualMax != expectedMax) {
+				throw new GradleException("${artifact.name} has the wrong resource-pack format range.")
+			}
+		}
+
+		def capabilities = new Properties()
+		archive.getInputStream(archive.getEntry("packforge-capabilities.properties")).withCloseable { capabilities.load(it) }
+		if (capabilities.getProperty("target") != target.key
+			|| capabilities.getProperty("minecraft") != target.artifactMinecraft
+			|| capabilities.getProperty("maturity") != loader.maturity
+			|| capabilities.getProperty("beta") != (loader.maturity == "beta").toString()
+			|| capabilities.getProperty("capabilities") != target.capabilities.join(",")) {
+			throw new GradleException("${artifact.name} contains stale target capability metadata.")
+		}
+
+		[target.mixinConfigs.main, target.mixinConfigs.client].each { mixinPath ->
+			def mixin = new JsonSlurper().parseText(readZipText(archive, mixinPath.toString()))
+			if (mixin.compatibilityLevel != target.mixinCompatibility) {
+				throw new GradleException("${artifact.name} has an incorrect mixin compatibility level in ${mixinPath}.")
+			}
+		}
+
+		def coreClass = archive.getEntry("com/teenkung/packforge/PackForgeCore.class")
+		if (coreClass == null) {
+			throw new GradleException("${artifact.name} is missing PackForgeCore.class.")
+		}
+		def header = archive.getInputStream(coreClass).withCloseable { it.readNBytes(8) }
+		def actualMajor = (Byte.toUnsignedInt(header[6]) << 8) | Byte.toUnsignedInt(header[7])
+		def expectedMajor = [17: 61, 21: 65, 25: 69][target.javaVersion as int]
+		if (actualMajor != expectedMajor) {
+			throw new GradleException("${artifact.name} uses class-file major ${actualMajor}; expected ${expectedMajor}.")
+		}
+
+		if (platform.id == "fabric") {
+			def fabricMetadata = new JsonSlurper().parseText(readZipText(archive, "fabric.mod.json"))
+			if (fabricMetadata.depends.minecraft != loader.minecraftDependency
+				|| fabricMetadata.depends.fabricloader != loader.loaderDependency
+				|| fabricMetadata.depends.containsKey("fabric-api")) {
+				throw new GradleException("${artifact.name} has incorrect Fabric dependency ranges.")
+			}
+			def accessWidener = readZipText(archive, "packforge.accesswidener").readLines().first().trim().split(/\s+/).toList()
+			def expectedNamespace = target.legacyApi ? "intermediary" : "official"
+			if (accessWidener != ["accessWidener", "v2", expectedNamespace]) {
+				throw new GradleException("${artifact.name} has access-widener header '${accessWidener.join(' ')}', expected namespace '${expectedNamespace}'.")
+			}
+		} else if (platform.id == "forge") {
+			def modsToml = readZipText(archive, "META-INF/mods.toml")
+			if (!modsToml.contains("versionRange=\"${loader.versionRange}\"")
+				|| !modsToml.contains("versionRange=\"${loader.minecraftVersionRange}\"")) {
+				throw new GradleException("${artifact.name} has incorrect Forge dependency ranges.")
+			}
+			if (target.minecraftVersion == "1.20.1") {
+				[target.mixinConfigs.main, target.mixinConfigs.client].each { mixinPath ->
+					def mixin = new JsonSlurper().parseText(readZipText(archive, mixinPath.toString()))
+					if (!(mixin.refmap instanceof String) || mixin.refmap.isBlank() || archive.getEntry(mixin.refmap) == null) {
+						throw new GradleException("${artifact.name} is missing the generated legacy Forge Mixin refmap for ${mixinPath}.")
+					}
+				}
+			}
+		} else if (platform.id == "neoforge") {
+			def modsToml = readZipText(archive, "META-INF/neoforge.mods.toml")
+			if (!modsToml.contains("versionRange=\"${loader.versionRange}\"")
+				|| !modsToml.contains("versionRange=\"${loader.minecraftVersionRange}\"")) {
+				throw new GradleException("${artifact.name} has incorrect NeoForge dependency ranges.")
+			}
+		}
+	}
+}
+def nestedCommand = { platform, target, taskName ->
+	[gradlew, "-p", platform.path, "-Ppackforge_target=${target.key}", taskName]
+}
+
+tasks.register("validateTargetRegistry") {
+	group = "verification"
+	description = "Validates the PackForge target registry and adapter declarations."
+	inputs.file registryFile
+	doLast {
+		if (registry.defaultTarget == null || !targetKeys.contains(registry.defaultTarget)) {
+			throw new GradleException("defaultTarget must identify a declared PackForge target.")
+		}
+		["mixinExtrasVersion", "fabricAsmVersion", "fabricMixinVersion"].each { field ->
+			if (registry[field] == null) {
+				throw new GradleException("PackForge target registry is missing '${field}'.")
+			}
+		}
+		targets.each { target ->
+			["key", "taskSuffix", "minecraftVersion", "artifactMinecraft", "apiAdapter", "javaVersion", "legacyApi", "packMetadata", "mixinConfigs", "capabilities", "platforms"].each { field ->
+				if (target[field] == null) {
+					throw new GradleException("PackForge target '${target.key}' is missing '${field}'.")
+				}
+			}
+			if (target.platforms.isEmpty()) {
+				throw new GradleException("PackForge target '${target.key}' must enable at least one platform.")
+			}
+			target.platforms.keySet().each { platformId ->
+				if (!platformBuilds.any { it.id == platformId }) {
+					throw new GradleException("PackForge target '${target.key}' declares unknown platform '${platformId}'.")
+				}
+			}
+			if (!(target.packMetadata.schema in ["single", "range"])) {
+				throw new GradleException("PackForge target '${target.key}' has unsupported pack metadata schema '${target.packMetadata.schema}'.")
+			}
+			target.platforms.each { platformId, loader ->
+				["maturity", "versionSuffix"].each { field ->
+					if (loader[field] == null) {
+						throw new GradleException("PackForge target '${target.key}' platform '${platformId}' is missing '${field}'.")
+					}
+				}
+				if (!(loader.maturity in ["beta", "stable"])) {
+					throw new GradleException("PackForge target '${target.key}' platform '${platformId}' has unsupported maturity '${loader.maturity}'.")
+				}
+				if (loader.maturity == "beta" && !loader.versionSuffix.toString().matches(/-beta\.\d+/)) {
+					throw new GradleException("Beta target '${target.key}' platform '${platformId}' must use an explicit -beta.N suffix.")
+				}
+				if (loader.maturity == "stable" && !loader.versionSuffix.toString().isEmpty()) {
+					throw new GradleException("Stable target '${target.key}' platform '${platformId}' must not use a prerelease suffix.")
+				}
+				if (target.legacyApi && platformId == "fabric" && loader.minecraftDependency != "=${target.minecraftVersion}") {
+					throw new GradleException("Legacy Fabric target '${target.key}' must declare exact Minecraft compatibility.")
+				}
+				if (target.legacyApi && platformId in ["forge", "neoforge"] && loader.minecraftVersionRange != "[${target.minecraftVersion}]") {
+					throw new GradleException("Legacy ${platformId} target '${target.key}' must declare an exact singleton Minecraft range.")
+				}
+			}
+		}
+	}
+}
 
 platformBuilds.each { platform ->
-	tasks.register("build${platform.name}Platform", Exec) {
-		group = "build"
-		description = "Builds the ${platform.name} PackForge jar for the default Minecraft target."
-		commandLine([gradlew, "-p", platform.path] + targetPropertyArgs(defaultTarget) + ["build"])
-	}
+	if (targetSupports(selectedTarget, platform)) {
+		tasks.register("build${platform.name}Platform", Exec) {
+			group = "build"
+			description = "Builds the ${platform.name} PackForge jar for ${selectedTarget.artifactMinecraft}."
+			dependsOn tasks.named("validateTargetRegistry")
+			commandLine nestedCommand(platform, selectedTarget, "build")
+		}
 
-	tasks.register("run${platform.name}Client", Exec) {
-		group = "run"
-		description = "Runs a ${platform.name} Minecraft client with PackForge loaded for the default Minecraft target."
-		commandLine([gradlew, "-p", platform.path] + targetPropertyArgs(defaultTarget) + ["runClient"])
+		tasks.register("run${platform.name}Client", Exec) {
+			group = "run"
+			description = "Runs the ${platform.name} client for ${selectedTarget.artifactMinecraft}."
+			dependsOn tasks.named("validateTargetRegistry")
+			commandLine nestedCommand(platform, selectedTarget, "runClient")
+		}
 	}
 }
 
-supportedMinecraftTargets.each { target ->
-	def platformTasksForTarget = []
+def buildTasksByTarget = [:]
+def buildTasksByPlatform = platformBuilds.collectEntries { [(it.id): []] }
+def verificationTasksByTarget = [:]
 
-	platformBuilds.each { platform ->
-		def taskName = "build${platform.name}${target.taskSuffix}Platform"
-		def buildTask = tasks.register(taskName, Exec) {
+targets.each { target ->
+	def targetBuildTasks = []
+
+	platformBuilds.findAll { targetSupports(target, it) }.each { platform ->
+		def buildTask = tasks.register("build${platform.name}${target.taskSuffix}Platform", Exec) {
 			group = "build"
-			description = "Builds the ${platform.name} PackForge jar for Minecraft ${target.minecraftVersion}."
-			commandLine([gradlew, "-p", platform.path] + targetPropertyArgs(target) + ["build"])
+			description = "Builds the ${platform.name} PackForge jar for ${target.artifactMinecraft}."
+			dependsOn tasks.named("validateTargetRegistry")
+			commandLine nestedCommand(platform, target, "build")
 		}
-		platformTasksForTarget << buildTask
+		targetBuildTasks << buildTask
+		buildTasksByPlatform[platform.id] << buildTask
+
+		tasks.register("run${platform.name}${target.taskSuffix}Client", Exec) {
+			group = "run"
+			description = "Runs the ${platform.name} client for ${target.artifactMinecraft}."
+			dependsOn tasks.named("validateTargetRegistry")
+			commandLine nestedCommand(platform, target, "runClient")
+		}
 	}
 
-	tasks.register("collect${target.taskSuffix}PlatformJars", Copy) {
+	def collectTask = tasks.register("collect${target.taskSuffix}PlatformJars", Copy) {
 		group = "build"
-		description = "Collects all PackForge jars for Minecraft ${target.minecraftVersion} into root build/libs."
-		dependsOn platformTasksForTarget
+		description = "Collects PackForge ${target.artifactMinecraft} jars into root build/libs."
+		dependsOn targetBuildTasks
+		duplicatesStrategy = DuplicatesStrategy.FAIL
 
-		platformBuilds.each { platform ->
-			from("${platform.path}/build/libs") {
-				include "packforge-${platform.id}-${project.version}-mc${target.minecraftVersion}.jar"
+		platformBuilds.findAll { targetSupports(target, it) }.each { platform ->
+			from("${platform.path}/build/${target.key}/libs") {
+				include artifactName(target, platform)
 			}
 		}
 		into layout.buildDirectory.dir("libs")
 	}
 
-	tasks.register("build${target.taskSuffix}") {
+	def verifyTask = tasks.register("verify${target.taskSuffix}Artifacts") {
+		group = "verification"
+		description = "Validates filenames, metadata, mappings, duplicates, and Java level for ${target.artifactMinecraft}."
+		dependsOn collectTask
+		doLast {
+			platformBuilds.findAll { targetSupports(target, it) }.each { platform ->
+				verifyArtifact(target, platform, layout.buildDirectory.file("libs/${artifactName(target, platform)}").get().asFile)
+			}
+		}
+	}
+	verificationTasksByTarget[target.key] = verifyTask
+
+	def aggregateTask = tasks.register("build${target.taskSuffix}") {
 		group = "build"
-		description = "Builds all PackForge platform jars for Minecraft ${target.minecraftVersion}."
-		dependsOn tasks.named("collect${target.taskSuffix}PlatformJars")
+		description = "Builds all PackForge platform jars for ${target.artifactMinecraft}."
+		dependsOn verifyTask
+	}
+	buildTasksByTarget[target.key] = aggregateTask
+}
+
+tasks.register("buildTarget") {
+	group = "build"
+	description = "Builds every enabled platform for the target selected by -Ppackforge_target."
+	dependsOn buildTasksByTarget[selectedTarget.key]
+}
+
+tasks.register("benchmarkPackIndex", Exec) {
+	group = "verification"
+	description = "Runs the selected target's deterministic PackIndex microbenchmark on Fabric."
+	dependsOn tasks.named("validateTargetRegistry")
+	def fabric = platformBuilds.find { it.id == "fabric" }
+	commandLine nestedCommand(fabric, selectedTarget, "benchmarkPackIndex")
+}
+
+tasks.register("verifyTargetArtifacts") {
+	group = "verification"
+	description = "Verifies every artifact for the target selected by -Ppackforge_target."
+	dependsOn verificationTasksByTarget[selectedTarget.key]
+}
+
+tasks.register("verifyAllArtifacts") {
+	group = "verification"
+	description = "Verifies every declared PackForge artifact."
+	dependsOn verificationTasksByTarget.values()
+}
+
+platformBuilds.findAll { targetSupports(selectedTarget, it) }.each { platform ->
+	tasks.register("run${platform.name}TargetClient") {
+		group = "run"
+		description = "Runs the ${platform.name} client for the target selected by -Ppackforge_target."
+		dependsOn tasks.named("run${platform.name}${selectedTarget.taskSuffix}Client")
 	}
 }
 
-platformBuilds.each { platform ->
+buildTasksByPlatform.values().each { platformTasks ->
 	def previous = null
-	supportedMinecraftTargets.each { target ->
-		def taskProvider = tasks.named("build${platform.name}${target.taskSuffix}Platform")
+	platformTasks.each { taskProvider ->
 		if (previous != null) {
 			def previousTask = previous
 			taskProvider.configure { mustRunAfter previousTask }
@@ -157,26 +342,41 @@ platformBuilds.each { platform ->
 
 tasks.register("collectPlatformJars", Copy) {
 	group = "build"
-	description = "Collects default-target platform jars into root build/libs."
-	dependsOn platformBuilds.collect { platform -> tasks.named("build${platform.name}Platform") }
-
-	platformBuilds.each { platform ->
-		from("${platform.path}/build/libs") {
-			include "packforge-${platform.id}-${project.version}-mc${defaultTarget.minecraftVersion}.jar"
+	description = "Collects the selected target's platform jars into root build/libs."
+	def selectedBuildTasks = platformBuilds.findAll { targetSupports(selectedTarget, it) }.collect {
+		tasks.named("build${it.name}Platform")
+	}
+	dependsOn selectedBuildTasks
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	platformBuilds.findAll { targetSupports(selectedTarget, it) }.each { platform ->
+		from("${platform.path}/build/${selectedTarget.key}/libs") {
+			include artifactName(selectedTarget, platform)
 		}
 	}
 	into layout.buildDirectory.dir("libs")
 }
 
+tasks.register("buildLegacySupported") {
+	group = "build"
+	description = "Builds all exact legacy Minecraft targets."
+	dependsOn targets.findAll { it.legacyApi }.collect { buildTasksByTarget[it.key] }
+}
+
+tasks.register("buildCurrentSupported") {
+	group = "build"
+	description = "Builds the current Minecraft target matrix."
+	dependsOn targets.findAll { !it.legacyApi }.collect { buildTasksByTarget[it.key] }
+}
+
 tasks.register("buildAllSupported") {
 	group = "build"
-	description = "Builds all PackForge platform jars for all supported Minecraft targets."
-	dependsOn supportedMinecraftTargets.collect { target -> tasks.named("build${target.taskSuffix}") }
+	description = "Builds every declared PackForge target and platform."
+	dependsOn targets.collect { buildTasksByTarget[it.key] }
 }
 
 tasks.register("build") {
 	group = "build"
-	description = "Builds all supported PackForge platform jars."
+	description = "Builds every supported PackForge artifact."
 	dependsOn tasks.named("buildAllSupported")
 }
 
@@ -185,8 +385,6 @@ tasks.register("clean") {
 	description = "Cleans root and platform build outputs."
 	doLast {
 		delete layout.buildDirectory
-		platformBuilds.each { platform ->
-			delete file("${platform.path}/build")
-		}
+		platformBuilds.each { platform -> delete file("${platform.path}/build") }
 	}
 }

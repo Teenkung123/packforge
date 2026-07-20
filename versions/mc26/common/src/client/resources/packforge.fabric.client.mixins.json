@@ -1,0 +1,30 @@
+{
+	"required": true,
+	"package": "com.teenkung.packforge.client.mixin",
+	"plugin": "com.teenkung.packforge.client.mixin.compat.GuiCompatMixinPlugin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"atlas.SpriteLoaderMixin",
+		"atlas.TextureAtlasMixin",
+		"compat.ShaderManagerCompatMixin",
+		"compat.MinecraftGui26_1Mixin",
+		"compat.Gui26_2Mixin",
+		"font.BitmapProviderDefinitionMixin",
+		"font.FontManagerPreparationAccessor",
+		"font.FontManagerMixin",
+		"font.FontSetMixin",
+		"model.FaceBakeryMixin",
+		"model.ModelManagerMixin",
+		"options.OptionsMixin",
+		"startup.GuiStartupMixin",
+		"startup.MainStartupMixin",
+		"startup.MinecraftStartupMixin",
+		"ui.LoadingOverlayMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

@@ -1,20 +1,28 @@
 plugins {
 	id "java"
 	id "net.minecraftforge.gradle" version "7.0.25"
+	id "net.minecraftforge.jarjar" version "0.2.3"
+	id "net.minecraftforge.renamer" version "1.1.5"
 }
 
-def rootProperties = new Properties()
-file("../../gradle.properties").withInputStream { rootProperties.load(it) }
-def rootProperty = { String name -> project.findProperty(name) ?: rootProperties.getProperty(name) }
+ext.packforgePlatformId = "forge"
+apply from: "../../gradle/packforge-target.gradle"
 
-version = rootProperty("mod_version")
-group = rootProperty("maven_group")
-def javaTarget = (rootProperty("java_version") as int)
-def targetKey = rootProperty("packforge_mc_key") ?: "mc${rootProperty("minecraft_version").replace(".", "_")}"
-def targetMinecraft = rootProperty("packforge_mc_target") ?: rootProperty("minecraft_version")
-def versionSourceDir = file("../../versions/${targetKey}/src")
-def minecraftVersionRange = rootProperty("minecraft_version_range") ?: "[${targetMinecraft},)"
-def forgeVersionRange = rootProperty("forge_version_range") ?: "[60.0.0,)"
+version = packforgeModVersion
+group = packforgeMavenGroup
+
+def target = packforgeTarget
+def loaderConfig = packforgePlatform
+def javaTarget = target.javaVersion as int
+def mainMixinConfig = target.mixinConfigs.main.toString()
+def clientMixinConfig = target.mixinConfigs.client.toString()
+def needsLegacyRuntimeRemap = target.minecraftVersion == "1.20.1"
+def legacyMixinRefmap = "packforge.refmap.json"
+def artifactSmoke = providers.gradleProperty("packforge_artifact_smoke").map(Boolean::parseBoolean).orElse(false).get()
+
+layout.buildDirectory.set(file("build/${target.key}"))
+
+jarJar.register()
 
 base {
 	archivesName = "packforge"
@@ -31,23 +39,40 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
 	options.release = javaTarget
+	options.encoding = "UTF-8"
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}
+
+tasks.register("benchmarkPackIndex", JavaExec) {
+	group = "verification"
+	description = "Runs the deterministic, non-gating PackIndex microbenchmark."
+	dependsOn tasks.named("testClasses")
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = "com.teenkung.packforge.loader.PackIndexBenchmark"
+	args layout.buildDirectory.dir("benchmark").get().asFile.absolutePath,
+		java.util.Base64.encoder.encodeToString(groovy.json.JsonOutput.toJson(packforgeBuildPackMetadata(true)).getBytes("UTF-8"))
 }
 
 minecraft {
-	mappings channel: "official", version: rootProperty("minecraft_version")
-	dependency "net.minecraftforge:forge:${rootProperty("forge_version")}"
+	mappings channel: "official", version: target.minecraftVersion
+	dependency "net.minecraftforge:forge:${loaderConfig.version}"
 
 	runs {
 		client {
-			workingDir = file("run")
+			workingDir = file("run/${target.key}")
 			client = true
 			systemProperties = [
 				"forge.logging.console.level": "debug"
 			]
 
-			mods {
-				packforge {
-					source sourceSets.main
+			if (!artifactSmoke) {
+				mods {
+					packforge {
+						source sourceSets.main
+					}
 				}
 			}
 		}
@@ -61,64 +86,145 @@ repositories {
 	mavenCentral()
 }
 
+def mainJavaDirs = [
+	new File(packforgeCommonRoot, "src/main/java"),
+	new File(packforgeCommonRoot, "src/client/java"),
+	new File(packforgeAdapterCommonRoot, "src/main/java"),
+	new File(packforgeAdapterCommonRoot, "src/client/java"),
+	file("src/main/java"),
+	file("src/client/java"),
+	new File(packforgeAdapterPlatformRoot, "src/main/java"),
+	new File(packforgeAdapterPlatformRoot, "src/client/java")
+]
+def mainResourceDirs = [
+	new File(packforgeCommonRoot, "src/main/resources"),
+	new File(packforgeCommonRoot, "src/client/resources"),
+	new File(packforgeAdapterCommonRoot, "src/main/resources"),
+	new File(packforgeAdapterCommonRoot, "src/client/resources"),
+	file("src/main/resources"),
+	file("src/client/resources"),
+	new File(packforgeAdapterPlatformRoot, "src/main/resources"),
+	new File(packforgeAdapterPlatformRoot, "src/client/resources")
+]
+def testJavaDirs = [
+	new File(packforgeCommonRoot, "src/test/java"),
+	new File(packforgeAdapterCommonRoot, "src/test/java"),
+	file("src/test/java"),
+	new File(packforgeAdapterPlatformRoot, "src/test/java")
+]
+def testResourceDirs = [
+	new File(packforgeCommonRoot, "src/test/resources"),
+	new File(packforgeAdapterCommonRoot, "src/test/resources"),
+	file("src/test/resources"),
+	new File(packforgeAdapterPlatformRoot, "src/test/resources")
+]
+
 sourceSets {
 	main {
-		java {
-			srcDir "../../common/src/main/java"
-			srcDir "../../common/src/client/java"
-			srcDir "${versionSourceDir}/main/java"
-			srcDir "${versionSourceDir}/client/java"
-			srcDir "src/main/java"
-		}
+		java.setSrcDirs(mainJavaDirs)
 		resources {
-			setSrcDirs([])
-			srcDir "../../common/src/main/resources"
-			srcDir "../../common/src/client/resources"
-			srcDir "${versionSourceDir}/main/resources"
-			srcDir "${versionSourceDir}/client/resources"
-			srcDir "src/main/resources"
+			setSrcDirs(mainResourceDirs)
 			exclude "fabric.mod.json"
 			exclude "packforge.accesswidener"
 			exclude "META-INF/accesstransformer.cfg"
 		}
 		output.resourcesDir = layout.buildDirectory.dir("classes/java/main").get().asFile
 	}
+	test {
+		java.setSrcDirs(testJavaDirs)
+		resources.setSrcDirs(testResourceDirs)
+	}
 }
 
 tasks.named("compileJava", JavaCompile) {
-	source = fileTree("../../common/src/main/java") +
-		fileTree("../../common/src/client/java") +
-		fileTree("${versionSourceDir}/main/java") +
-		fileTree("${versionSourceDir}/client/java") +
-		fileTree("src/main/java")
+	source = files(mainJavaDirs.collect { fileTree(it) })
 }
 
 dependencies {
 	implementation minecraft.dependency
+	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${packforgeMixinExtrasVersion}"))
+	if (needsLegacyRuntimeRemap) {
+		annotationProcessor "org.spongepowered:mixin:0.8.7:processor"
+	}
+	implementation(jarJar("io.github.llamalad7:mixinextras-forge:${packforgeMixinExtrasVersion}")) {
+		transitive = false
+		jarJar.configure(it) {
+			version = packforgeMixinExtrasVersion
+		}
+	}
+
+	testImplementation platform("org.junit:junit-bom:5.11.4")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testImplementation "org.apache.commons:commons-compress:1.27.1"
+	testImplementation "com.google.code.gson:gson:2.11.0"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 processResources {
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	exclude "pack.mcmeta"
+	inputs.file packforgeRegistryFile
+	inputs.property "legacyMixinRefmap", needsLegacyRuntimeRemap ? legacyMixinRefmap : ""
 	def properties = [
 		"version": project.version,
-		"minecraft_version_range": minecraftVersionRange,
-		"forge_version_range": forgeVersionRange
+		"minecraft_version_range": loaderConfig.minecraftVersionRange,
+		"forge_version_range": loaderConfig.versionRange,
+		"main_mixin_config": mainMixinConfig,
+		"client_mixin_config": clientMixinConfig,
+		"mixin_compatibility": target.mixinCompatibility
 	]
 	inputs.properties properties
 	filesMatching("META-INF/mods.toml") {
 		expand properties
 	}
+	filesMatching([mainMixinConfig, clientMixinConfig]) {
+		expand properties
+	}
+	doLast {
+		packforgeWriteGeneratedResources(destinationDir)
+		if (needsLegacyRuntimeRemap) {
+			[mainMixinConfig, clientMixinConfig].each { mixinPath ->
+				def mixinFile = new File(destinationDir, mixinPath)
+				def mixin = new groovy.json.JsonSlurper().parse(mixinFile)
+				mixin.refmap = legacyMixinRefmap
+				mixinFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(mixin)) + System.lineSeparator(), "UTF-8")
+			}
+		}
+	}
 }
 
 jar {
-	archiveFileName = "packforge-forge-${project.version}-mc${targetMinecraft}.jar"
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	archiveFileName = "packforge-forge-${project.version}-mc${target.artifactMinecraft}-slim.jar"
 	manifest {
-		attributes([
-			"MixinConfigs": "packforge.fabric.mixins.json,packforge.fabric.client.mixins.json"
-		])
+		attributes(["MixinConfigs": "${mainMixinConfig},${clientMixinConfig}"])
+	}
+}
+
+tasks.named("jarJar") {
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	archiveFileName = needsLegacyRuntimeRemap
+		? "packforge-forge-${project.version}-mc${target.artifactMinecraft}-named.jar"
+		: "packforge-forge-${project.version}-mc${target.artifactMinecraft}.jar"
+}
+
+if (needsLegacyRuntimeRemap) {
+	renamer.enableMixinRefmaps {
+		config mainMixinConfig
+		config clientMixinConfig
+		refMap = legacyMixinRefmap
+	}
+	renamer.mappings(minecraft.dependency.toSrg)
+	def renamePackForgeJar = renamer.classes("renamePackForgeJar", tasks.named("jarJar", Jar)) {
+		mappings renamer.mixin.generatedMappings
+		output.set(layout.buildDirectory.file("libs/packforge-forge-${project.version}-mc${target.artifactMinecraft}.jar"))
+	}
+	tasks.named("assemble") {
+		dependsOn renamePackForgeJar
 	}
 }
 
 tasks.named("sourcesJar") {
-	archiveFileName = "packforge-forge-${project.version}-mc${targetMinecraft}-sources.jar"
-	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	archiveFileName = "packforge-forge-${project.version}-mc${target.artifactMinecraft}-sources.jar"
 }

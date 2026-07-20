@@ -1,0 +1,89 @@
+import groovy.json.JsonSlurper
+
+def repositoryRoot = rootProject.file("../..").canonicalFile
+def registryFile = new File(repositoryRoot, "gradle/minecraft-targets.json")
+if (!registryFile.isFile()) {
+	throw new GradleException("PackForge target registry is missing: ${registryFile}")
+}
+
+def registry = new JsonSlurper().parse(registryFile)
+if (registry.schemaVersion != 1) {
+	throw new GradleException("Unsupported PackForge target registry schema: ${registry.schemaVersion}")
+}
+
+def rootProperties = new Properties()
+def rootPropertiesFile = new File(repositoryRoot, "gradle.properties")
+if (rootPropertiesFile.isFile()) {
+	rootPropertiesFile.withInputStream { rootProperties.load(it) }
+}
+
+def targetKey = project.findProperty("packforge_target") ?: rootProperties.getProperty("packforge_target") ?: registry.defaultTarget
+def target = registry.targets.find { it.key == targetKey }
+if (target == null) {
+	def validTargets = registry.targets.collect { it.key }.join(", ")
+	throw new GradleException("Unknown PackForge target '${targetKey}'. Valid targets: ${validTargets}")
+}
+
+def platformId = project.ext.packforgePlatformId
+def platform = target.platforms[platformId]
+if (platform == null) {
+	throw new GradleException("PackForge target '${targetKey}' does not support platform '${platformId}'.")
+}
+
+project.ext.packforgeRepositoryRoot = repositoryRoot
+project.ext.packforgeRegistryFile = registryFile
+project.ext.packforgeRegistry = registry
+project.ext.packforgeTarget = target
+project.ext.packforgePlatform = platform
+project.ext.packforgeMixinExtrasVersion = registry.mixinExtrasVersion
+project.ext.packforgeModVersion = rootProperties.getProperty("mod_version") + platform.versionSuffix.toString()
+project.ext.packforgeMavenGroup = rootProperties.getProperty("maven_group")
+project.ext.packforgeCommonRoot = new File(repositoryRoot, "common")
+project.ext.packforgeAdapterCommonRoot = new File(repositoryRoot, "versions/${target.apiAdapter}/common")
+project.ext.packforgeAdapterPlatformRoot = new File(repositoryRoot, "versions/${target.apiAdapter}/${platformId}")
+
+project.ext.packforgeBuildPackMetadata = { boolean fixture ->
+	def packSection = [description: "PackForge resources"]
+	def overlayFormats = null
+	if (target.packMetadata.schema == "single") {
+		packSection.pack_format = target.packMetadata.packFormat
+		if ((target.packMetadata.packFormat as int) >= 18) {
+			overlayFormats = [
+				min_inclusive: target.packMetadata.packFormat,
+				max_inclusive: target.packMetadata.packFormat
+			]
+		}
+	} else if (target.packMetadata.schema == "range") {
+		packSection.min_format = target.packMetadata.minFormat
+		packSection.max_format = target.packMetadata.maxFormat
+		overlayFormats = [
+			min_inclusive: target.packMetadata.minFormat,
+			max_inclusive: target.packMetadata.maxFormat
+		]
+	} else {
+		throw new GradleException("Unsupported pack metadata schema '${target.packMetadata.schema}' for '${target.key}'.")
+	}
+	def metadata = [pack: packSection]
+	if (fixture && overlayFormats != null) {
+		metadata.overlays = [entries: [[formats: overlayFormats, directory: "overlay"]]]
+	}
+	return metadata
+}
+
+project.ext.packforgeWriteGeneratedResources = { File outputDirectory ->
+	outputDirectory.mkdirs()
+	def packMetadataFile = new File(outputDirectory, "pack.mcmeta")
+	def packMetadataJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(packforgeBuildPackMetadata(false)))
+	packMetadataFile.setText(packMetadataJson + System.lineSeparator(), "UTF-8")
+
+	def capabilitiesFile = new File(outputDirectory, "packforge-capabilities.properties")
+	def capabilities = target.capabilities.collect { it.toString() }.join(",")
+	def capabilityProperties = [
+		"target=${target.key}",
+		"minecraft=${target.artifactMinecraft}",
+		"maturity=${platform.maturity}",
+		"beta=${platform.maturity == 'beta'}",
+		"capabilities=${capabilities}"
+	].join(System.lineSeparator()) + System.lineSeparator()
+	capabilitiesFile.setText(capabilityProperties, "UTF-8")
+}

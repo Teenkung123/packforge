@@ -1,0 +1,17 @@
+{
+	"required": true,
+	"package": "com.teenkung.packforge.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"loader.CompositePackResourcesMixin",
+		"loader.FilePackResourcesMixin",
+		"loader.SharedZipFileAccessMixin",
+		"observe.ReloadableResourceManagerMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

@@ -1,22 +1,35 @@
 pluginManagement {
+	def repositoryRoot = settingsDir.parentFile.parentFile
+	def registry = new groovy.json.JsonSlurper().parse(new File(repositoryRoot, "gradle/minecraft-targets.json"))
 	def rootProperties = new Properties()
-	file("../../gradle.properties").withInputStream { rootProperties.load(it) }
-	def rootProperty = { String name ->
-		gradle.startParameter.projectProperties.get(name) ?: rootProperties.getProperty(name)
+	new File(repositoryRoot, "gradle.properties").withInputStream { rootProperties.load(it) }
+	def targetKey = gradle.startParameter.projectProperties.get("packforge_target") ?: rootProperties.getProperty("packforge_target") ?: registry.defaultTarget
+	def target = registry.targets.find { it.key == targetKey }
+	if (target == null) {
+		throw new GradleException("Unknown PackForge target '${targetKey}'.")
 	}
+	if (target.platforms.fabric == null) {
+		throw new GradleException("PackForge target '${targetKey}' does not support Fabric.")
+	}
+	def loomVersion = target.platforms.fabric.loomVersion.toString()
 
 	repositories {
 		maven {
-			name = 'Fabric'
-			url = 'https://maven.fabricmc.net/'
+			name = "Fabric"
+			url = "https://maven.fabricmc.net/"
 		}
 		mavenCentral()
 		gradlePluginPortal()
 	}
 
 	plugins {
-		id 'net.fabricmc.fabric-loom' version rootProperty("loom_version")
+		id "fabric-loom" version loomVersion
+		id "net.fabricmc.fabric-loom" version loomVersion
 	}
 }
 
-rootProject.name = 'packforge-fabric'
+plugins {
+	id "org.gradle.toolchains.foojay-resolver-convention" version "1.0.0"
+}
+
+rootProject.name = "packforge-fabric"
