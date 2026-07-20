@@ -5,11 +5,19 @@ plugins {
 
 def rootProperties = new Properties()
 file("../../gradle.properties").withInputStream { rootProperties.load(it) }
-def rootProperty = { String name -> rootProperties.getProperty(name) ?: project.findProperty(name) }
+def rootProperty = { String name -> project.findProperty(name) ?: rootProperties.getProperty(name) }
 
 version = rootProperty("mod_version")
 group = rootProperty("maven_group")
 def javaTarget = (rootProperty("java_version") as int)
+def targetKey = rootProperty("packforge_mc_key") ?: "mc${rootProperty("minecraft_version").replace(".", "_")}"
+def targetMinecraft = rootProperty("packforge_mc_target") ?: rootProperty("minecraft_version")
+def versionSourceDir = file("../../versions/${targetKey}/src")
+def minecraftDependencyMin = rootProperty("minecraft_dependency_min") ?: targetMinecraft
+def minecraftDependencyMax = rootProperty("minecraft_dependency_max")
+def minecraftDependency = rootProperty("minecraft_dependency") ?: (minecraftDependencyMax ? ">=${minecraftDependencyMin} <${minecraftDependencyMax}" : ">=${minecraftDependencyMin}")
+def fabricLoaderDependencyMin = rootProperty("fabric_loader_dependency_min") ?: rootProperty("loader_version")
+def fabricLoaderDependency = rootProperty("fabric_loader_dependency") ?: ">=${fabricLoaderDependencyMin}"
 
 repositories {
 	maven {
@@ -35,20 +43,24 @@ sourceSets {
 	main {
 		java {
 			srcDir "../../common/src/main/java"
+			srcDir "${versionSourceDir}/main/java"
 			srcDir "src/main/java"
 		}
 		resources {
 			srcDir "../../common/src/main/resources"
+			srcDir "${versionSourceDir}/main/resources"
 			srcDir "src/main/resources"
 		}
 	}
 	client {
 		java {
 			srcDir "../../common/src/client/java"
+			srcDir "${versionSourceDir}/client/java"
 			srcDir "src/client/java"
 		}
 		resources {
 			srcDir "../../common/src/client/resources"
+			srcDir "${versionSourceDir}/client/resources"
 			srcDir "src/client/resources"
 		}
 	}
@@ -69,10 +81,16 @@ dependencies {
 
 processResources {
 	def version = project.version
-	inputs.property "version", version
+	def properties = [
+		"version": version,
+		"minecraft_dependency": minecraftDependency,
+		"fabric_loader_dependency": fabricLoaderDependency,
+		"java_dependency": ">=${javaTarget}"
+	]
+	inputs.properties properties
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version
+		expand properties
 	}
 }
 
@@ -89,7 +107,7 @@ java {
 
 jar {
 	inputs.property "projectName", project.name
-	archiveFileName = "packforge-fabric-${project.version}.jar"
+	archiveFileName = "packforge-fabric-${project.version}-mc${targetMinecraft}.jar"
 
 	from("../../LICENSE") {
 		rename { "${it}_${project.name}"}
@@ -97,7 +115,7 @@ jar {
 }
 
 tasks.named("sourcesJar") {
-	archiveFileName = "packforge-fabric-${project.version}-sources.jar"
+	archiveFileName = "packforge-fabric-${project.version}-mc${targetMinecraft}-sources.jar"
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 

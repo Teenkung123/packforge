@@ -57,13 +57,27 @@ public final class FontSelectionRegistry {
 		ConcurrentHashMap<Identifier, FontPreparedSelection> selections = new ConcurrentHashMap<>();
 		ConcurrentHashMap<List<GlyphProvider.Conditional>, FontPreparedSelection> memoizedStacks = new ConcurrentHashMap<>();
 		LongAdder selectionNs = new LongAdder();
+		LongAdder memoHits = new LongAdder();
+		LongAdder memoMisses = new LongAdder();
 		CompletableFuture<?>[] tasks;
 		if (FeatureFlags.fontPrepareProviderSelectionEnabled()) {
 			tasks = fontSets.entrySet().stream()
 				.map(entry -> CompletableFuture.runAsync(() -> {
 					List<GlyphProvider.Conditional> providers = Lists.reverse(entry.getValue());
 					List<GlyphProvider.Conditional> key = List.copyOf(providers);
-					FontPreparedSelection selection = memoizedStacks.computeIfAbsent(key, ignored -> FontPreparedSelection.compute(providers, options));
+					FontPreparedSelection selection = memoizedStacks.get(key);
+					if (selection == null) {
+						FontPreparedSelection computed = FontPreparedSelection.compute(providers, options);
+						FontPreparedSelection existing = memoizedStacks.putIfAbsent(key, computed);
+						selection = existing == null ? computed : existing;
+						if (existing == null) {
+							memoMisses.increment();
+						} else {
+							memoHits.increment();
+						}
+					} else {
+						memoHits.increment();
+					}
 					selectionNs.add(selection.elapsedNs());
 					selections.put(entry.getKey(), selection);
 				}, executor))
@@ -72,7 +86,7 @@ public final class FontSelectionRegistry {
 			tasks = new CompletableFuture<?>[0];
 		}
 		return CompletableFuture.allOf(tasks).thenApply(ignored -> {
-			FontReloadDiagnostics.Snapshot snapshot = FontReloadDiagnostics.snapshot(fontSets, selectionNs.sum());
+			FontReloadDiagnostics.Snapshot snapshot = FontReloadDiagnostics.snapshot(fontSets, selectionNs.sum(), memoHits.intValue(), memoMisses.intValue(), memoizedStacks.size());
 			synchronized (PREPARED) {
 				PREPARED.put(preparation, new FontPreparationBundle(Set.copyOf(options), new HashMap<>(selections), snapshot));
 			}

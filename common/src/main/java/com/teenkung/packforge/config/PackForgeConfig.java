@@ -17,7 +17,7 @@ import java.util.List;
 
 public final class PackForgeConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	private static final int CURRENT_VERSION = 5;
+	private static final int CURRENT_VERSION = 12;
 	private static volatile Cfg INSTANCE;
 
 	public static final class Cfg {
@@ -28,7 +28,11 @@ public final class PackForgeConfig {
 		public boolean loaderZipPoolEnabled = false;
 		public boolean loaderTimingsEnabled = false;
 		public boolean reloadListenerTimingsEnabled = false;
+		public boolean shaderApplyStallDiagnosticsEnabled = true;
+		public boolean immediatelyFastFontAtlasCompatEnabled = true;
 		public boolean loadingStatusOverlayEnabled = true;
+		public boolean loadingScreenFadeOutDisabled = false;
+		public boolean reloadSummaryToastEnabled = false;
 		public boolean modelUvTransparencyClampEnabled = true;
 		public boolean fontReloadDiagnosticsEnabled = false;
 		public boolean fontPrepareProviderSelectionEnabled = true;
@@ -36,8 +40,12 @@ public final class PackForgeConfig {
 		public boolean atlasPhaseTimingsEnabled = false;
 		public boolean atlasMipParallelEnabled = false;
 		public int atlasMipBatchSize = 128;
+		public boolean atlasDecodeBatchingEnabled = false;
+		public int atlasDecodeBatchSize = 128;
 		public boolean modelParseBatchingEnabled = true;
 		public int modelParseBatchSize = 64;
+		public boolean modelParseTimingEnabled = false;
+		public boolean modelAdaptiveBatchingEnabled = false;
 		public boolean modelDuplicateParseCacheEnabled = false;
 		public boolean atlasCapEnabled = true;
 		public int atlasCapPx = 256;
@@ -53,11 +61,25 @@ public final class PackForgeConfig {
 		public boolean atlasSplitDisableWithSodium = false;
 		public boolean atlasSplitModelCoherence = true;
 		public boolean atlasSplitDiagnostics = true;
+		public boolean startupOptimizerEnabled = false;
+		public boolean startupTimingsEnabled = true;
+		public boolean startupStatusOverlayEnabled = true;
+		public boolean startupExecutorTuningEnabled = true;
+		public int startupWorkerThreads = 0;
+		public int startupThreadPriority = 4;
+		public boolean startupSkipWithSmoothBoot = true;
+		public boolean startupAsyncDataParsingEnabled = false;
+		public boolean startupAsyncClassScanEnabled = false;
+		public boolean startupAsyncFontAtlasEnabled = false;
 	}
 
 	public static Cfg get() {
 		Cfg c = INSTANCE;
 		return c != null ? c : new Cfg();
+	}
+
+	public static boolean isLoaded() {
+		return INSTANCE != null;
 	}
 
 	public static synchronized void load() {
@@ -123,7 +145,11 @@ public final class PackForgeConfig {
 		if (!root.has("loaderZipPoolEnabled")) { cfg.loaderZipPoolEnabled = defaults.loaderZipPoolEnabled; changed = true; }
 		if (!root.has("loaderTimingsEnabled")) { cfg.loaderTimingsEnabled = defaults.loaderTimingsEnabled; changed = true; }
 		if (!root.has("reloadListenerTimingsEnabled")) { cfg.reloadListenerTimingsEnabled = defaults.reloadListenerTimingsEnabled; changed = true; }
+		if (!root.has("shaderApplyStallDiagnosticsEnabled")) { cfg.shaderApplyStallDiagnosticsEnabled = defaults.shaderApplyStallDiagnosticsEnabled; changed = true; }
+		if (!root.has("immediatelyFastFontAtlasCompatEnabled")) { cfg.immediatelyFastFontAtlasCompatEnabled = defaults.immediatelyFastFontAtlasCompatEnabled; changed = true; }
 		if (!root.has("loadingStatusOverlayEnabled")) { cfg.loadingStatusOverlayEnabled = defaults.loadingStatusOverlayEnabled; changed = true; }
+		if (!root.has("loadingScreenFadeOutDisabled")) { cfg.loadingScreenFadeOutDisabled = defaults.loadingScreenFadeOutDisabled; changed = true; }
+		if (!root.has("reloadSummaryToastEnabled")) { cfg.reloadSummaryToastEnabled = defaults.reloadSummaryToastEnabled; changed = true; }
 		if (!root.has("modelUvTransparencyClampEnabled")) { cfg.modelUvTransparencyClampEnabled = defaults.modelUvTransparencyClampEnabled; changed = true; }
 		if (!root.has("fontReloadDiagnosticsEnabled")) { cfg.fontReloadDiagnosticsEnabled = defaults.fontReloadDiagnosticsEnabled; changed = true; }
 		if (!root.has("fontPrepareProviderSelectionEnabled")) { cfg.fontPrepareProviderSelectionEnabled = defaults.fontPrepareProviderSelectionEnabled; changed = true; }
@@ -131,8 +157,12 @@ public final class PackForgeConfig {
 		if (!root.has("atlasPhaseTimingsEnabled")) { cfg.atlasPhaseTimingsEnabled = defaults.atlasPhaseTimingsEnabled; changed = true; }
 		if (!root.has("atlasMipParallelEnabled")) { cfg.atlasMipParallelEnabled = defaults.atlasMipParallelEnabled; changed = true; }
 		if (!root.has("atlasMipBatchSize")) { cfg.atlasMipBatchSize = defaults.atlasMipBatchSize; changed = true; }
+		if (!root.has("atlasDecodeBatchingEnabled")) { cfg.atlasDecodeBatchingEnabled = defaults.atlasDecodeBatchingEnabled; changed = true; }
+		if (!root.has("atlasDecodeBatchSize")) { cfg.atlasDecodeBatchSize = defaults.atlasDecodeBatchSize; changed = true; }
 		if (!root.has("modelParseBatchingEnabled")) { cfg.modelParseBatchingEnabled = defaults.modelParseBatchingEnabled; changed = true; }
 		if (!root.has("modelParseBatchSize")) { cfg.modelParseBatchSize = defaults.modelParseBatchSize; changed = true; }
+		if (!root.has("modelParseTimingEnabled")) { cfg.modelParseTimingEnabled = defaults.modelParseTimingEnabled; changed = true; }
+		if (!root.has("modelAdaptiveBatchingEnabled")) { cfg.modelAdaptiveBatchingEnabled = defaults.modelAdaptiveBatchingEnabled; changed = true; }
 		if (!root.has("modelDuplicateParseCacheEnabled")) { cfg.modelDuplicateParseCacheEnabled = defaults.modelDuplicateParseCacheEnabled; changed = true; }
 		if (!root.has("atlasCapEnabled")) { cfg.atlasCapEnabled = defaults.atlasCapEnabled; changed = true; }
 		if (!root.has("atlasCapPx")) { cfg.atlasCapPx = defaults.atlasCapPx; changed = true; }
@@ -148,12 +178,25 @@ public final class PackForgeConfig {
 		if (!root.has("atlasSplitDisableWithSodium")) { cfg.atlasSplitDisableWithSodium = defaults.atlasSplitDisableWithSodium; changed = true; }
 		if (!root.has("atlasSplitModelCoherence")) { cfg.atlasSplitModelCoherence = defaults.atlasSplitModelCoherence; changed = true; }
 		if (!root.has("atlasSplitDiagnostics")) { cfg.atlasSplitDiagnostics = defaults.atlasSplitDiagnostics; changed = true; }
+		if (!root.has("startupOptimizerEnabled")) { cfg.startupOptimizerEnabled = defaults.startupOptimizerEnabled; changed = true; }
+		if (!root.has("startupTimingsEnabled")) { cfg.startupTimingsEnabled = defaults.startupTimingsEnabled; changed = true; }
+		if (!root.has("startupStatusOverlayEnabled")) { cfg.startupStatusOverlayEnabled = defaults.startupStatusOverlayEnabled; changed = true; }
+		if (!root.has("startupExecutorTuningEnabled")) { cfg.startupExecutorTuningEnabled = defaults.startupExecutorTuningEnabled; changed = true; }
+		if (!root.has("startupWorkerThreads")) { cfg.startupWorkerThreads = defaults.startupWorkerThreads; changed = true; }
+		if (!root.has("startupThreadPriority")) { cfg.startupThreadPriority = defaults.startupThreadPriority; changed = true; }
+		if (!root.has("startupSkipWithSmoothBoot")) { cfg.startupSkipWithSmoothBoot = defaults.startupSkipWithSmoothBoot; changed = true; }
+		if (!root.has("startupAsyncDataParsingEnabled")) { cfg.startupAsyncDataParsingEnabled = defaults.startupAsyncDataParsingEnabled; changed = true; }
+		if (!root.has("startupAsyncClassScanEnabled")) { cfg.startupAsyncClassScanEnabled = defaults.startupAsyncClassScanEnabled; changed = true; }
+		if (!root.has("startupAsyncFontAtlasEnabled")) { cfg.startupAsyncFontAtlasEnabled = defaults.startupAsyncFontAtlasEnabled; changed = true; }
 
 		cfg.atlasCapPx = clamp(cfg.atlasCapPx, 16, 8192);
 		cfg.atlasRetryMaxAttempts = clamp(cfg.atlasRetryMaxAttempts, 1, 10);
 		cfg.atlasMipBatchSize = clamp(cfg.atlasMipBatchSize, 16, 4096);
+		cfg.atlasDecodeBatchSize = clamp(cfg.atlasDecodeBatchSize, 16, 4096);
 		cfg.modelParseBatchSize = clamp(cfg.modelParseBatchSize, 8, 1024);
 		cfg.atlasSplitMaxTiers = clamp(cfg.atlasSplitMaxTiers, 1, 4);
+		cfg.startupWorkerThreads = clamp(cfg.startupWorkerThreads, 0, Runtime.getRuntime().availableProcessors());
+		cfg.startupThreadPriority = clamp(cfg.startupThreadPriority, Thread.MIN_PRIORITY, Thread.MAX_PRIORITY);
 		return changed;
 	}
 
@@ -190,7 +233,13 @@ public final class PackForgeConfig {
 		}
 		int oldTiers = cfg.atlasSplitMaxTiers;
 		cfg.atlasSplitMaxTiers = clamp(cfg.atlasSplitMaxTiers, 1, 4);
-		return changed || oldTiers != cfg.atlasSplitMaxTiers;
+		int oldThreads = cfg.startupWorkerThreads;
+		int oldPriority = cfg.startupThreadPriority;
+		int oldAtlasDecodeBatch = cfg.atlasDecodeBatchSize;
+		cfg.startupWorkerThreads = clamp(cfg.startupWorkerThreads, 0, Runtime.getRuntime().availableProcessors());
+		cfg.startupThreadPriority = clamp(cfg.startupThreadPriority, Thread.MIN_PRIORITY, Thread.MAX_PRIORITY);
+		cfg.atlasDecodeBatchSize = clamp(cfg.atlasDecodeBatchSize, 16, 4096);
+		return changed || oldTiers != cfg.atlasSplitMaxTiers || oldThreads != cfg.startupWorkerThreads || oldPriority != cfg.startupThreadPriority || oldAtlasDecodeBatch != cfg.atlasDecodeBatchSize;
 	}
 
 	private static int clamp(int value, int min, int max) {

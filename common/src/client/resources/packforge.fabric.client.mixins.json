@@ -5,11 +5,16 @@
 	"client": [
 		"atlas.SpriteLoaderMixin",
 		"atlas.TextureAtlasMixin",
+		"compat.ShaderManagerCompatMixin",
 		"font.BitmapProviderDefinitionMixin",
 		"font.FontManagerMixin",
 		"font.FontSetMixin",
 		"model.FaceBakeryMixin",
 		"model.ModelManagerMixin",
+		"options.OptionsMixin",
+		"startup.GuiStartupMixin",
+		"startup.MainStartupMixin",
+		"startup.MinecraftStartupMixin",
 		"ui.LoadingOverlayMixin"
 	],
 	"injectors": {

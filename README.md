@@ -1,6 +1,6 @@
 # PackForge
 
-PackForge is a client-side performance and stability mod for Minecraft **26.1**.
+PackForge is a client-side performance and stability mod for Minecraft **26.1.x** and **26.2**.
 
 It is built for players who use large resource packs, modpacks, or heavy visual setups and run into one or both of these problems:
 
@@ -29,23 +29,29 @@ If a texture atlas still fails to stitch, PackForge can retry with more aggressi
 
 ## Installation
 
-1. Use Minecraft **26.1**
+1. Use Minecraft **26.1**, **26.1.1**, **26.1.2**, or **26.2**
 2. Install the correct loader for your client
-3. Put the matching PackForge jar into your `mods` folder
+3. Put the matching PackForge `mc...` jar into your `mods` folder
 4. Launch the game once to generate the config file
 
 Fabric also needs:
 
-- Fabric Loader `0.19.2+`
-- Fabric API `0.148.0+26.1.2`
+- Fabric Loader `0.19.3+`
+- the Fabric API build matching your Minecraft version
 
-Forge build target:
+Forge build targets:
 
-- Forge `26.1-62.0.9`
+- Minecraft `26.1`: Forge `26.1-62.0.9`
+- Minecraft `26.1.1`: Forge `26.1.1-63.0.2`
+- Minecraft `26.1.2`: Forge `26.1.2-64.0.11`
+- Minecraft `26.2`: Forge `26.2-65.0.3`
 
-NeoForge build target:
+NeoForge build targets:
 
-- NeoForge `26.1.0.19-beta`
+- Minecraft `26.1`: NeoForge `26.1.0.19-beta`
+- Minecraft `26.1.1`: NeoForge `26.1.1.15-beta`
+- Minecraft `26.1.2`: NeoForge `26.1.2.78`
+- Minecraft `26.2`: NeoForge `26.2.0.8-beta`
 
 Java requirement:
 

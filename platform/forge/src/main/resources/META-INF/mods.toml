@@ -15,13 +15,13 @@ description="Faster pack reloads and atlas overflow recovery for large resource 
 [[dependencies.packforge]]
 modId="forge"
 mandatory=true
-versionRange="[60.0.0,)"
+versionRange="${forge_version_range}"
 ordering="NONE"
 side="CLIENT"
 
 [[dependencies.packforge]]
 modId="minecraft"
 mandatory=true
-versionRange="[26.1,)"
+versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="CLIENT"

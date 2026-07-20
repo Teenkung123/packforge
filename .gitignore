@@ -39,3 +39,7 @@ replay_*.log
 *.hprof
 *.jfr
 /resources/
+
+# local agent settings and source archive
+/.claude/
+/PackForge.zip

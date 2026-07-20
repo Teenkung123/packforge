@@ -31,36 +31,54 @@ public final class ModelParseOptimizer {
 
 	public static CompletableFuture<Map<Identifier, UnbakedModel>> loadBlockModels(ResourceManager manager, Executor executor) {
 		if (!FeatureFlags.modelParseBatchingEnabled()) {
-			return CompletableFuture.supplyAsync(() -> loadSerial(manager), executor);
+			return CompletableFuture.supplyAsync(() -> loadSerial(manager), executor).whenComplete((ignored, error) -> ModelParseTimings.log());
 		}
-		return CompletableFuture.supplyAsync(() -> MODEL_LISTER.listMatchingResources(manager), executor).thenCompose(resources -> {
+		return CompletableFuture.supplyAsync(() -> {
+			long startNs = ModelParseTimings.start();
+			Map<Identifier, Resource> resources = MODEL_LISTER.listMatchingResources(manager);
+			ModelParseTimings.recordList(startNs);
+			return resources;
+		}, executor).thenCompose(resources -> {
 			List<Map.Entry<Identifier, Resource>> entries = List.copyOf(resources.entrySet());
-			int batchSize = Math.max(8, FeatureFlags.modelParseBatchSize());
+			int batchSize = modelBatchSize(entries.size());
 			ArrayList<CompletableFuture<List<Pair<Identifier, UnbakedModel>>>> jobs = new ArrayList<>();
 			for (int from = 0; from < entries.size(); from += batchSize) {
 				int start = from;
 				int end = Math.min(entries.size(), from + batchSize);
 				jobs.add(CompletableFuture.supplyAsync(() -> parseBatch(entries.subList(start, end)), executor));
 			}
-			return Util.sequence(jobs).thenApply(batches -> batches.stream()
-				.flatMap(List::stream)
-				.filter(Objects::nonNull)
-				.collect(Collectors.toUnmodifiableMap(Pair::getFirst, Pair::getSecond)));
-		});
+			return Util.sequence(jobs).thenApply(batches -> {
+				long collectStartNs = ModelParseTimings.start();
+				Map<Identifier, UnbakedModel> result = batches.stream()
+					.flatMap(List::stream)
+					.filter(Objects::nonNull)
+					.collect(Collectors.toUnmodifiableMap(Pair::getFirst, Pair::getSecond));
+				ModelParseTimings.recordCollect(collectStartNs);
+				return result;
+			});
+		}).whenComplete((ignored, error) -> ModelParseTimings.log());
 	}
 
 	public static void resetForReload() {
 		DUPLICATE_CACHE.clear();
+		ModelParseTimings.reset();
 	}
 
 	private static Map<Identifier, UnbakedModel> loadSerial(ResourceManager manager) {
-		return MODEL_LISTER.listMatchingResources(manager).entrySet().stream()
+		long listStartNs = ModelParseTimings.start();
+		Map<Identifier, Resource> resources = MODEL_LISTER.listMatchingResources(manager);
+		ModelParseTimings.recordList(listStartNs);
+		long collectStartNs = ModelParseTimings.start();
+		Map<Identifier, UnbakedModel> result = resources.entrySet().stream()
 			.map(ModelParseOptimizer::parseOne)
 			.filter(Objects::nonNull)
 			.collect(Collectors.toUnmodifiableMap(Pair::getFirst, Pair::getSecond));
+		ModelParseTimings.recordCollect(collectStartNs);
+		return result;
 	}
 
 	private static List<Pair<Identifier, UnbakedModel>> parseBatch(List<Map.Entry<Identifier, Resource>> entries) {
+		ModelParseTimings.recordBatch();
 		ArrayList<Pair<Identifier, UnbakedModel>> result = new ArrayList<>(entries.size());
 		for (Map.Entry<Identifier, Resource> entry : entries) {
 			Pair<Identifier, UnbakedModel> parsed = parseOne(entry);
@@ -76,16 +94,24 @@ public final class ModelParseOptimizer {
 		Resource resource = entry.getValue();
 		try {
 			UnbakedModel model;
-			if (FeatureFlags.modelDuplicateParseCacheEnabled()) {
+			if (FeatureFlags.modelDuplicateParseCacheEnabled() || FeatureFlags.modelParseTimingEnabled()) {
 				byte[] bytes;
+				long readStartNs = ModelParseTimings.start();
 				try (var stream = resource.open()) {
 					bytes = stream.readAllBytes();
 				}
-				ContentKey key = new ContentKey(bytes);
-				model = DUPLICATE_CACHE.computeIfAbsent(key, ignored -> parseString(new String(bytes, StandardCharsets.UTF_8)));
+				ModelParseTimings.recordRead(readStartNs);
+				if (FeatureFlags.modelDuplicateParseCacheEnabled()) {
+					ContentKey key = new ContentKey(bytes);
+					model = DUPLICATE_CACHE.computeIfAbsent(key, ignored -> parseString(new String(bytes, StandardCharsets.UTF_8)));
+				} else {
+					model = parseString(new String(bytes, StandardCharsets.UTF_8));
+				}
 			} else {
 				try (BufferedReader reader = resource.openAsReader()) {
+					long parseStartNs = ModelParseTimings.start();
 					model = CuboidModel.fromStream(reader);
+					ModelParseTimings.recordParse(parseStartNs);
 				}
 			}
 			return Pair.of(modelId, model);
@@ -96,11 +122,25 @@ public final class ModelParseOptimizer {
 	}
 
 	private static UnbakedModel parseString(String json) {
+		long parseStartNs = ModelParseTimings.start();
 		try (StringReader reader = new StringReader(json)) {
-			return CuboidModel.fromStream(reader);
+			UnbakedModel model = CuboidModel.fromStream(reader);
+			ModelParseTimings.recordParse(parseStartNs);
+			return model;
 		} catch (Exception e) {
 			throw new IllegalArgumentException("Failed duplicate model parse", e);
 		}
+	}
+
+	private static int modelBatchSize(int modelCount) {
+		int configured = Math.max(8, FeatureFlags.modelParseBatchSize());
+		if (!FeatureFlags.modelAdaptiveBatchingEnabled()) {
+			return configured;
+		}
+		if (modelCount >= 4096) return Math.max(configured, 128);
+		if (modelCount >= 2048) return Math.max(configured, 96);
+		if (modelCount <= 512) return Math.min(configured, 32);
+		return configured;
 	}
 
 	private static final class ContentKey {

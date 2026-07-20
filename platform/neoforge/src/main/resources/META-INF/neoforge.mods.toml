@@ -21,13 +21,13 @@ config="packforge.fabric.client.mixins.json"
 [[dependencies.packforge]]
 modId="neoforge"
 type="required"
-versionRange="[26.1.0.1,)"
+versionRange="${neoforge_version_range}"
 ordering="NONE"
 side="CLIENT"
 
 [[dependencies.packforge]]
 modId="minecraft"
 type="required"
-versionRange="[26.1,)"
+versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="CLIENT"

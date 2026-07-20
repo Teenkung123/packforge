@@ -9,6 +9,10 @@ public final class PackForgeServices {
 		platform = Objects.requireNonNull(value, "platform");
 	}
 
+	public static boolean isInitialized() {
+		return platform != null;
+	}
+
 	public static PackForgePlatform platform() {
 		PackForgePlatform value = platform;
 		if (value == null) {

@@ -1,5 +1,7 @@
 package com.teenkung.packforge.loader;
 
+import com.teenkung.packforge.config.FeatureFlags;
+
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -8,12 +10,16 @@ public final class ReloadStatus {
 	private static final AtomicInteger activeApplyTasks = new AtomicInteger();
 	private static volatile boolean active;
 	private static volatile boolean complete;
+	private static volatile long startNs;
+	private static volatile ReloadSummary pendingSummary;
 	private static volatile String phase = "Starting";
 	private static volatile String detail = "resource reload";
 
 	public static void start() {
 		active = true;
 		complete = false;
+		startNs = System.nanoTime();
+		pendingSummary = null;
 		activePrepareTasks.set(0);
 		activeApplyTasks.set(0);
 		phase = "Starting";
@@ -22,6 +28,10 @@ public final class ReloadStatus {
 
 	public static void finish(Throwable error) {
 		complete = true;
+		long elapsedMs = startNs == 0L ? 0L : (System.nanoTime() - startNs) / 1_000_000L;
+		if (FeatureFlags.reloadSummaryToastEnabled()) {
+			pendingSummary = new ReloadSummary(elapsedMs, error == null);
+		}
 		phase = error == null ? "Finishing" : "Failed";
 		detail = error == null ? "applying resources" : "resource reload";
 		activePrepareTasks.set(0);
@@ -58,7 +68,8 @@ public final class ReloadStatus {
 
 	public static String line(float progress) {
 		int percent = Math.clamp(Math.round(progress * 100.0f), 0, 100);
-		return "Loading resources - " + percent + "%";
+		long elapsedMs = startNs == 0L ? 0L : (System.nanoTime() - startNs) / 1_000_000L;
+		return "Loading resources - " + percent + "% - " + elapsedMs + "ms";
 	}
 
 	public static String detailLine() {
@@ -75,6 +86,12 @@ public final class ReloadStatus {
 		return currentPhase + " " + currentDetail;
 	}
 
+	public static ReloadSummary consumeSummaryToast() {
+		ReloadSummary summary = pendingSummary;
+		pendingSummary = null;
+		return summary;
+	}
+
 	private static String readableListener(String listenerName) {
 		if (listenerName == null || listenerName.isBlank()) {
 			return "resources";
@@ -88,6 +105,7 @@ public final class ReloadStatus {
 			case "FontManager" -> "fonts";
 			case "BlockColors" -> "block colors";
 			case "ItemColors" -> "item colors";
+			case "Shader Loader" -> "shader loader";
 			case "GpuWarnlistManager" -> "GPU warnlist";
 			case "SplashManager" -> "splash text";
 			case "WaypointStyleManager" -> "waypoint styles";
@@ -113,4 +131,7 @@ public final class ReloadStatus {
 	}
 
 	private ReloadStatus() {}
+
+	public record ReloadSummary(long elapsedMs, boolean success) {
+	}
 }

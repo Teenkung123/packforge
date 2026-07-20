@@ -2,6 +2,7 @@ package com.teenkung.packforge.loader;
 
 import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.config.FeatureFlags;
+import com.teenkung.packforge.platform.PackForgeServices;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -9,7 +10,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -20,6 +24,7 @@ public final class LoaderTimings {
 	private static final AtomicLong fullScansAvoided = new AtomicLong();
 	private static final ConcurrentHashMap<String, ListenerTiming> listenerTimings = new ConcurrentHashMap<>();
 	private static volatile long reloadStartNs;
+	private static volatile long reloadSessionId;
 
 	public static void recordGetResource() {
 		if (!FeatureFlags.loaderTimingsEnabled()) return;
@@ -40,8 +45,9 @@ public final class LoaderTimings {
 
 	public static void onReloadStart() {
 		ReloadHooks.fireStart();
-		if (!FeatureFlags.loaderTimingsEnabled() && !FeatureFlags.reloadListenerTimingsEnabled()) return;
+		reloadSessionId = ReloadSessionTracker.current().id();
 		reloadStartNs = System.nanoTime();
+		if (!FeatureFlags.loaderTimingsEnabled() && !FeatureFlags.reloadListenerTimingsEnabled()) return;
 		getResourceCalls.set(0);
 		getNamespacesCalls.set(0);
 		listResourcesCalls.set(0);
@@ -56,15 +62,23 @@ public final class LoaderTimings {
 		long gn = getNamespacesCalls.get();
 		long lr = listResourcesCalls.get();
 		long avoided = fullScansAvoided.get();
-		PackForge.LOGGER.info("PackForge reload: elapsed={}ms getResource={} getNamespaces={} listResources={} fullScansAvoided={}",
-			elapsedMs, gr, gn, lr, avoided);
+		PackForge.LOGGER.info("PackForge reload: id={} elapsed={}ms getResource={} getNamespaces={} listResources={} fullScansAvoided={}",
+			reloadSessionId, elapsedMs, gr, gn, lr, avoided);
+		writeReloadCountersCsvAsync(reloadSessionId, elapsedMs, gr, gn, lr, avoided);
+	}
+
+	private static void writeReloadCountersCsvAsync(long sessionId, long elapsedMs, long gr, long gn, long lr, long avoided) {
+		CompletableFuture.runAsync(() -> writeReloadCountersCsv(sessionId, elapsedMs, gr, gn, lr, avoided), backgroundExecutor());
+	}
+
+	private static void writeReloadCountersCsv(long sessionId, long elapsedMs, long gr, long gn, long lr, long avoided) {
 		try {
 			Path csv = Path.of("logs", "packforge-timings.csv");
 			Files.createDirectories(csv.getParent());
 			boolean exists = Files.exists(csv);
 			try (var w = Files.newBufferedWriter(csv, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
-				if (!exists) w.write("timestamp,elapsed_ms,getResource,getNamespaces,listResources,fullScansAvoided\n");
-				w.write(System.currentTimeMillis() + "," + elapsedMs + "," + gr + "," + gn + "," + lr + "," + avoided + "\n");
+				if (!exists) w.write("timestamp,reload_id,elapsed_ms,getResource,getNamespaces,listResources,fullScansAvoided\n");
+				w.write(System.currentTimeMillis() + "," + sessionId + "," + elapsedMs + "," + gr + "," + gn + "," + lr + "," + avoided + "\n");
 			}
 		} catch (IOException e) {
 			PackForge.LOGGER.warn("Failed to write timings CSV", e);
@@ -103,7 +117,9 @@ public final class LoaderTimings {
 			return;
 		}
 
-		PackForge.LOGGER.info("PackForge Loading Summary: elapsed={}ms status={}", elapsedMs, error == null ? "ok" : "failed");
+		ReloadSessionTracker.ReloadSession session = ReloadSessionTracker.current();
+		PackForge.LOGGER.info("PackForge Loading Summary: id={} elapsed={}ms status={} source={} added={} removed={}",
+			session.id(), elapsedMs, error == null ? "ok" : "failed", session.source(), session.added(), session.removed());
 		PackForge.LOGGER.info("PackForge Loading Summary: slowest active work");
 		for (ListenerReport report : reports.stream().filter(ListenerReport::hasActiveWork).limit(12).toList()) {
 			PackForge.LOGGER.info("  {} - {}ms active (prepare {}ms/{} tasks, max {}ms; apply {}ms/{} tasks, max {}ms; wall {}ms)",
@@ -123,7 +139,27 @@ public final class LoaderTimings {
 					report.name, report.applyMs, report.applyTasks, report.applyMaxMs);
 			}
 		}
-		writeListenerCsv(elapsedMs, reports);
+		logApplyStalls(session.id(), applyReports);
+		writeListenerCsvAsync(session.id(), elapsedMs, reports);
+	}
+
+	private static void logApplyStalls(long sessionId, List<ListenerReport> applyReports) {
+		if (!FeatureFlags.shaderApplyStallDiagnosticsEnabled()) {
+			return;
+		}
+		for (ListenerReport report : applyReports) {
+			long stallMs = report.applySortMs();
+			if (stallMs < 1000L) {
+				continue;
+			}
+			if ("Shader Loader".equals(report.name)) {
+				PackForge.LOGGER.info("PackForge reload stall: id={} listener={} apply={}ms max={}ms reason=shader pipeline apply on render thread; observed only",
+					sessionId, report.name, report.applyMs, report.applyMaxMs);
+			} else {
+				PackForge.LOGGER.info("PackForge reload stall: id={} listener={} apply={}ms max={}ms reason=render-thread apply work",
+					sessionId, report.name, report.applyMs, report.applyMaxMs);
+			}
+		}
 	}
 
 	private static ListenerTiming timing(String listenerName) {
@@ -131,18 +167,22 @@ public final class LoaderTimings {
 		return listenerTimings.computeIfAbsent(name, ignored -> new ListenerTiming());
 	}
 
-	private static void writeListenerCsv(long elapsedMs, List<ListenerReport> reports) {
+	private static void writeListenerCsvAsync(long sessionId, long elapsedMs, List<ListenerReport> reports) {
+		CompletableFuture.runAsync(() -> writeListenerCsv(sessionId, elapsedMs, reports), backgroundExecutor());
+	}
+
+	private static void writeListenerCsv(long sessionId, long elapsedMs, List<ListenerReport> reports) {
 		try {
 			Path csv = Path.of("logs", "packforge-listener-timings.csv");
 			Files.createDirectories(csv.getParent());
 			boolean exists = Files.exists(csv);
 			try (var w = Files.newBufferedWriter(csv, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
 				if (!exists) {
-					w.write("timestamp,reload_elapsed_ms,listener,wall_ms,prepare_ms,prepare_tasks,prepare_max_ms,apply_ms,apply_tasks,apply_max_ms\n");
+					w.write("timestamp,reload_id,reload_elapsed_ms,listener,wall_ms,prepare_ms,prepare_tasks,prepare_max_ms,apply_ms,apply_tasks,apply_max_ms\n");
 				}
 				long now = System.currentTimeMillis();
 				for (ListenerReport report : reports) {
-					w.write(now + "," + elapsedMs + "," + csv(report.name) + "," + report.wallMs + "," + report.prepareMs + "," +
+					w.write(now + "," + sessionId + "," + elapsedMs + "," + csv(report.name) + "," + report.wallMs + "," + report.prepareMs + "," +
 						report.prepareTasks + "," + report.prepareMaxMs + "," + report.applyMs + "," + report.applyTasks + "," + report.applyMaxMs + "\n");
 				}
 			}
@@ -160,6 +200,10 @@ public final class LoaderTimings {
 
 	private static long ms(long ns) {
 		return ns / 1_000_000L;
+	}
+
+	private static Executor backgroundExecutor() {
+		return PackForgeServices.isInitialized() ? PackForgeServices.platform().backgroundExecutor() : ForkJoinPool.commonPool();
 	}
 
 	private LoaderTimings() {}

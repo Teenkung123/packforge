@@ -5,11 +5,16 @@ plugins {
 
 def rootProperties = new Properties()
 file("../../gradle.properties").withInputStream { rootProperties.load(it) }
-def rootProperty = { String name -> rootProperties.getProperty(name) ?: project.findProperty(name) }
+def rootProperty = { String name -> project.findProperty(name) ?: rootProperties.getProperty(name) }
 
 version = rootProperty("mod_version")
 group = rootProperty("maven_group")
 def javaTarget = (rootProperty("java_version") as int)
+def targetKey = rootProperty("packforge_mc_key") ?: "mc${rootProperty("minecraft_version").replace(".", "_")}"
+def targetMinecraft = rootProperty("packforge_mc_target") ?: rootProperty("minecraft_version")
+def versionSourceDir = file("../../versions/${targetKey}/src")
+def minecraftVersionRange = rootProperty("minecraft_version_range") ?: "[${targetMinecraft},)"
+def neoforgeVersionRange = rootProperty("neoforge_version_range") ?: "[${rootProperty("neoforge_version")},)"
 
 base {
 	archivesName = "packforge"
@@ -30,12 +35,16 @@ sourceSets {
 		java {
 			srcDir "../../common/src/main/java"
 			srcDir "../../common/src/client/java"
+			srcDir "${versionSourceDir}/main/java"
+			srcDir "${versionSourceDir}/client/java"
 			srcDir "src/main/java"
 		}
 		resources {
 			setSrcDirs([])
 			srcDir "../../common/src/main/resources"
 			srcDir "../../common/src/client/resources"
+			srcDir "${versionSourceDir}/main/resources"
+			srcDir "${versionSourceDir}/client/resources"
 			srcDir "src/main/resources"
 			exclude "fabric.mod.json"
 			exclude "packforge.accesswidener"
@@ -44,7 +53,11 @@ sourceSets {
 }
 
 tasks.named("compileJava", JavaCompile) {
-	source = fileTree("../../common/src/main/java") + fileTree("../../common/src/client/java") + fileTree("src/main/java")
+	source = fileTree("../../common/src/main/java") +
+		fileTree("../../common/src/client/java") +
+		fileTree("${versionSourceDir}/main/java") +
+		fileTree("${versionSourceDir}/client/java") +
+		fileTree("src/main/java")
 }
 
 neoForge {
@@ -68,17 +81,22 @@ neoForge {
 }
 
 processResources {
-	inputs.property "version", project.version
+	def properties = [
+		"version": project.version,
+		"minecraft_version_range": minecraftVersionRange,
+		"neoforge_version_range": neoforgeVersionRange
+	]
+	inputs.properties properties
 	filesMatching("META-INF/neoforge.mods.toml") {
-		expand "version": project.version
+		expand properties
 	}
 }
 
 jar {
-	archiveFileName = "packforge-neoforge-${project.version}.jar"
+	archiveFileName = "packforge-neoforge-${project.version}-mc${targetMinecraft}.jar"
 }
 
 tasks.named("sourcesJar") {
-	archiveFileName = "packforge-neoforge-${project.version}-sources.jar"
+	archiveFileName = "packforge-neoforge-${project.version}-mc${targetMinecraft}-sources.jar"
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

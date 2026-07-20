@@ -1,5 +1,6 @@
 package com.teenkung.packforge.client.config;
 
+import com.teenkung.packforge.client.compat.MinecraftGuiCompat;
 import com.teenkung.packforge.config.PackForgeConfig;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -27,6 +28,7 @@ import java.util.function.Supplier;
 public final class PackForgeConfigScreen extends Screen {
 	private static final String CATEGORY_RELOAD = "Reload Optimizer";
 	private static final String CATEGORY_ATLAS = "Large Atlas Fixer";
+	private static final String CATEGORY_STARTUP = "Startup Optimizer";
 	private final Screen parent;
 	private final PackForgeConfig.Cfg cfg;
 	private final PackForgeConfig.Cfg defaults = new PackForgeConfig.Cfg();
@@ -54,8 +56,9 @@ public final class PackForgeConfigScreen extends Screen {
 		});
 		addRenderableWidget(searchBox);
 
-		addRenderableWidget(categoryButton(CATEGORY_RELOAD, this.width / 2 - 154, 50));
-		addRenderableWidget(categoryButton(CATEGORY_ATLAS, this.width / 2 + 4, 50));
+		addRenderableWidget(categoryButton(CATEGORY_RELOAD, this.width / 2 - 231, 50));
+		addRenderableWidget(categoryButton(CATEGORY_ATLAS, this.width / 2 - 75, 50));
+		addRenderableWidget(categoryButton(CATEGORY_STARTUP, this.width / 2 + 81, 50));
 
 		list = new ConfigList(this.minecraft, this.width, this.height - 118, 78, 26);
 		addRenderableWidget(list);
@@ -68,7 +71,7 @@ public final class PackForgeConfigScreen extends Screen {
 		}).bounds(this.width / 2 - 154, this.height - 32, 100, 20).tooltip(Tooltip.create(Component.literal("Restore PackForge defaults."))).build());
 		addRenderableWidget(Button.builder(Component.literal("Done"), button -> {
 			PackForgeConfig.save();
-			this.minecraft.setScreen(parent);
+			MinecraftGuiCompat.setScreen(this.minecraft, parent);
 		}).bounds(this.width / 2 + 54, this.height - 32, 100, 20).build());
 		addRenderableOnly(new StringWidget(0, 8, this.width, 12, this.title, this.font));
 	}
@@ -76,7 +79,7 @@ public final class PackForgeConfigScreen extends Screen {
 	@Override
 	public void onClose() {
 		PackForgeConfig.save();
-		this.minecraft.setScreen(parent);
+		MinecraftGuiCompat.setScreen(this.minecraft, parent);
 	}
 
 	private void rebuildList() {
@@ -109,6 +112,10 @@ public final class PackForgeConfigScreen extends Screen {
 			() -> cfg.loaderZipPoolEnabled, value -> cfg.loaderZipPoolEnabled = value, () -> defaults.loaderZipPoolEnabled);
 		booleanRow(CATEGORY_RELOAD, "Reload UI", "Loading status overlay", "Show current reload listener on Mojang loading overlay.",
 			() -> cfg.loadingStatusOverlayEnabled, value -> cfg.loadingStatusOverlayEnabled = value, () -> defaults.loadingStatusOverlayEnabled);
+		booleanRow(CATEGORY_RELOAD, "Reload UI", "Disable loading fade out", "Remove Mojang loading overlay immediately after reload completion.",
+			() -> cfg.loadingScreenFadeOutDisabled, value -> cfg.loadingScreenFadeOutDisabled = value, () -> defaults.loadingScreenFadeOutDisabled);
+		booleanRow(CATEGORY_RELOAD, "Reload UI", "Pack reload summary toast", "Show a toast with total pack reload time after reload completion.",
+			() -> cfg.reloadSummaryToastEnabled, value -> cfg.reloadSummaryToastEnabled = value, () -> defaults.reloadSummaryToastEnabled);
 		booleanRow(CATEGORY_RELOAD, "Fonts", "Prepare font provider selection", "Move CPU-only FontSet provider selection off render-thread apply. Big freeze reducer.",
 			() -> cfg.fontPrepareProviderSelectionEnabled, value -> cfg.fontPrepareProviderSelectionEnabled = value, () -> defaults.fontPrepareProviderSelectionEnabled);
 		booleanRow(CATEGORY_RELOAD, "Fonts", "Bitmap provider cache", "Experimental. Keep off until font resource fingerprinting is proven stable.",
@@ -117,16 +124,28 @@ public final class PackForgeConfigScreen extends Screen {
 			() -> cfg.modelParseBatchingEnabled, value -> cfg.modelParseBatchingEnabled = value, () -> defaults.modelParseBatchingEnabled);
 		intRow(CATEGORY_RELOAD, "Models", "Model parse batch size", "Number of block model JSON files parsed per worker task.",
 			() -> cfg.modelParseBatchSize, value -> cfg.modelParseBatchSize = clamp(value, 8, 1024), () -> defaults.modelParseBatchSize);
+		booleanRow(CATEGORY_RELOAD, "Models", "Model parse timings", "Development use. Logs model list/read/parse/collect timings.",
+			() -> cfg.modelParseTimingEnabled, value -> cfg.modelParseTimingEnabled = value, () -> defaults.modelParseTimingEnabled);
+		booleanRow(CATEGORY_RELOAD, "Models", "Adaptive model batching", "Experimental. Adjust model parse batch size from resource count.",
+			() -> cfg.modelAdaptiveBatchingEnabled, value -> cfg.modelAdaptiveBatchingEnabled = value, () -> defaults.modelAdaptiveBatchingEnabled);
 		booleanRow(CATEGORY_RELOAD, "Models", "Duplicate model parse cache", "Experimental. Reload-scoped cache for exact duplicate immutable model JSON parses.",
 			() -> cfg.modelDuplicateParseCacheEnabled, value -> cfg.modelDuplicateParseCacheEnabled = value, () -> defaults.modelDuplicateParseCacheEnabled);
 		booleanRow(CATEGORY_RELOAD, "Logging", "Loader timings", "Debug log for PackForge resource index counters. Development use.",
 			() -> cfg.loaderTimingsEnabled, value -> cfg.loaderTimingsEnabled = value, () -> defaults.loaderTimingsEnabled);
 		booleanRow(CATEGORY_RELOAD, "Logging", "Reload listener timings", "Debug loading summary and CSV listener timings. Development use.",
 			() -> cfg.reloadListenerTimingsEnabled, value -> cfg.reloadListenerTimingsEnabled = value, () -> defaults.reloadListenerTimingsEnabled);
+		booleanRow(CATEGORY_RELOAD, "Logging", "Shader apply stall diagnostics", "Label long Shader Loader render-thread stalls after reloads.",
+			() -> cfg.shaderApplyStallDiagnosticsEnabled, value -> cfg.shaderApplyStallDiagnosticsEnabled = value, () -> defaults.shaderApplyStallDiagnosticsEnabled);
+		booleanRow(CATEGORY_RELOAD, "Compatibility", "ImmediatelyFast font atlas guard", "Avoid re-enabling ImmediatelyFast font atlas resizing during pack removal reloads.",
+			() -> cfg.immediatelyFastFontAtlasCompatEnabled, value -> cfg.immediatelyFastFontAtlasCompatEnabled = value, () -> defaults.immediatelyFastFontAtlasCompatEnabled);
 		booleanRow(CATEGORY_RELOAD, "Logging", "Font reload diagnostics", "Debug font provider counts and CSV font timings. Development use.",
 			() -> cfg.fontReloadDiagnosticsEnabled, value -> cfg.fontReloadDiagnosticsEnabled = value, () -> defaults.fontReloadDiagnosticsEnabled);
 		booleanRow(CATEGORY_RELOAD, "Logging", "Atlas phase timings", "Development use. Logs source, decode, stitch, mip, and upload atlas timings.",
 			() -> cfg.atlasPhaseTimingsEnabled, value -> cfg.atlasPhaseTimingsEnabled = value, () -> defaults.atlasPhaseTimingsEnabled);
+		booleanRow(CATEGORY_RELOAD, "Atlas decode", "Atlas decode batching", "Experimental. Batch atlas sprite decode jobs to reduce future overhead.",
+			() -> cfg.atlasDecodeBatchingEnabled, value -> cfg.atlasDecodeBatchingEnabled = value, () -> defaults.atlasDecodeBatchingEnabled);
+		intRow(CATEGORY_RELOAD, "Atlas decode", "Atlas decode batch size", "Sprite source loaders processed per decode worker task.",
+			() -> cfg.atlasDecodeBatchSize, value -> cfg.atlasDecodeBatchSize = clamp(value, 16, 4096), () -> defaults.atlasDecodeBatchSize);
 
 		booleanRow(CATEGORY_ATLAS, "General", "Enable large atlas fixer", "Master switch for atlas overflow and atlas-related resource-pack compatibility fixes. Child settings stay saved while this is off.",
 			() -> cfg.largeAtlasFixerEnabled, value -> cfg.largeAtlasFixerEnabled = value, () -> defaults.largeAtlasFixerEnabled);
@@ -164,6 +183,27 @@ public final class PackForgeConfigScreen extends Screen {
 			() -> cfg.atlasSplitModelCoherence, value -> cfg.atlasSplitModelCoherence = value, () -> defaults.atlasSplitModelCoherence);
 		booleanRow(CATEGORY_ATLAS, "Experimental split", "Split diagnostics", "Reserved logging/reporting switch for future split experiments.",
 			() -> cfg.atlasSplitDiagnostics, value -> cfg.atlasSplitDiagnostics = value, () -> defaults.atlasSplitDiagnostics);
+
+		booleanRow(CATEGORY_STARTUP, "General", "Enable startup optimizer", "Master switch for experimental startup/init optimizations. Default off.",
+			() -> cfg.startupOptimizerEnabled, value -> cfg.startupOptimizerEnabled = value, () -> defaults.startupOptimizerEnabled);
+		booleanRow(CATEGORY_STARTUP, "General", "Startup timings", "Log startup optimizer timing events and CSV rows when startup optimizer is on.",
+			() -> cfg.startupTimingsEnabled, value -> cfg.startupTimingsEnabled = value, () -> defaults.startupTimingsEnabled);
+		booleanRow(CATEGORY_STARTUP, "General", "Startup status overlay", "Show current startup optimizer phase on the loading screen.",
+			() -> cfg.startupStatusOverlayEnabled, value -> cfg.startupStatusOverlayEnabled = value, () -> defaults.startupStatusOverlayEnabled);
+		booleanRow(CATEGORY_STARTUP, "Executors", "Executor tuning", "Tune Minecraft background worker thread count and priority during executor creation.",
+			() -> cfg.startupExecutorTuningEnabled, value -> cfg.startupExecutorTuningEnabled = value, () -> defaults.startupExecutorTuningEnabled);
+		intRow(CATEGORY_STARTUP, "Executors", "Startup worker threads", "Background worker threads. Use 0 for auto.",
+			() -> cfg.startupWorkerThreads, value -> cfg.startupWorkerThreads = clamp(value, 0, Runtime.getRuntime().availableProcessors()), () -> defaults.startupWorkerThreads);
+		intRow(CATEGORY_STARTUP, "Executors", "Startup thread priority", "Priority for tuned Minecraft startup worker threads. Valid range is 1 to 10.",
+			() -> cfg.startupThreadPriority, value -> cfg.startupThreadPriority = clamp(value, Thread.MIN_PRIORITY, Thread.MAX_PRIORITY), () -> defaults.startupThreadPriority);
+		booleanRow(CATEGORY_STARTUP, "Compatibility", "Skip with Smooth Boot", "Skip executor tuning when a Smooth Boot variant is installed.",
+			() -> cfg.startupSkipWithSmoothBoot, value -> cfg.startupSkipWithSmoothBoot = value, () -> defaults.startupSkipWithSmoothBoot);
+		booleanRow(CATEGORY_STARTUP, "Future async work", "Async data parsing", "Use reload-safe async model JSON batching and duplicate parse cache.",
+			() -> cfg.startupAsyncDataParsingEnabled, value -> cfg.startupAsyncDataParsingEnabled = value, () -> defaults.startupAsyncDataParsingEnabled);
+		booleanRow(CATEGORY_STARTUP, "Future async work", "Async class scanning", "Background mod-jar scan telemetry only. Does not change loader entrypoint order.",
+			() -> cfg.startupAsyncClassScanEnabled, value -> cfg.startupAsyncClassScanEnabled = value, () -> defaults.startupAsyncClassScanEnabled);
+		booleanRow(CATEGORY_STARTUP, "Future async work", "Async font/atlas startup", "Use CPU-only async font selection, atlas decode batching, and mip prep.",
+			() -> cfg.startupAsyncFontAtlasEnabled, value -> cfg.startupAsyncFontAtlasEnabled = value, () -> defaults.startupAsyncFontAtlasEnabled);
 	}
 
 	private Button categoryButton(String category, int x, int y) {
@@ -173,7 +213,9 @@ public final class PackForgeConfigScreen extends Screen {
 		}).bounds(x, y, 150, 20).build();
 		button.setTooltip(Tooltip.create(Component.literal(category.equals(CATEGORY_RELOAD)
 			? "Options that reduce resource-pack reload time and show reload diagnostics."
-			: "Options that prevent oversized atlas crashes and related pack compatibility failures.")));
+			: category.equals(CATEGORY_ATLAS)
+				? "Options that prevent oversized atlas crashes and related pack compatibility failures."
+				: "Experimental options for startup/init timing and worker executor tuning.")));
 		return button;
 	}
 
@@ -250,7 +292,11 @@ public final class PackForgeConfigScreen extends Screen {
 		cfg.loaderZipPoolEnabled = defaults.loaderZipPoolEnabled;
 		cfg.loaderTimingsEnabled = defaults.loaderTimingsEnabled;
 		cfg.reloadListenerTimingsEnabled = defaults.reloadListenerTimingsEnabled;
+		cfg.shaderApplyStallDiagnosticsEnabled = defaults.shaderApplyStallDiagnosticsEnabled;
+		cfg.immediatelyFastFontAtlasCompatEnabled = defaults.immediatelyFastFontAtlasCompatEnabled;
 		cfg.loadingStatusOverlayEnabled = defaults.loadingStatusOverlayEnabled;
+		cfg.loadingScreenFadeOutDisabled = defaults.loadingScreenFadeOutDisabled;
+		cfg.reloadSummaryToastEnabled = defaults.reloadSummaryToastEnabled;
 		cfg.modelUvTransparencyClampEnabled = defaults.modelUvTransparencyClampEnabled;
 		cfg.fontReloadDiagnosticsEnabled = defaults.fontReloadDiagnosticsEnabled;
 		cfg.fontPrepareProviderSelectionEnabled = defaults.fontPrepareProviderSelectionEnabled;
@@ -258,8 +304,12 @@ public final class PackForgeConfigScreen extends Screen {
 		cfg.atlasPhaseTimingsEnabled = defaults.atlasPhaseTimingsEnabled;
 		cfg.atlasMipParallelEnabled = defaults.atlasMipParallelEnabled;
 		cfg.atlasMipBatchSize = defaults.atlasMipBatchSize;
+		cfg.atlasDecodeBatchingEnabled = defaults.atlasDecodeBatchingEnabled;
+		cfg.atlasDecodeBatchSize = defaults.atlasDecodeBatchSize;
 		cfg.modelParseBatchingEnabled = defaults.modelParseBatchingEnabled;
 		cfg.modelParseBatchSize = defaults.modelParseBatchSize;
+		cfg.modelParseTimingEnabled = defaults.modelParseTimingEnabled;
+		cfg.modelAdaptiveBatchingEnabled = defaults.modelAdaptiveBatchingEnabled;
 		cfg.modelDuplicateParseCacheEnabled = defaults.modelDuplicateParseCacheEnabled;
 		cfg.atlasCapEnabled = defaults.atlasCapEnabled;
 		cfg.atlasCapPx = defaults.atlasCapPx;
@@ -275,6 +325,16 @@ public final class PackForgeConfigScreen extends Screen {
 		cfg.atlasSplitDisableWithSodium = defaults.atlasSplitDisableWithSodium;
 		cfg.atlasSplitModelCoherence = defaults.atlasSplitModelCoherence;
 		cfg.atlasSplitDiagnostics = defaults.atlasSplitDiagnostics;
+		cfg.startupOptimizerEnabled = defaults.startupOptimizerEnabled;
+		cfg.startupTimingsEnabled = defaults.startupTimingsEnabled;
+		cfg.startupStatusOverlayEnabled = defaults.startupStatusOverlayEnabled;
+		cfg.startupExecutorTuningEnabled = defaults.startupExecutorTuningEnabled;
+		cfg.startupWorkerThreads = defaults.startupWorkerThreads;
+		cfg.startupThreadPriority = defaults.startupThreadPriority;
+		cfg.startupSkipWithSmoothBoot = defaults.startupSkipWithSmoothBoot;
+		cfg.startupAsyncDataParsingEnabled = defaults.startupAsyncDataParsingEnabled;
+		cfg.startupAsyncClassScanEnabled = defaults.startupAsyncClassScanEnabled;
+		cfg.startupAsyncFontAtlasEnabled = defaults.startupAsyncFontAtlasEnabled;
 	}
 
 	private static int clamp(int value, int min, int max) {

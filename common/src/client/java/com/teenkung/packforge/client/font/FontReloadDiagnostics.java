@@ -16,6 +16,10 @@ public final class FontReloadDiagnostics {
 	private static final ThreadLocal<ApplyStats> APPLY_STATS = new ThreadLocal<>();
 
 	public static Snapshot snapshot(Map<Identifier, List<GlyphProvider.Conditional>> fontSets, long selectionNs) {
+		return snapshot(fontSets, selectionNs, 0, 0, 0);
+	}
+
+	public static Snapshot snapshot(Map<Identifier, List<GlyphProvider.Conditional>> fontSets, long selectionNs, int memoHits, int memoMisses, int uniqueStacks) {
 		if (!FeatureFlags.fontReloadDiagnosticsEnabled()) {
 			return Snapshot.EMPTY;
 		}
@@ -28,7 +32,7 @@ public final class FontReloadDiagnostics {
 				providerTypes.merge(type, 1, Integer::sum);
 			}
 		}
-		return new Snapshot(fontSets.size(), providerCount, providerTypes, selectionNs);
+		return new Snapshot(fontSets.size(), providerCount, providerTypes, selectionNs, memoHits, memoMisses, uniqueStacks);
 	}
 
 	public static void startApply() {
@@ -53,9 +57,9 @@ public final class FontReloadDiagnostics {
 		}
 		long totalNs = System.nanoTime() - stats.startNs;
 		Snapshot snapshot = bundle != null ? bundle.diagnostics() : Snapshot.EMPTY;
-		PackForge.LOGGER.info("PackForge font reload: apply={}ms fontSetCreate={}ms fontSets={} optimized={} fonts={} providers={} selectionPrepare={}ms providerTypes={}",
+		PackForge.LOGGER.info("PackForge font reload: apply={}ms fontSetCreate={}ms fontSets={} optimized={} fonts={} providers={} selectionPrepare={}ms memoHits={} memoMisses={} uniqueStacks={} providerTypes={}",
 			ms(totalNs), ms(stats.fontSetCreateNs), stats.fontSets, stats.optimizedFontSets,
-			snapshot.fonts, snapshot.providers, ms(snapshot.selectionPrepareNs), snapshot.providerTypes);
+			snapshot.fonts, snapshot.providers, ms(snapshot.selectionPrepareNs), snapshot.memoHits, snapshot.memoMisses, snapshot.uniqueStacks, snapshot.providerTypes);
 		writeCsv(totalNs, stats, snapshot);
 	}
 
@@ -66,11 +70,12 @@ public final class FontReloadDiagnostics {
 			boolean exists = Files.exists(csv);
 			try (var w = Files.newBufferedWriter(csv, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
 				if (!exists) {
-					w.write("timestamp,apply_ms,font_set_create_ms,font_sets,optimized_font_sets,fonts,providers,selection_prepare_ms,provider_types\n");
+					w.write("timestamp,apply_ms,font_set_create_ms,font_sets,optimized_font_sets,fonts,providers,selection_prepare_ms,memo_hits,memo_misses,unique_stacks,provider_types\n");
 				}
 				w.write(System.currentTimeMillis() + "," + ms(totalNs) + "," + ms(stats.fontSetCreateNs) + "," +
 					stats.fontSets + "," + stats.optimizedFontSets + "," + snapshot.fonts + "," + snapshot.providers + "," +
-					ms(snapshot.selectionPrepareNs) + "," + csv(snapshot.providerTypes.toString()) + "\n");
+					ms(snapshot.selectionPrepareNs) + "," + snapshot.memoHits + "," + snapshot.memoMisses + "," + snapshot.uniqueStacks + "," +
+					csv(snapshot.providerTypes.toString()) + "\n");
 			}
 		} catch (IOException e) {
 			PackForge.LOGGER.warn("Failed to write font timings CSV", e);
@@ -101,7 +106,7 @@ public final class FontReloadDiagnostics {
 		}
 	}
 
-	public record Snapshot(int fonts, int providers, Map<String, Integer> providerTypes, long selectionPrepareNs) {
-		static final Snapshot EMPTY = new Snapshot(0, 0, Map.of(), 0L);
+	public record Snapshot(int fonts, int providers, Map<String, Integer> providerTypes, long selectionPrepareNs, int memoHits, int memoMisses, int uniqueStacks) {
+		static final Snapshot EMPTY = new Snapshot(0, 0, Map.of(), 0L, 0, 0, 0);
 	}
 }

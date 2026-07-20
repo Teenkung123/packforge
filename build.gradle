@@ -3,48 +3,181 @@ group = project.maven_group
 
 def gradlew = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows") ? "gradlew.bat" : "./gradlew"
 def platformBuilds = [
-	"Fabric": "platform/fabric",
-	"NeoForge": "platform/neoforge",
-	"Forge": "platform/forge"
+	[name: "Fabric", id: "fabric", path: "platform/fabric"],
+	[name: "NeoForge", id: "neoforge", path: "platform/neoforge"],
+	[name: "Forge", id: "forge", path: "platform/forge"]
 ]
 
-platformBuilds.each { platformName, platformPath ->
-	tasks.register("build${platformName}Platform", Exec) {
+def supportedMinecraftTargets = [
+	[
+		key: "mc26_1",
+		taskSuffix: "Mc26_1",
+		minecraftVersion: "26.1",
+		minecraftDependencyMin: "26.1",
+		minecraftDependencyMax: "26.1.1",
+		minecraftVersionRange: "[26.1,26.1.1)",
+		loaderVersion: "0.19.3",
+		fabricLoaderDependencyMin: "0.19.3",
+		fabricApiVersion: "0.145.1+26.1",
+		loomVersion: "1.17.13",
+		forgeVersion: "26.1-62.0.9",
+		forgeVersionRange: "[62.0.9,63.0.0)",
+		neoforgeVersion: "26.1.0.19-beta",
+		neoforgeVersionRange: "[26.1.0.19-beta,26.1.1)"
+	],
+	[
+		key: "mc26_1_1",
+		taskSuffix: "Mc26_1_1",
+		minecraftVersion: "26.1.1",
+		minecraftDependencyMin: "26.1.1",
+		minecraftDependencyMax: "26.1.2",
+		minecraftVersionRange: "[26.1.1,26.1.2)",
+		loaderVersion: "0.19.3",
+		fabricLoaderDependencyMin: "0.19.3",
+		fabricApiVersion: "0.145.4+26.1.1",
+		loomVersion: "1.17.13",
+		forgeVersion: "26.1.1-63.0.2",
+		forgeVersionRange: "[63.0.2,64.0.0)",
+		neoforgeVersion: "26.1.1.15-beta",
+		neoforgeVersionRange: "[26.1.1.15-beta,26.1.2)"
+	],
+	[
+		key: "mc26_1_2",
+		taskSuffix: "Mc26_1_2",
+		minecraftVersion: "26.1.2",
+		minecraftDependencyMin: "26.1.2",
+		minecraftDependencyMax: "26.2",
+		minecraftVersionRange: "[26.1.2,26.2)",
+		loaderVersion: "0.19.3",
+		fabricLoaderDependencyMin: "0.19.3",
+		fabricApiVersion: "0.154.2+26.1.2",
+		loomVersion: "1.17.13",
+		forgeVersion: "26.1.2-64.0.11",
+		forgeVersionRange: "[64.0.11,65.0.0)",
+		neoforgeVersion: "26.1.2.78",
+		neoforgeVersionRange: "[26.1.2.78,26.2)"
+	],
+	[
+		key: "mc26_2",
+		taskSuffix: "Mc26_2",
+		minecraftVersion: "26.2",
+		minecraftDependencyMin: "26.2",
+		minecraftDependencyMax: "26.3",
+		minecraftVersionRange: "[26.2,26.3)",
+		loaderVersion: "0.19.3",
+		fabricLoaderDependencyMin: "0.19.3",
+		fabricApiVersion: "0.154.2+26.2",
+		loomVersion: "1.17.13",
+		forgeVersion: "26.2-65.0.3",
+		forgeVersionRange: "[65.0.3,66.0.0)",
+		neoforgeVersion: "26.2.0.8-beta",
+		neoforgeVersionRange: "[26.2.0.8-beta,26.3)"
+	]
+]
+
+def targetPropertyArgs = { target ->
+	[
+		"packforge_mc_key": target.key,
+		"packforge_mc_target": target.minecraftVersion,
+		"minecraft_version": target.minecraftVersion,
+		"minecraft_dependency_min": target.minecraftDependencyMin,
+		"minecraft_dependency_max": target.minecraftDependencyMax,
+		"minecraft_version_range": target.minecraftVersionRange,
+		"loader_version": target.loaderVersion,
+		"fabric_loader_dependency_min": target.fabricLoaderDependencyMin,
+		"fabric_api_version": target.fabricApiVersion,
+		"loom_version": target.loomVersion,
+		"forge_version": target.forgeVersion,
+		"forge_version_range": target.forgeVersionRange,
+		"neoforge_version": target.neoforgeVersion,
+		"neoforge_version_range": target.neoforgeVersionRange
+	].collect { name, value -> "-P${name}=${value}" }
+}
+
+def defaultTarget = supportedMinecraftTargets.find { it.key == "mc26_1_2" }
+
+platformBuilds.each { platform ->
+	tasks.register("build${platform.name}Platform", Exec) {
 		group = "build"
-		description = "Builds the ${platformName} PackForge jar."
-		commandLine gradlew, "-p", platformPath, "build"
+		description = "Builds the ${platform.name} PackForge jar for the default Minecraft target."
+		commandLine([gradlew, "-p", platform.path] + targetPropertyArgs(defaultTarget) + ["build"])
 	}
 
-	tasks.register("run${platformName}Client", Exec) {
+	tasks.register("run${platform.name}Client", Exec) {
 		group = "run"
-		description = "Runs a ${platformName} Minecraft client with PackForge loaded."
-		commandLine gradlew, "-p", platformPath, "runClient"
+		description = "Runs a ${platform.name} Minecraft client with PackForge loaded for the default Minecraft target."
+		commandLine([gradlew, "-p", platform.path] + targetPropertyArgs(defaultTarget) + ["runClient"])
+	}
+}
+
+supportedMinecraftTargets.each { target ->
+	def platformTasksForTarget = []
+
+	platformBuilds.each { platform ->
+		def taskName = "build${platform.name}${target.taskSuffix}Platform"
+		def buildTask = tasks.register(taskName, Exec) {
+			group = "build"
+			description = "Builds the ${platform.name} PackForge jar for Minecraft ${target.minecraftVersion}."
+			commandLine([gradlew, "-p", platform.path] + targetPropertyArgs(target) + ["build"])
+		}
+		platformTasksForTarget << buildTask
+	}
+
+	tasks.register("collect${target.taskSuffix}PlatformJars", Copy) {
+		group = "build"
+		description = "Collects all PackForge jars for Minecraft ${target.minecraftVersion} into root build/libs."
+		dependsOn platformTasksForTarget
+
+		platformBuilds.each { platform ->
+			from("${platform.path}/build/libs") {
+				include "packforge-${platform.id}-${project.version}-mc${target.minecraftVersion}.jar"
+			}
+		}
+		into layout.buildDirectory.dir("libs")
+	}
+
+	tasks.register("build${target.taskSuffix}") {
+		group = "build"
+		description = "Builds all PackForge platform jars for Minecraft ${target.minecraftVersion}."
+		dependsOn tasks.named("collect${target.taskSuffix}PlatformJars")
+	}
+}
+
+platformBuilds.each { platform ->
+	def previous = null
+	supportedMinecraftTargets.each { target ->
+		def taskProvider = tasks.named("build${platform.name}${target.taskSuffix}Platform")
+		if (previous != null) {
+			def previousTask = previous
+			taskProvider.configure { mustRunAfter previousTask }
+		}
+		previous = taskProvider
 	}
 }
 
 tasks.register("collectPlatformJars", Copy) {
 	group = "build"
-	description = "Collects all platform jars into root build/libs."
-	dependsOn platformBuilds.keySet().collect { platformName ->
-		tasks.named("build${platformName}Platform")
-	}
+	description = "Collects default-target platform jars into root build/libs."
+	dependsOn platformBuilds.collect { platform -> tasks.named("build${platform.name}Platform") }
 
-	from("platform/fabric/build/libs") {
-		include "packforge-fabric-${project.version}.jar"
-	}
-	from("platform/neoforge/build/libs") {
-		include "packforge-neoforge-${project.version}.jar"
-	}
-	from("platform/forge/build/libs") {
-		include "packforge-forge-${project.version}.jar"
+	platformBuilds.each { platform ->
+		from("${platform.path}/build/libs") {
+			include "packforge-${platform.id}-${project.version}-mc${defaultTarget.minecraftVersion}.jar"
+		}
 	}
 	into layout.buildDirectory.dir("libs")
 }
 
+tasks.register("buildAllSupported") {
+	group = "build"
+	description = "Builds all PackForge platform jars for all supported Minecraft targets."
+	dependsOn supportedMinecraftTargets.collect { target -> tasks.named("build${target.taskSuffix}") }
+}
+
 tasks.register("build") {
 	group = "build"
-	description = "Builds all platform jars."
-	dependsOn tasks.named("collectPlatformJars")
+	description = "Builds all supported PackForge platform jars."
+	dependsOn tasks.named("buildAllSupported")
 }
 
 tasks.register("clean") {
@@ -52,8 +185,8 @@ tasks.register("clean") {
 	description = "Cleans root and platform build outputs."
 	doLast {
 		delete layout.buildDirectory
-		platformBuilds.values().each { platformPath ->
-			delete file("${platformPath}/build")
+		platformBuilds.each { platform ->
+			delete file("${platform.path}/build")
 		}
 	}
 }

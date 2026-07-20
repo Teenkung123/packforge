@@ -11,5 +11,16 @@ public final class PackForgeCompat {
 		return platform.isModLoaded("iris") || platform.isModLoaded("oculus");
 	}
 
+	public static boolean isSmoothBootPresent() {
+		PackForgePlatform platform = PackForgeServices.platform();
+		return platform.isModLoaded("smoothboot")
+			|| platform.isModLoaded("smoothboot-fabric")
+			|| platform.isModLoaded("smoothboot-reloaded");
+	}
+
+	public static boolean isImmediatelyFastPresent() {
+		return PackForgeServices.platform().isModLoaded("immediatelyfast");
+	}
+
 	private PackForgeCompat() {}
 }

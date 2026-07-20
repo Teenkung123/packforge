@@ -88,7 +88,7 @@ public abstract class SpriteLoaderMixin {
 		Set<MetadataSectionType<?>> additionalMetadata,
 		Operation<CompletableFuture<SpriteLoader.Preparations>> original
 	) {
-		if (!FeatureFlags.atlasPhaseTimingsEnabled()) {
+		if (!FeatureFlags.atlasPhaseTimingsEnabled() && !FeatureFlags.atlasDecodeBatchingEnabled()) {
 			return original.call(manager, atlasInfoLocation, maxMipmapLevels, taskExecutor, additionalMetadata);
 		}
 		SpriteResourceLoader spriteResourceLoader = packforge$createResourceLoader(additionalMetadata);
@@ -99,12 +99,10 @@ public abstract class SpriteLoaderMixin {
 			return loaders;
 		}, taskExecutor).thenCompose(loaders -> {
 			long startNs = AtlasTimings.start();
-			List<CompletableFuture<SpriteContents>> spriteFutures = loaders.stream()
-				.map(loader -> CompletableFuture.supplyAsync(() -> loader.get(spriteResourceLoader), taskExecutor))
-				.toList();
-			return Util.sequence(spriteFutures).thenApply(sprites -> {
+			List<CompletableFuture<List<SpriteContents>>> spriteFutures = packforge$decodeSpriteBatches(loaders, spriteResourceLoader, taskExecutor);
+			return Util.sequence(spriteFutures).thenApply(batches -> {
 				AtlasTimings.recordDecode(this.location, startNs);
-				return sprites.stream().filter(Objects::nonNull).toList();
+				return batches.stream().flatMap(List::stream).filter(Objects::nonNull).toList();
 			});
 		}).thenApply(sprites -> this.packforge$stitchWithFeatures(sprites, maxMipmapLevels, taskExecutor));
 	}
@@ -215,5 +213,30 @@ public abstract class SpriteLoaderMixin {
 			return SpriteResourceLoader.create(additional);
 		}
 		return new CappedSpriteResourceLoader(this.location, additional);
+	}
+
+	private List<CompletableFuture<List<SpriteContents>>> packforge$decodeSpriteBatches(List<SpriteSource.Loader> loaders, SpriteResourceLoader spriteResourceLoader, Executor executor) {
+		if (!FeatureFlags.atlasDecodeBatchingEnabled()) {
+			return loaders.stream()
+				.map(loader -> CompletableFuture.supplyAsync(() -> java.util.Collections.singletonList(loader.get(spriteResourceLoader)), executor))
+				.toList();
+		}
+		int batchSize = Math.max(16, FeatureFlags.atlasDecodeBatchSize());
+		return java.util.stream.IntStream.range(0, (loaders.size() + batchSize - 1) / batchSize)
+			.mapToObj(batch -> {
+				int from = batch * batchSize;
+				int to = Math.min(loaders.size(), from + batchSize);
+				return CompletableFuture.supplyAsync(() -> {
+					java.util.ArrayList<SpriteContents> sprites = new java.util.ArrayList<>(to - from);
+					for (int index = from; index < to; index++) {
+						SpriteContents sprite = loaders.get(index).get(spriteResourceLoader);
+						if (sprite != null) {
+							sprites.add(sprite);
+						}
+					}
+					return List.copyOf(sprites);
+				}, executor);
+			})
+			.toList();
 	}
 }

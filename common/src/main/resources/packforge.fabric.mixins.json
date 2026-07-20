@@ -8,7 +8,8 @@
 		"loader.SharedZipFileAccessAccessor",
 		"loader.SharedZipFileAccessMixin",
 		"observe.ReloadableResourceManagerMixin",
-		"observe.SimpleReloadInstanceMixin"
+		"observe.SimpleReloadInstanceMixin",
+		"startup.UtilExecutorMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
