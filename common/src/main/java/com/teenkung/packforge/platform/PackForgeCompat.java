@@ -1,5 +1,7 @@
 package com.teenkung.packforge.platform;
 
+import java.util.function.Predicate;
+
 public final class PackForgeCompat {
 	public static boolean isSodiumLikePresent() {
 		PackForgePlatform platform = PackForgeServices.platform();
@@ -20,6 +22,15 @@ public final class PackForgeCompat {
 
 	public static boolean isImmediatelyFastPresent() {
 		return PackForgeServices.platform().isModLoaded("immediatelyfast");
+	}
+
+	public static boolean mustPreservePlatformModelLoading() {
+		PackForgePlatform platform = PackForgeServices.platform();
+		return mustPreservePlatformModelLoading(platform.loaderName(), platform::isModLoaded);
+	}
+
+	static boolean mustPreservePlatformModelLoading(String loaderName, Predicate<String> isModLoaded) {
+		return "fabric".equals(loaderName) && isModLoaded.test("fabric-model-loading-api-v1");
 	}
 
 	private PackForgeCompat() {}
