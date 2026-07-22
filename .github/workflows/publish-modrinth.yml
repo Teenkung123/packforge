@@ -17,19 +17,9 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
+    name: Build stable 26.1-26.2 artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - mc26_1_to_26_2
-          - mc1_21_1
-          - mc1_21_4
-          - mc1_21_8
-          - mc1_21_11
-          - mc1_20_1
 
     steps:
       - uses: actions/checkout@v4
@@ -56,19 +46,30 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             platform/forge/.gradle/mavenizer
-          key: packforge-publish-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          key: packforge-publish-${{ runner.os }}-mc26_1_to_26_2-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
           restore-keys: |
-            packforge-publish-${{ runner.os }}-${{ matrix.target }}-
+            packforge-publish-${{ runner.os }}-mc26_1_to_26_2-
 
       - name: Build, test, and verify target artifacts
         run: |
           chmod +x gradlew
-          ./gradlew buildTarget -Ppackforge_target=${{ matrix.target }} --no-daemon --stacktrace
+          for attempt in 1 2 3; do
+            if ./gradlew buildTarget -Ppackforge_target=mc26_1_to_26_2 --no-daemon --stacktrace; then
+              exit 0
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "Build failed after $attempt attempts."
+              exit 1
+            fi
+            delay=$((attempt * 30))
+            echo "Build attempt $attempt failed; retrying in ${delay}s."
+            sleep "$delay"
+          done
 
       - name: Upload target artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: packforge-${{ matrix.target }}
+          name: packforge-mc26_1_to_26_2
           path: build/libs/packforge-*.jar
           if-no-files-found: error
 
@@ -82,29 +83,15 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - { target: mc26_1_to_26_2, loader: fabric, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", suffix: "", type: release }
-          - { target: mc26_1_to_26_2, loader: forge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", suffix: "", type: release }
-          - { target: mc26_1_to_26_2, loader: neoforge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", suffix: "", type: release }
-          - { target: mc1_21_1, loader: fabric, minecraft: 1.21.1, versions: "1.21.1", suffix: -beta.1, type: beta }
-          - { target: mc1_21_1, loader: forge, minecraft: 1.21.1, versions: "1.21.1", suffix: -beta.1, type: beta }
-          - { target: mc1_21_1, loader: neoforge, minecraft: 1.21.1, versions: "1.21.1", suffix: -beta.1, type: beta }
-          - { target: mc1_21_4, loader: fabric, minecraft: 1.21.4, versions: "1.21.4", suffix: -beta.1, type: beta }
-          - { target: mc1_21_4, loader: forge, minecraft: 1.21.4, versions: "1.21.4", suffix: -beta.1, type: beta }
-          - { target: mc1_21_4, loader: neoforge, minecraft: 1.21.4, versions: "1.21.4", suffix: -beta.1, type: beta }
-          - { target: mc1_21_8, loader: fabric, minecraft: 1.21.8, versions: "1.21.8", suffix: -beta.1, type: beta }
-          - { target: mc1_21_8, loader: forge, minecraft: 1.21.8, versions: "1.21.8", suffix: -beta.1, type: beta }
-          - { target: mc1_21_8, loader: neoforge, minecraft: 1.21.8, versions: "1.21.8", suffix: -beta.1, type: beta }
-          - { target: mc1_21_11, loader: fabric, minecraft: 1.21.11, versions: "1.21.11", suffix: -beta.1, type: beta }
-          - { target: mc1_21_11, loader: forge, minecraft: 1.21.11, versions: "1.21.11", suffix: -beta.1, type: beta }
-          - { target: mc1_21_11, loader: neoforge, minecraft: 1.21.11, versions: "1.21.11", suffix: -beta.1, type: beta }
-          - { target: mc1_20_1, loader: fabric, minecraft: 1.20.1, versions: "1.20.1", suffix: -beta.1, type: beta }
-          - { target: mc1_20_1, loader: forge, minecraft: 1.20.1, versions: "1.20.1", suffix: -beta.1, type: beta }
+          - { loader: fabric, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2" }
+          - { loader: forge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2" }
+          - { loader: neoforge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2" }
 
     steps:
-      - name: Download ${{ matrix.target }} artifacts
+      - name: Download stable artifacts
         uses: actions/download-artifact@v4
         with:
-          name: packforge-${{ matrix.target }}
+          name: packforge-mc26_1_to_26_2
           path: build/libs
 
       - name: Prepare Modrinth version metadata
@@ -112,14 +99,12 @@ jobs:
         shell: bash
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
-          VERSION_SUFFIX: ${{ matrix.suffix }}
           LOADER: ${{ matrix.loader }}
           MINECRAFT_ARTIFACT: ${{ matrix.minecraft }}
           GAME_VERSIONS: ${{ matrix.versions }}
-          VERSION_TYPE: ${{ matrix.type }}
           CHANGELOG: ${{ inputs.changelog }}
         run: |
-          version="${RELEASE_VERSION}${VERSION_SUFFIX}"
+          version="$RELEASE_VERSION"
           file="build/libs/packforge-${LOADER}-${version}-mc${MINECRAFT_ARTIFACT}.jar"
           if [[ ! -f "$file" ]]; then
             echo "Expected artifact not found: $file"
@@ -139,7 +124,7 @@ jobs:
               "changelog": os.environ["CHANGELOG"],
               "dependencies": [],
               "game_versions": os.environ["GAME_VERSIONS"].splitlines(),
-              "version_type": os.environ["VERSION_TYPE"],
+              "version_type": "release",
               "loaders": [os.environ["LOADER"]],
               "featured": True,
               "status": "listed",

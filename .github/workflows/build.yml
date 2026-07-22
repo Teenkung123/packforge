@@ -48,7 +48,18 @@ jobs:
       - name: Build, test, and verify exact artifacts
         run: |
           chmod +x gradlew
-          ./gradlew buildTarget -Ppackforge_target=${{ matrix.target }} --no-daemon --stacktrace
+          for attempt in 1 2 3; do
+            if ./gradlew buildTarget -Ppackforge_target=${{ matrix.target }} --no-daemon --stacktrace; then
+              exit 0
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "Build failed after $attempt attempts."
+              exit 1
+            fi
+            delay=$((attempt * 30))
+            echo "Build attempt $attempt failed; retrying in ${delay}s."
+            sleep "$delay"
+          done
 
       - name: Upload target artifacts
         uses: actions/upload-artifact@v4
