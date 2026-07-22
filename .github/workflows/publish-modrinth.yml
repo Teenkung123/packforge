@@ -1,0 +1,196 @@
+name: Publish to Modrinth
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Base PackForge version from gradle.properties
+        required: true
+        default: "1.3.1"
+      changelog:
+        description: Release notes shown on Modrinth
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - mc26_1_to_26_2
+          - mc1_21_1
+          - mc1_21_4
+          - mc1_21_8
+          - mc1_21_11
+          - mc1_20_1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Validate requested version
+        shell: bash
+        run: |
+          configured_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          if [[ "$configured_version" != "${{ inputs.release_version }}" ]]; then
+            echo "Requested version ${{ inputs.release_version }} does not match gradle.properties ($configured_version)."
+            exit 1
+          fi
+
+      - name: Restore target-scoped Gradle and Mavenizer caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            platform/forge/.gradle/mavenizer
+          key: packforge-publish-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          restore-keys: |
+            packforge-publish-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Build, test, and verify target artifacts
+        run: |
+          chmod +x gradlew
+          ./gradlew buildTarget -Ppackforge_target=${{ matrix.target }} --no-daemon --stacktrace
+
+      - name: Upload target artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packforge-${{ matrix.target }}
+          path: build/libs/packforge-*.jar
+          if-no-files-found: error
+
+  publish:
+    name: Publish ${{ matrix.loader }} ${{ matrix.minecraft }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        include:
+          - { target: mc26_1_to_26_2, loader: fabric, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", suffix: "", type: release }
+          - { target: mc26_1_to_26_2, loader: forge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", suffix: "", type: release }
+          - { target: mc26_1_to_26_2, loader: neoforge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", suffix: "", type: release }
+          - { target: mc1_21_1, loader: fabric, minecraft: 1.21.1, versions: "1.21.1", suffix: -beta.1, type: beta }
+          - { target: mc1_21_1, loader: forge, minecraft: 1.21.1, versions: "1.21.1", suffix: -beta.1, type: beta }
+          - { target: mc1_21_1, loader: neoforge, minecraft: 1.21.1, versions: "1.21.1", suffix: -beta.1, type: beta }
+          - { target: mc1_21_4, loader: fabric, minecraft: 1.21.4, versions: "1.21.4", suffix: -beta.1, type: beta }
+          - { target: mc1_21_4, loader: forge, minecraft: 1.21.4, versions: "1.21.4", suffix: -beta.1, type: beta }
+          - { target: mc1_21_4, loader: neoforge, minecraft: 1.21.4, versions: "1.21.4", suffix: -beta.1, type: beta }
+          - { target: mc1_21_8, loader: fabric, minecraft: 1.21.8, versions: "1.21.8", suffix: -beta.1, type: beta }
+          - { target: mc1_21_8, loader: forge, minecraft: 1.21.8, versions: "1.21.8", suffix: -beta.1, type: beta }
+          - { target: mc1_21_8, loader: neoforge, minecraft: 1.21.8, versions: "1.21.8", suffix: -beta.1, type: beta }
+          - { target: mc1_21_11, loader: fabric, minecraft: 1.21.11, versions: "1.21.11", suffix: -beta.1, type: beta }
+          - { target: mc1_21_11, loader: forge, minecraft: 1.21.11, versions: "1.21.11", suffix: -beta.1, type: beta }
+          - { target: mc1_21_11, loader: neoforge, minecraft: 1.21.11, versions: "1.21.11", suffix: -beta.1, type: beta }
+          - { target: mc1_20_1, loader: fabric, minecraft: 1.20.1, versions: "1.20.1", suffix: -beta.1, type: beta }
+          - { target: mc1_20_1, loader: forge, minecraft: 1.20.1, versions: "1.20.1", suffix: -beta.1, type: beta }
+
+    steps:
+      - name: Download ${{ matrix.target }} artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: packforge-${{ matrix.target }}
+          path: build/libs
+
+      - name: Prepare Modrinth version metadata
+        id: release
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          VERSION_SUFFIX: ${{ matrix.suffix }}
+          LOADER: ${{ matrix.loader }}
+          MINECRAFT_ARTIFACT: ${{ matrix.minecraft }}
+          GAME_VERSIONS: ${{ matrix.versions }}
+          VERSION_TYPE: ${{ matrix.type }}
+          CHANGELOG: ${{ inputs.changelog }}
+        run: |
+          version="${RELEASE_VERSION}${VERSION_SUFFIX}"
+          file="build/libs/packforge-${LOADER}-${version}-mc${MINECRAFT_ARTIFACT}.jar"
+          if [[ ! -f "$file" ]]; then
+            echo "Expected artifact not found: $file"
+            find build/libs -maxdepth 1 -type f -print
+            exit 1
+          fi
+
+          export PUBLISH_VERSION="$version"
+          python - <<'PY'
+          import json
+          import os
+
+          version = os.environ["PUBLISH_VERSION"]
+          metadata = {
+              "name": f"PackForge - Optimized Resource Pack Loading Time {version}",
+              "version_number": version,
+              "changelog": os.environ["CHANGELOG"],
+              "dependencies": [],
+              "game_versions": os.environ["GAME_VERSIONS"].splitlines(),
+              "version_type": os.environ["VERSION_TYPE"],
+              "loaders": [os.environ["LOADER"]],
+              "featured": True,
+              "status": "listed",
+              "project_id": "NimDX7iQ",
+              "file_parts": ["artifact"],
+              "primary_file": "artifact",
+              "environment": "client_only",
+          }
+          with open("modrinth-version.json", "w", encoding="utf-8") as output:
+              json.dump(metadata, output, ensure_ascii=False)
+          PY
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+
+      - name: Publish through the Modrinth API
+        shell: bash
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          ARTIFACT_FILE: ${{ steps.release.outputs.file }}
+        run: |
+          if [[ -z "$MODRINTH_TOKEN" ]]; then
+            echo "The MODRINTH_TOKEN repository secret is not configured."
+            exit 1
+          fi
+
+          http_status="$(curl \
+            --silent \
+            --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --output modrinth-response.json \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: $MODRINTH_TOKEN" \
+            --header "User-Agent: Teenkung123/PackForge-GitHub-Actions/1.0" \
+            --form 'data=@modrinth-version.json;type=application/json' \
+            --form "artifact=@${ARTIFACT_FILE};type=application/java-archive" \
+            'https://api.modrinth.com/v2/version')"
+
+          if [[ "$http_status" -lt 200 || "$http_status" -ge 300 ]]; then
+            echo "Modrinth API returned HTTP $http_status:"
+            python -m json.tool modrinth-response.json || sed -n '1,120p' modrinth-response.json
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+
+          with open("modrinth-response.json", encoding="utf-8") as response_file:
+              response = json.load(response_file)
+          files = ", ".join(file["filename"] for file in response.get("files", []))
+          print(f"Published Modrinth version {response['id']}: {files}")
+          PY
