@@ -23,8 +23,8 @@ layout.buildDirectory.set(file("build/${target.key}"))
 
 repositories {
 	maven {
-		name = "Terraformers"
-		url = "https://maven.terraformersmc.com/"
+		name = "Modrinth"
+		url = "https://api.modrinth.com/maven"
 	}
 	mavenCentral()
 }
@@ -124,8 +124,8 @@ dependencies {
 		compileOnly "net.fabricmc.fabric-api:fabric-api:${loaderConfig.fabricApiVersion}"
 	}
 	if (loaderConfig.modMenuEntrypoint) {
-		compileOnly "com.terraformersmc:modmenu:${loaderConfig.modMenuVersion}"
-		runtimeOnly "com.terraformersmc:modmenu:${loaderConfig.modMenuVersion}"
+		compileOnly "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}"
+		runtimeOnly "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}"
 	}
 
 	implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${packforgeMixinExtrasVersion}"))
