@@ -10,6 +10,9 @@ public final class ReloadSummaryToast {
 	private static final SystemToast.SystemToastId TOAST_ID = new SystemToast.SystemToastId();
 
 	public static void showPending() {
+		if (!ReloadStatus.isStatusTextReady()) {
+			return;
+		}
 		ReloadStatus.ReloadSummary summary = ReloadStatus.consumeSummaryToast();
 		if (summary == null) {
 			return;

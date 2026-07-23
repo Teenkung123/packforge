@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class ReloadStatus {
 	private static final AtomicInteger activePrepareTasks = new AtomicInteger();
 	private static final AtomicInteger activeApplyTasks = new AtomicInteger();
+	private static final InitialUiResourceReadiness initialUiResources = new InitialUiResourceReadiness();
 	private static volatile boolean active;
 	private static volatile boolean complete;
 	private static volatile long startNs;
@@ -56,6 +57,14 @@ public final class ReloadStatus {
 
 	public static void applyFinished() {
 		activeApplyTasks.updateAndGet(value -> Math.max(0, value - 1));
+	}
+
+	public static void resourceApplied(String listenerName) {
+		initialUiResources.listenerApplied(listenerName);
+	}
+
+	public static boolean isStatusTextReady() {
+		return initialUiResources.isReady();
 	}
 
 	public static boolean isActive() {

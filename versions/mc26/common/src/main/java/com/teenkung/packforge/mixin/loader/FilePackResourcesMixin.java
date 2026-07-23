@@ -1,5 +1,6 @@
 package com.teenkung.packforge.mixin.loader;
 
+import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.loader.InputStreamSupplier;
 import com.teenkung.packforge.loader.LoaderTimings;
@@ -13,7 +14,6 @@ import net.minecraft.server.packs.PackLocationInfo;
 import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.IoSupplier;
-import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -31,7 +31,6 @@ import java.util.zip.ZipFile;
 
 @Mixin(FilePackResources.class)
 public abstract class FilePackResourcesMixin {
-	@Shadow @Final private static Logger LOGGER = null;
 	@Shadow @Final private String prefix;
 
 	@Unique
@@ -68,7 +67,7 @@ public abstract class FilePackResourcesMixin {
 		return archive.packforge$archiveState().index(
 			zipFile,
 			archive.packforge$archiveFile().toString(),
-			failure -> LOGGER.warn(
+			failure -> PackForge.LOGGER.warn(
 				"PackIndex build failed for {}; using vanilla until reopen",
 				failure.archiveName(),
 				failure.cause()
@@ -93,7 +92,7 @@ public abstract class FilePackResourcesMixin {
 			ZipReadPool.DEFAULT_MAX_HANDLES,
 			path,
 			fallback,
-			failure -> LOGGER.warn(
+			failure -> PackForge.LOGGER.warn(
 				"PackForge ZIP read pool failed for {}; using vanilla reads until reopen",
 				failure.archiveFile(),
 				failure.cause()
@@ -138,7 +137,7 @@ public abstract class FilePackResourcesMixin {
 		String typePrefix = this.packforge$addPrefix(type.getDirectory() + "/");
 		PackIndex.NamespaceResult namespaces = index.namespacesFor(typePrefix, ResourceNamePolicy.current());
 		for (String invalid : namespaces.invalid()) {
-			LOGGER.warn(
+			PackForge.LOGGER.warn(
 				"Non [a-z0-9_.-] character in namespace {} in pack {}, ignoring",
 				invalid,
 				this.packforge$archive.packforge$archiveFile()
@@ -167,7 +166,7 @@ public abstract class FilePackResourcesMixin {
 			String path = indexedEntry.path().substring(root.length());
 			Identifier location = Identifier.tryBuild(namespace, path);
 			if (location == null) {
-				LOGGER.warn("Invalid path in datapack: {}:{}, ignoring", namespace, path);
+				PackForge.LOGGER.warn("Invalid path in datapack: {}:{}, ignoring", namespace, path);
 				return;
 			}
 			output.accept(

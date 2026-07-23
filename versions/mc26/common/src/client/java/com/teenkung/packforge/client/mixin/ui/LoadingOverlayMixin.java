@@ -63,7 +63,7 @@ public abstract class LoadingOverlayMixin {
 	private void packforge$drawReloadStatus(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float tickProgress, CallbackInfo ci) {
 		boolean drawReload = FeatureFlags.loadingStatusOverlayEnabled() && ReloadStatus.isActive();
 		boolean drawStartup = FeatureFlags.startupStatusOverlayEnabled() && StartupStatus.isActive();
-		if (!drawReload && !drawStartup) {
+		if ((!drawReload && !drawStartup) || !ReloadStatus.isStatusTextReady()) {
 			return;
 		}
 		Font font = Minecraft.getInstance().font;

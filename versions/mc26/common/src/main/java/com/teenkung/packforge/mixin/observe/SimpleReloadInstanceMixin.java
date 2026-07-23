@@ -36,7 +36,11 @@ public abstract class SimpleReloadInstanceMixin {
 	) {
 		String name = listener.getName();
 		boolean trackStartup = StartupTimings.isActive();
-		if (!FeatureFlags.reloadListenerTimingsEnabled() && !FeatureFlags.loadingStatusOverlayEnabled() && !trackStartup) {
+		boolean trackUiReadiness = !ReloadStatus.isStatusTextReady()
+			&& (FeatureFlags.loadingStatusOverlayEnabled()
+				|| FeatureFlags.startupStatusOverlayEnabled()
+				|| FeatureFlags.reloadSummaryToastEnabled());
+		if (!FeatureFlags.reloadListenerTimingsEnabled() && !FeatureFlags.loadingStatusOverlayEnabled() && !trackStartup && !trackUiReadiness) {
 			return packforge$invokeCreate(original, stateFactory, sharedState, barrier, listener, taskExecutor, reloadExecutor, name, false);
 		}
 		Executor trackedTaskExecutor = command -> taskExecutor.execute(() -> {
@@ -73,6 +77,7 @@ public abstract class SimpleReloadInstanceMixin {
 			long startNs = (FeatureFlags.reloadListenerTimingsEnabled() || startupActive) ? System.nanoTime() : 0L;
 			try {
 				command.run();
+				ReloadStatus.resourceApplied(name);
 			} finally {
 				if (FeatureFlags.reloadListenerTimingsEnabled()) {
 					LoaderTimings.recordListenerApply(name, System.nanoTime() - startNs);
