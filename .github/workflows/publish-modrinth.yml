@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   build:
-    name: Build stable 26.1-26.2 artifacts
+    name: Build all supported artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -39,22 +39,22 @@ jobs:
             exit 1
           fi
 
-      - name: Restore target-scoped Gradle and Mavenizer caches
+      - name: Restore Gradle and Mavenizer caches
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
             platform/forge/.gradle/mavenizer
-          key: packforge-publish-${{ runner.os }}-mc26_1_to_26_2-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          key: packforge-publish-${{ runner.os }}-all-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
           restore-keys: |
-            packforge-publish-${{ runner.os }}-mc26_1_to_26_2-
+            packforge-publish-${{ runner.os }}-all-
 
-      - name: Build, test, and verify target artifacts
+      - name: Build, test, and verify all artifacts
         run: |
           chmod +x gradlew
           for attempt in 1 2 3; do
-            if ./gradlew buildTarget -Ppackforge_target=mc26_1_to_26_2 --no-daemon --stacktrace; then
+            if ./gradlew buildAllSupported verifyAllArtifacts --no-daemon --stacktrace; then
               exit 0
             fi
             if [[ "$attempt" -eq 3 ]]; then
@@ -66,15 +66,15 @@ jobs:
             sleep "$delay"
           done
 
-      - name: Upload target artifacts
+      - name: Upload verified artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: packforge-mc26_1_to_26_2
+          name: packforge-all-supported
           path: build/libs/packforge-*.jar
           if-no-files-found: error
 
   publish:
-    name: Publish ${{ matrix.loader }} ${{ matrix.minecraft }}
+    name: Publish ${{ matrix.loader }} ${{ matrix.minecraft }} (${{ matrix.release_type }})
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -83,15 +83,29 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - { loader: fabric, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2" }
-          - { loader: forge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2" }
-          - { loader: neoforge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2" }
+          - { loader: fabric, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", version_suffix: "", release_type: release, featured: "true" }
+          - { loader: forge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", version_suffix: "", release_type: release, featured: "true" }
+          - { loader: neoforge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", version_suffix: "", release_type: release, featured: "true" }
+          - { loader: fabric, minecraft: 1.21.11, versions: "1.21.11", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: forge, minecraft: 1.21.11, versions: "1.21.11", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: neoforge, minecraft: 1.21.11, versions: "1.21.11", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: fabric, minecraft: 1.21.8, versions: "1.21.8", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: forge, minecraft: 1.21.8, versions: "1.21.8", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: neoforge, minecraft: 1.21.8, versions: "1.21.8", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: fabric, minecraft: 1.21.4, versions: "1.21.4", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: forge, minecraft: 1.21.4, versions: "1.21.4", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: neoforge, minecraft: 1.21.4, versions: "1.21.4", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: fabric, minecraft: 1.21.1, versions: "1.21.1", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: forge, minecraft: 1.21.1, versions: "1.21.1", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: neoforge, minecraft: 1.21.1, versions: "1.21.1", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: fabric, minecraft: 1.20.1, versions: "1.20.1", version_suffix: "-beta.1", release_type: beta, featured: "false" }
+          - { loader: forge, minecraft: 1.20.1, versions: "1.20.1", version_suffix: "-beta.1", release_type: beta, featured: "false" }
 
     steps:
-      - name: Download stable artifacts
+      - name: Download verified artifacts
         uses: actions/download-artifact@v4
         with:
-          name: packforge-mc26_1_to_26_2
+          name: packforge-all-supported
           path: build/libs
 
       - name: Prepare Modrinth version metadata
@@ -99,12 +113,15 @@ jobs:
         shell: bash
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
+          VERSION_SUFFIX: ${{ matrix.version_suffix }}
+          RELEASE_TYPE: ${{ matrix.release_type }}
+          FEATURED: ${{ matrix.featured }}
           LOADER: ${{ matrix.loader }}
           MINECRAFT_ARTIFACT: ${{ matrix.minecraft }}
           GAME_VERSIONS: ${{ matrix.versions }}
           CHANGELOG: ${{ inputs.changelog }}
         run: |
-          version="$RELEASE_VERSION"
+          version="${RELEASE_VERSION}${VERSION_SUFFIX}"
           file="build/libs/packforge-${LOADER}-${version}-mc${MINECRAFT_ARTIFACT}.jar"
           if [[ ! -f "$file" ]]; then
             echo "Expected artifact not found: $file"
@@ -161,9 +178,9 @@ jobs:
               "changelog": os.environ["CHANGELOG"],
               "dependencies": dependencies,
               "game_versions": os.environ["GAME_VERSIONS"].splitlines(),
-              "version_type": "release",
+              "version_type": os.environ["RELEASE_TYPE"],
               "loaders": [os.environ["LOADER"]],
-              "featured": True,
+              "featured": os.environ["FEATURED"] == "true",
               "status": "listed",
               "project_id": "NimDX7iQ",
               "file_parts": ["artifact"],
@@ -177,7 +194,71 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "file=$file" >> "$GITHUB_OUTPUT"
 
+      - name: Check for an existing identical version
+        id: existing
+        shell: bash
+        env:
+          ARTIFACT_FILE: ${{ steps.release.outputs.file }}
+          PUBLISH_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_TYPE: ${{ matrix.release_type }}
+          FEATURED: ${{ matrix.featured }}
+          LOADER: ${{ matrix.loader }}
+          GAME_VERSIONS: ${{ matrix.versions }}
+          CHANGELOG: ${{ inputs.changelog }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import urllib.request
+
+          artifact = pathlib.Path(os.environ["ARTIFACT_FILE"])
+          request = urllib.request.Request(
+              "https://api.modrinth.com/v2/project/NimDX7iQ/version",
+              headers={"User-Agent": "Teenkung123/PackForge-GitHub-Actions/1.0"},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              versions = json.load(response)
+
+          matches = []
+          for version in versions:
+              for remote_file in version.get("files", []):
+                  if remote_file.get("filename") == artifact.name:
+                      matches.append((version, remote_file))
+
+          if len(matches) > 1:
+              raise SystemExit(f"Multiple existing Modrinth versions contain {artifact.name}")
+
+          found = bool(matches)
+          if found:
+              version, remote_file = matches[0]
+              digest = hashlib.sha512(artifact.read_bytes()).hexdigest()
+              expected_games = set(os.environ["GAME_VERSIONS"].splitlines())
+              expected_changelog = os.environ["CHANGELOG"].replace("\r\n", "\n").strip()
+              actual_changelog = (version.get("changelog") or "").replace("\r\n", "\n").strip()
+              checks = {
+                  "SHA-512": remote_file.get("hashes", {}).get("sha512") == digest,
+                  "version number": version.get("version_number") == os.environ["PUBLISH_VERSION"],
+                  "release type": version.get("version_type") == os.environ["RELEASE_TYPE"],
+                  "featured flag": version.get("featured") == (os.environ["FEATURED"] == "true"),
+                  "loader": set(version.get("loaders", [])) == {os.environ["LOADER"]},
+                  "game versions": set(version.get("game_versions", [])) == expected_games,
+                  "changelog": actual_changelog == expected_changelog,
+              }
+              failures = [name for name, passed in checks.items() if not passed]
+              if failures:
+                  raise SystemExit(
+                      f"Existing {artifact.name} differs in: {', '.join(failures)}"
+                  )
+              print(f"Identical Modrinth version already exists: {version['id']}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"found={'true' if found else 'false'}\n")
+          PY
+
       - name: Publish through the Modrinth API
+        if: steps.existing.outputs.found != 'true'
         shell: bash
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
