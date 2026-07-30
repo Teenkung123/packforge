@@ -67,6 +67,9 @@ def clientJavaDirs = [
 	file("src/client/java"),
 	new File(packforgeAdapterPlatformRoot, "src/client/java")
 ]
+if (target.key in ["mc1_21_1", "mc1_21_4", "mc1_21_8"]) {
+	clientJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/client/java"))
+}
 def clientResourceDirs = [
 	new File(packforgeCommonRoot, "src/client/resources"),
 	new File(packforgeAdapterCommonRoot, "src/client/resources"),
@@ -124,8 +127,20 @@ dependencies {
 		compileOnly "net.fabricmc.fabric-api:fabric-api:${loaderConfig.fabricApiVersion}"
 	}
 	if (loaderConfig.modMenuEntrypoint) {
-		compileOnly "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}"
-		runtimeOnly "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}"
+		if (loaderConfig.mappingMode == "named") {
+			// Legacy Mod Menu artifacts publish their API in intermediary mappings.
+			// Route them through classic Loom so its Screen parameter is remapped to
+			// the Mojang names this project uses at compile time.
+			modCompileOnly "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}"
+		} else {
+			// Modern Loom resolves the current Mod Menu artifact in its native
+			// mapping namespace and does not expose the legacy modCompileOnly DSL.
+			compileOnly "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}"
+			// Keep optional integrations available to local client runs without
+			// exporting either dependency to PackForge consumers.
+			add("localRuntime", "net.fabricmc.fabric-api:fabric-api:${loaderConfig.fabricApiVersion}")
+			add("localRuntime", "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}")
+		}
 	}
 
 	implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${packforgeMixinExtrasVersion}"))
@@ -210,6 +225,22 @@ tasks.named("processClientResources") {
 	inputs.property "mixin_compatibility", target.mixinCompatibility
 	filesMatching(clientMixinConfig) {
 		expand "mixin_compatibility": target.mixinCompatibility
+	}
+}
+
+if (artifactSmoke) {
+	def developmentOutputPaths = providers.provider {
+		(sourceSets.main.output.files + sourceSets.client.output.files)
+			.collect { it.canonicalPath }
+			.toSet()
+	}
+	tasks.named("runClient") {
+		// A packaged smoke must not be able to discover PackForge through Loom's
+		// source-set outputs. Fabric Loader should see only the artifact copied
+		// into the run directory's mods folder.
+		classpath = classpath.filter { candidate ->
+			!developmentOutputPaths.get().contains(candidate.canonicalPath)
+		}
 	}
 }
 

@@ -6,7 +6,7 @@ on:
       release_version:
         description: Base PackForge version from gradle.properties
         required: true
-        default: "1.3.2"
+        default: "1.3.3"
       changelog:
         description: Release notes shown on Modrinth
         required: true
@@ -113,16 +113,53 @@ jobs:
           fi
 
           export PUBLISH_VERSION="$version"
+          export PUBLISH_ARTIFACT="$file"
           python - <<'PY'
           import json
           import os
+          import zipfile
 
           version = os.environ["PUBLISH_VERSION"]
+          dependencies = []
+          if os.environ["LOADER"] == "fabric":
+              with zipfile.ZipFile(os.environ["PUBLISH_ARTIFACT"]) as artifact:
+                  fabric_metadata = json.loads(artifact.read("fabric.mod.json"))
+
+              required_mods = set(fabric_metadata.get("depends", {})) - {
+                  "fabricloader",
+                  "minecraft",
+                  "java",
+              }
+              unsupported_required = required_mods - {"fabric-api"}
+              if unsupported_required:
+                  raise SystemExit(
+                      "Unmapped required Fabric dependencies: "
+                      + ", ".join(sorted(unsupported_required))
+                  )
+              if "fabric-api" in required_mods:
+                  dependencies.append({
+                      "project_id": "P7dR8mSH",
+                      "dependency_type": "required",
+                  })
+
+              suggested_mods = set(fabric_metadata.get("suggests", {}))
+              unsupported_suggested = suggested_mods - {"modmenu"}
+              if unsupported_suggested:
+                  raise SystemExit(
+                      "Unmapped optional Fabric dependencies: "
+                      + ", ".join(sorted(unsupported_suggested))
+                  )
+              if "modmenu" in suggested_mods:
+                  dependencies.append({
+                      "project_id": "mOgUt4GM",
+                      "dependency_type": "optional",
+                  })
+
           metadata = {
               "name": f"PackForge - Optimized Resource Pack Loading Time {version}",
               "version_number": version,
               "changelog": os.environ["CHANGELOG"],
-              "dependencies": [],
+              "dependencies": dependencies,
               "game_versions": os.environ["GAME_VERSIONS"].splitlines(),
               "version_type": "release",
               "loaders": [os.environ["LOADER"]],

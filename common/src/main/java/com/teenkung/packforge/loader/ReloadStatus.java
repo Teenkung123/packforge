@@ -28,9 +28,14 @@ public final class ReloadStatus {
 	}
 
 	public static void finish(Throwable error) {
+		finish(error, FeatureFlags.reloadSummaryToastEnabled());
+	}
+
+	static void finish(Throwable error, boolean summaryToastEnabled) {
 		complete = true;
+		active = false;
 		long elapsedMs = startNs == 0L ? 0L : (System.nanoTime() - startNs) / 1_000_000L;
-		if (FeatureFlags.reloadSummaryToastEnabled()) {
+		if (summaryToastEnabled) {
 			pendingSummary = new ReloadSummary(elapsedMs, error == null);
 		}
 		phase = error == null ? "Finishing" : "Failed";
@@ -81,6 +86,11 @@ public final class ReloadStatus {
 		return "Loading resources - " + percent + "% - " + elapsedMs + "ms";
 	}
 
+	public static float displayProgress(float progress) {
+		float normalized = Math.max(0.0F, Math.min(1.0F, progress));
+		return complete ? 1.0F : Math.min(0.99F, normalized);
+	}
+
 	public static String detailLine() {
 		String currentPhase = phase;
 		String currentDetail = detail;
@@ -99,6 +109,18 @@ public final class ReloadStatus {
 		ReloadSummary summary = pendingSummary;
 		pendingSummary = null;
 		return summary;
+	}
+
+	static void resetForTesting() {
+		active = false;
+		complete = false;
+		startNs = 0L;
+		pendingSummary = null;
+		activePrepareTasks.set(0);
+		activeApplyTasks.set(0);
+		initialUiResources.reset();
+		phase = "Starting";
+		detail = "resource reload";
 	}
 
 	private static String readableListener(String listenerName) {

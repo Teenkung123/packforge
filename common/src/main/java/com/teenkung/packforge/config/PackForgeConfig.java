@@ -10,8 +10,11 @@ import com.teenkung.packforge.platform.PackForgeServices;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -73,6 +76,17 @@ public final class PackForgeConfig {
 		public boolean startupAsyncFontAtlasEnabled = false;
 	}
 
+	public record SaveResult(boolean successful, String errorMessage) {
+		private static SaveResult success() {
+			return new SaveResult(true, "");
+		}
+
+		private static SaveResult failure(IOException exception) {
+			String message = exception.getMessage();
+			return new SaveResult(false, message == null || message.isBlank() ? exception.getClass().getSimpleName() : message);
+		}
+	}
+
 	public static Cfg get() {
 		Cfg c = INSTANCE;
 		return c != null ? c : new Cfg();
@@ -116,14 +130,104 @@ public final class PackForgeConfig {
 		Cfg cfg = get();
 		cfg.configVersion = CURRENT_VERSION;
 		sanitize(cfg);
+		write(cfg);
+	}
+
+	/**
+	 * Atomically persists a detached configuration and installs it as the live
+	 * configuration only after the write succeeds.
+	 */
+	public static synchronized SaveResult applyAndSave(Cfg replacement) {
+		Cfg candidate = copyOf(replacement);
+		candidate.configVersion = CURRENT_VERSION;
+		sanitize(candidate);
+		SaveResult result = write(candidate);
+		if (result.successful()) {
+			INSTANCE = candidate;
+		}
+		return result;
+	}
+
+	public static Cfg copyOf(Cfg source) {
+		Cfg copy = new Cfg();
+		copy.configVersion = source.configVersion;
+		copy.reloadOptimizerEnabled = source.reloadOptimizerEnabled;
+		copy.largeAtlasFixerEnabled = source.largeAtlasFixerEnabled;
+		copy.loaderIndexEnabled = source.loaderIndexEnabled;
+		copy.loaderZipPoolEnabled = source.loaderZipPoolEnabled;
+		copy.loaderTimingsEnabled = source.loaderTimingsEnabled;
+		copy.reloadListenerTimingsEnabled = source.reloadListenerTimingsEnabled;
+		copy.shaderApplyStallDiagnosticsEnabled = source.shaderApplyStallDiagnosticsEnabled;
+		copy.immediatelyFastFontAtlasCompatEnabled = source.immediatelyFastFontAtlasCompatEnabled;
+		copy.loadingStatusOverlayEnabled = source.loadingStatusOverlayEnabled;
+		copy.loadingScreenFadeOutDisabled = source.loadingScreenFadeOutDisabled;
+		copy.reloadSummaryToastEnabled = source.reloadSummaryToastEnabled;
+		copy.modelUvTransparencyClampEnabled = source.modelUvTransparencyClampEnabled;
+		copy.fontReloadDiagnosticsEnabled = source.fontReloadDiagnosticsEnabled;
+		copy.fontPrepareProviderSelectionEnabled = source.fontPrepareProviderSelectionEnabled;
+		copy.fontBitmapProviderCacheEnabled = source.fontBitmapProviderCacheEnabled;
+		copy.atlasPhaseTimingsEnabled = source.atlasPhaseTimingsEnabled;
+		copy.atlasMipParallelEnabled = source.atlasMipParallelEnabled;
+		copy.atlasMipBatchSize = source.atlasMipBatchSize;
+		copy.atlasDecodeBatchingEnabled = source.atlasDecodeBatchingEnabled;
+		copy.atlasDecodeBatchSize = source.atlasDecodeBatchSize;
+		copy.modelParseBatchingEnabled = source.modelParseBatchingEnabled;
+		copy.modelParseBatchSize = source.modelParseBatchSize;
+		copy.modelParseTimingEnabled = source.modelParseTimingEnabled;
+		copy.modelAdaptiveBatchingEnabled = source.modelAdaptiveBatchingEnabled;
+		copy.modelDuplicateParseCacheEnabled = source.modelDuplicateParseCacheEnabled;
+		copy.atlasCapEnabled = source.atlasCapEnabled;
+		copy.atlasCapPx = source.atlasCapPx;
+		copy.atlasExcludeIds = new ArrayList<>(source.atlasExcludeIds == null ? List.of() : source.atlasExcludeIds);
+		copy.atlasRetryEnabled = source.atlasRetryEnabled;
+		copy.atlasRetryMaxAttempts = source.atlasRetryMaxAttempts;
+		copy.forceDisablePartIIIWithIris = source.forceDisablePartIIIWithIris;
+		copy.experimentalAtlasSplit = source.experimentalAtlasSplit;
+		copy.atlasSplitTargets = new ArrayList<>(source.atlasSplitTargets == null ? List.of() : source.atlasSplitTargets);
+		copy.atlasSplitMaxTiers = source.atlasSplitMaxTiers;
+		copy.atlasSplitFallbackToDownscale = source.atlasSplitFallbackToDownscale;
+		copy.atlasSplitDisableWithIris = source.atlasSplitDisableWithIris;
+		copy.atlasSplitDisableWithSodium = source.atlasSplitDisableWithSodium;
+		copy.atlasSplitModelCoherence = source.atlasSplitModelCoherence;
+		copy.atlasSplitDiagnostics = source.atlasSplitDiagnostics;
+		copy.startupOptimizerEnabled = source.startupOptimizerEnabled;
+		copy.startupTimingsEnabled = source.startupTimingsEnabled;
+		copy.startupStatusOverlayEnabled = source.startupStatusOverlayEnabled;
+		copy.startupExecutorTuningEnabled = source.startupExecutorTuningEnabled;
+		copy.startupWorkerThreads = source.startupWorkerThreads;
+		copy.startupThreadPriority = source.startupThreadPriority;
+		copy.startupSkipWithSmoothBoot = source.startupSkipWithSmoothBoot;
+		copy.startupAsyncDataParsingEnabled = source.startupAsyncDataParsingEnabled;
+		copy.startupAsyncClassScanEnabled = source.startupAsyncClassScanEnabled;
+		copy.startupAsyncFontAtlasEnabled = source.startupAsyncFontAtlasEnabled;
+		return copy;
+	}
+
+	private static SaveResult write(Cfg cfg) {
 		Path file = configFile();
+		Path temporaryFile = null;
 		try {
 			Files.createDirectories(file.getParent());
-			try (Writer w = Files.newBufferedWriter(file)) {
+			temporaryFile = Files.createTempFile(file.getParent(), "packforge-", ".json.tmp");
+			try (Writer w = Files.newBufferedWriter(temporaryFile, StandardCharsets.UTF_8)) {
 				GSON.toJson(cfg, w);
 			}
+			try {
+				Files.move(temporaryFile, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			} catch (AtomicMoveNotSupportedException exception) {
+				Files.move(temporaryFile, file, StandardCopyOption.REPLACE_EXISTING);
+			}
+			return SaveResult.success();
 		} catch (IOException e) {
 			PackForge.LOGGER.error("Failed to save packforge config", e);
+			if (temporaryFile != null) {
+				try {
+					Files.deleteIfExists(temporaryFile);
+				} catch (IOException cleanupException) {
+					PackForge.LOGGER.debug("Failed to remove temporary PackForge config {}", temporaryFile, cleanupException);
+				}
+			}
+			return SaveResult.failure(e);
 		}
 	}
 

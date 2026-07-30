@@ -9,6 +9,7 @@
 		"compat.ShaderManagerCompatMixin",
 		"compat.MinecraftGui26_1Mixin",
 		"compat.Gui26_2Mixin",
+		"config.PackSelectionScreenMixin",
 		"font.BitmapProviderDefinitionMixin",
 		"font.FontManagerPreparationAccessor",
 		"font.FontManagerMixin",

@@ -3,6 +3,7 @@ package com.teenkung.packforge.mixin.observe;
 import com.teenkung.packforge.loader.LoaderTimings;
 import com.teenkung.packforge.loader.ReloadSessionTracker;
 import com.teenkung.packforge.loader.RuntimeResourceHash;
+import com.teenkung.packforge.loader.ReloadStatus;
 import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
@@ -28,6 +29,7 @@ public abstract class ReloadableResourceManagerMixin {
 	) {
 		ReloadSessionTracker.startReload();
 		LoaderTimings.onReloadStart();
+		ReloadStatus.start();
 	}
 
 	@Inject(method = "createReload", at = @At("RETURN"))
@@ -43,6 +45,7 @@ public abstract class ReloadableResourceManagerMixin {
 		cir.getReturnValue().done().whenComplete((result, error) -> {
 			LoaderTimings.onReloadEnd(error);
 			LoaderTimings.onReloadComplete(error);
+			ReloadStatus.finish(error);
 			if (error == null) {
 				RuntimeResourceHash.report(manager, reloadId);
 			}

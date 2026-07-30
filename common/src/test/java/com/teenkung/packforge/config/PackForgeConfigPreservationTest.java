@@ -62,6 +62,43 @@ class PackForgeConfigPreservationTest {
 		assertTrue(saved.contains("\"startupAsyncDataParsingEnabled\": true"));
 	}
 
+	@Test
+	void applyAndSaveInstallsDetachedCopyAfterSuccessfulAtomicWrite() throws Exception {
+		PackForgeServices.init(new TestPlatform(temporaryDirectory));
+		PackForgeConfig.load();
+		PackForgeConfig.Cfg draft = PackForgeConfig.copyOf(PackForgeConfig.get());
+		draft.loaderIndexEnabled = false;
+		draft.atlasExcludeIds.add("example:test");
+
+		PackForgeConfig.SaveResult result = PackForgeConfig.applyAndSave(draft);
+
+		assertTrue(result.successful(), result.errorMessage());
+		assertFalse(PackForgeConfig.get().loaderIndexEnabled);
+		assertTrue(PackForgeConfig.get().atlasExcludeIds.contains("example:test"));
+		draft.atlasExcludeIds.add("example:after-save");
+		assertFalse(PackForgeConfig.get().atlasExcludeIds.contains("example:after-save"));
+		String saved = Files.readString(temporaryDirectory.resolve("packforge.json"));
+		assertTrue(saved.contains("\"loaderIndexEnabled\": false"));
+		assertTrue(saved.contains("\"example:test\""));
+	}
+
+	@Test
+	void failedSaveDoesNotInstallDraftAsLiveConfiguration() throws Exception {
+		PackForgeServices.init(new TestPlatform(temporaryDirectory));
+		PackForgeConfig.load();
+		PackForgeConfig.Cfg liveBeforeFailure = PackForgeConfig.get();
+		PackForgeConfig.Cfg draft = PackForgeConfig.copyOf(liveBeforeFailure);
+		draft.loaderIndexEnabled = !liveBeforeFailure.loaderIndexEnabled;
+
+		Path blockingFile = temporaryDirectory.resolve("not-a-directory");
+		Files.writeString(blockingFile, "blocks config directory creation");
+		PackForgeServices.init(new TestPlatform(blockingFile));
+		PackForgeConfig.SaveResult result = PackForgeConfig.applyAndSave(draft);
+
+		assertFalse(result.successful());
+		assertEquals(liveBeforeFailure.loaderIndexEnabled, PackForgeConfig.get().loaderIndexEnabled);
+	}
+
 	private record TestPlatform(Path configDirectory) implements PackForgePlatform {
 		@Override public String loaderName() { return "test"; }
 		@Override public boolean isModLoaded(String modId) { return false; }

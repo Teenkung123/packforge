@@ -59,8 +59,8 @@
           "maturity": "stable",
           "versionSuffix": "",
           "loomVersion": "1.17.16",
-          "loaderVersion": "0.19.3",
-          "loaderDependency": ">=0.19.3",
+          "loaderVersion": "0.18.4",
+          "loaderDependency": ">=0.18.4",
           "fabricApiVersion": "0.145.1+26.1",
           "minecraftDependency": ">=26.1 <26.3",
           "mappingMode": "official",
@@ -71,15 +71,15 @@
         "forge": {
           "maturity": "stable",
           "versionSuffix": "",
-          "version": "26.1-62.0.9",
-          "versionRange": "[62.0.9,66.0.0)",
+          "version": "26.1-62.0.0",
+          "versionRange": "[62.0.0,66.0.0)",
           "minecraftVersionRange": "[26.1,26.3)"
         },
         "neoforge": {
           "maturity": "stable",
           "versionSuffix": "",
-          "version": "26.1.0.19-beta",
-          "versionRange": "[26.1.0.19-beta,26.3)",
+          "version": "26.1.0.1-beta",
+          "versionRange": "[26.1.0.1-beta,26.3)",
           "minecraftVersionRange": "[26.1,26.3)"
         }
       }
@@ -104,33 +104,49 @@
       "capabilities": [
         "RESOURCE_PACK_INDEX",
         "ZIP_READ_POOL",
-        "LOADER_TIMINGS"
+        "LOADER_TIMINGS",
+        "RELOAD_LISTENER_TIMINGS",
+        "SHADER_STALL_DIAGNOSTICS",
+        "IMMEDIATELY_FAST_FONT_ATLAS_COMPAT",
+        "LOADING_STATUS_OVERLAY",
+        "LOADING_FADE_CONTROL",
+        "RELOAD_SUMMARY_TOAST",
+        "FONT_RELOAD_DIAGNOSTICS",
+        "FONT_PROVIDER_PRESELECTION",
+        "FONT_BITMAP_CACHE",
+        "ATLAS_PHASE_TIMINGS",
+        "ATLAS_DECODE_BATCHING",
+        "MODEL_PARSE_BATCHING",
+        "MODEL_PARSE_TIMINGS",
+        "MODEL_ADAPTIVE_BATCHING",
+        "MODEL_DUPLICATE_CACHE"
       ],
       "platforms": {
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
           "loomVersion": "1.17.16",
-          "loaderVersion": "0.19.3",
-          "loaderDependency": ">=0.19.3",
+          "loaderVersion": "0.15.11",
+          "loaderDependency": ">=0.15.11",
+          "fabricApiVersion": "0.116.15+1.21.1",
           "minecraftDependency": "=1.21.1",
           "mappingMode": "named",
           "accessWidener": "versions/mc1_21_1/fabric/src/main/resources/packforge.accesswidener",
           "modMenuVersion": "11.0.4",
-          "modMenuEntrypoint": false
+          "modMenuEntrypoint": true
         },
         "forge": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
-          "version": "1.21.1-52.1.15",
-          "versionRange": "[52.1.15,53)",
+          "version": "1.21.1-52.0.0",
+          "versionRange": "[52.0.0,53)",
           "minecraftVersionRange": "[1.21.1]"
         },
         "neoforge": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
-          "version": "21.1.241",
-          "versionRange": "[21.1.241,21.2)",
+          "version": "21.1.1",
+          "versionRange": "[21.1.1,21.2)",
           "minecraftVersionRange": "[1.21.1]"
         }
       }
@@ -155,33 +171,49 @@
       "capabilities": [
         "RESOURCE_PACK_INDEX",
         "ZIP_READ_POOL",
-        "LOADER_TIMINGS"
+        "LOADER_TIMINGS",
+        "RELOAD_LISTENER_TIMINGS",
+        "SHADER_STALL_DIAGNOSTICS",
+        "IMMEDIATELY_FAST_FONT_ATLAS_COMPAT",
+        "LOADING_STATUS_OVERLAY",
+        "LOADING_FADE_CONTROL",
+        "RELOAD_SUMMARY_TOAST",
+        "FONT_RELOAD_DIAGNOSTICS",
+        "FONT_PROVIDER_PRESELECTION",
+        "FONT_BITMAP_CACHE",
+        "ATLAS_PHASE_TIMINGS",
+        "ATLAS_DECODE_BATCHING",
+        "MODEL_PARSE_BATCHING",
+        "MODEL_PARSE_TIMINGS",
+        "MODEL_ADAPTIVE_BATCHING",
+        "MODEL_DUPLICATE_CACHE"
       ],
       "platforms": {
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
           "loomVersion": "1.17.16",
-          "loaderVersion": "0.19.3",
-          "loaderDependency": ">=0.19.3",
+          "loaderVersion": "0.16.9",
+          "loaderDependency": ">=0.16.9",
+          "fabricApiVersion": "0.119.4+1.21.4",
           "minecraftDependency": "=1.21.4",
           "mappingMode": "named",
           "accessWidener": "versions/mc1_21_4/fabric/src/main/resources/packforge.accesswidener",
           "modMenuVersion": "13.0.4",
-          "modMenuEntrypoint": false
+          "modMenuEntrypoint": true
         },
         "forge": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
-          "version": "1.21.4-54.1.17",
-          "versionRange": "[54.1.17,55)",
+          "version": "1.21.4-54.0.0",
+          "versionRange": "[54.0.0,55)",
           "minecraftVersionRange": "[1.21.4]"
         },
         "neoforge": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
-          "version": "21.4.157",
-          "versionRange": "[21.4.157,21.5)",
+          "version": "21.4.0-beta",
+          "versionRange": "[21.4.0-beta,21.5)",
           "minecraftVersionRange": "[1.21.4]"
         }
       }
@@ -206,33 +238,49 @@
       "capabilities": [
         "RESOURCE_PACK_INDEX",
         "ZIP_READ_POOL",
-        "LOADER_TIMINGS"
+        "LOADER_TIMINGS",
+        "RELOAD_LISTENER_TIMINGS",
+        "SHADER_STALL_DIAGNOSTICS",
+        "IMMEDIATELY_FAST_FONT_ATLAS_COMPAT",
+        "LOADING_STATUS_OVERLAY",
+        "LOADING_FADE_CONTROL",
+        "RELOAD_SUMMARY_TOAST",
+        "FONT_RELOAD_DIAGNOSTICS",
+        "FONT_PROVIDER_PRESELECTION",
+        "FONT_BITMAP_CACHE",
+        "ATLAS_PHASE_TIMINGS",
+        "ATLAS_DECODE_BATCHING",
+        "MODEL_PARSE_BATCHING",
+        "MODEL_PARSE_TIMINGS",
+        "MODEL_ADAPTIVE_BATCHING",
+        "MODEL_DUPLICATE_CACHE"
       ],
       "platforms": {
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
           "loomVersion": "1.17.16",
-          "loaderVersion": "0.19.3",
-          "loaderDependency": ">=0.19.3",
+          "loaderVersion": "0.16.14",
+          "loaderDependency": ">=0.16.14",
+          "fabricApiVersion": "0.136.1+1.21.8",
           "minecraftDependency": "=1.21.8",
           "mappingMode": "named",
           "accessWidener": "versions/mc1_21_8/fabric/src/main/resources/packforge.accesswidener",
           "modMenuVersion": "15.0.2",
-          "modMenuEntrypoint": false
+          "modMenuEntrypoint": true
         },
         "forge": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
-          "version": "1.21.8-58.1.19",
-          "versionRange": "[58.1.19,59)",
+          "version": "1.21.8-58.0.0",
+          "versionRange": "[58.0.0,59)",
           "minecraftVersionRange": "[1.21.8]"
         },
         "neoforge": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
-          "version": "21.8.54",
-          "versionRange": "[21.8.54,21.9)",
+          "version": "21.8.0-beta",
+          "versionRange": "[21.8.0-beta,21.9)",
           "minecraftVersionRange": "[1.21.8]"
         }
       }
@@ -258,33 +306,49 @@
       "capabilities": [
         "RESOURCE_PACK_INDEX",
         "ZIP_READ_POOL",
-        "LOADER_TIMINGS"
+        "LOADER_TIMINGS",
+        "RELOAD_LISTENER_TIMINGS",
+        "SHADER_STALL_DIAGNOSTICS",
+        "IMMEDIATELY_FAST_FONT_ATLAS_COMPAT",
+        "LOADING_STATUS_OVERLAY",
+        "LOADING_FADE_CONTROL",
+        "RELOAD_SUMMARY_TOAST",
+        "FONT_RELOAD_DIAGNOSTICS",
+        "FONT_PROVIDER_PRESELECTION",
+        "FONT_BITMAP_CACHE",
+        "ATLAS_PHASE_TIMINGS",
+        "ATLAS_DECODE_BATCHING",
+        "MODEL_PARSE_BATCHING",
+        "MODEL_PARSE_TIMINGS",
+        "MODEL_ADAPTIVE_BATCHING",
+        "MODEL_DUPLICATE_CACHE"
       ],
       "platforms": {
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
           "loomVersion": "1.17.16",
-          "loaderVersion": "0.19.3",
-          "loaderDependency": ">=0.19.3",
+          "loaderVersion": "0.18.1",
+          "loaderDependency": ">=0.18.1",
+          "fabricApiVersion": "0.141.6+1.21.11",
           "minecraftDependency": "=1.21.11",
           "mappingMode": "named",
           "accessWidener": "versions/mc1_21_11/fabric/src/main/resources/packforge.accesswidener",
           "modMenuVersion": "17.0.0",
-          "modMenuEntrypoint": false
+          "modMenuEntrypoint": true
         },
         "forge": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
-          "version": "1.21.11-61.1.9",
-          "versionRange": "[61.1.9,62)",
+          "version": "1.21.11-61.0.1",
+          "versionRange": "[61.0.1,62)",
           "minecraftVersionRange": "[1.21.11]"
         },
         "neoforge": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
-          "version": "21.11.44",
-          "versionRange": "[21.11.44,21.12)",
+          "version": "21.11.0-beta",
+          "versionRange": "[21.11.0-beta,21.12)",
           "minecraftVersionRange": "[1.21.11]"
         }
       }
@@ -309,26 +373,41 @@
       "capabilities": [
         "RESOURCE_PACK_INDEX",
         "ZIP_READ_POOL",
-        "LOADER_TIMINGS"
+        "LOADER_TIMINGS",
+        "RELOAD_LISTENER_TIMINGS",
+        "SHADER_STALL_DIAGNOSTICS",
+        "IMMEDIATELY_FAST_FONT_ATLAS_COMPAT",
+        "LOADING_STATUS_OVERLAY",
+        "LOADING_FADE_CONTROL",
+        "RELOAD_SUMMARY_TOAST",
+        "FONT_RELOAD_DIAGNOSTICS",
+        "FONT_BITMAP_CACHE",
+        "ATLAS_PHASE_TIMINGS",
+        "ATLAS_DECODE_BATCHING",
+        "MODEL_PARSE_BATCHING",
+        "MODEL_PARSE_TIMINGS",
+        "MODEL_ADAPTIVE_BATCHING",
+        "MODEL_DUPLICATE_CACHE"
       ],
       "platforms": {
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
           "loomVersion": "1.17.16",
-          "loaderVersion": "0.19.3",
-          "loaderDependency": ">=0.19.3",
+          "loaderVersion": "0.14.19",
+          "loaderDependency": ">=0.14.19",
+          "fabricApiVersion": "0.92.11+1.20.1",
           "minecraftDependency": "=1.20.1",
           "mappingMode": "named",
           "accessWidener": "versions/mc1_20_1/fabric/src/main/resources/packforge.accesswidener",
           "modMenuVersion": "7.2.2",
-          "modMenuEntrypoint": false
+          "modMenuEntrypoint": true
         },
         "forge": {
           "maturity": "beta",
           "versionSuffix": "-beta.1",
-          "version": "1.20.1-47.4.21",
-          "versionRange": "[47.4.21,48)",
+          "version": "1.20.1-47.0.0",
+          "versionRange": "[47.0.0,48)",
           "minecraftVersionRange": "[1.20.1]"
         }
       }

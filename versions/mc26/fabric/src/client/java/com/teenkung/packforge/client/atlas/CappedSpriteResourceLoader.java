@@ -76,8 +76,7 @@ public final class CappedSpriteResourceLoader implements SpriteResourceLoader {
 			int newImgH = image.getHeight() / scale;
 			NativeImage scaled;
 			try {
-				scaled = new NativeImage(newImgW, newImgH, false);
-				image.resizeSubRectTo(0, 0, image.getWidth(), image.getHeight(), scaled);
+				scaled = SpriteResize.resize(image, newImgW, newImgH);
 			} catch (Throwable t) {
 				LOGGER.warn("PackForge cap failed for {}; keeping original size", spriteLocation, t);
 				maybeRetain(spriteLocation, image, frameSize, animationInfo, additionalMetadata, textureInfo, 1);

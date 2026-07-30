@@ -7,19 +7,29 @@ import com.teenkung.packforge.platform.PackForgeCompat;
 import com.teenkung.packforge.platform.PackForgeServices;
 
 import java.lang.reflect.Field;
+import java.util.Collection;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class ImmediatelyFastFontAtlasCompat {
 	private static volatile boolean disabledThisSession;
+	private static final AtomicBoolean attemptedThisSession = new AtomicBoolean();
+	private static final AtomicBoolean diagnosticLogged = new AtomicBoolean();
 
 	public static void disableReenableForPackRemoval() {
+		disableReenableForPackRemoval(ReloadSessionTracker.current().removed());
+	}
+
+	public static void disableReenableForPackRemoval(Collection<String> removedPacks) {
 		if (disabledThisSession || !FeatureFlags.immediatelyFastFontAtlasCompatEnabled()) {
 			return;
 		}
 		if (!PackForgeServices.isInitialized() || !PackForgeCompat.isImmediatelyFastPresent()) {
 			return;
 		}
-		ReloadSessionTracker.ReloadSession session = ReloadSessionTracker.current();
-		if (session.removed().isEmpty()) {
+		if (removedPacks == null || removedPacks.isEmpty()) {
+			return;
+		}
+		if (!attemptedThisSession.compareAndSet(false, true)) {
 			return;
 		}
 		boolean changed = setStaticConfigBoolean("config", "font_atlas_resizing", false);
@@ -27,7 +37,7 @@ public final class ImmediatelyFastFontAtlasCompat {
 		if (changed) {
 			disabledThisSession = true;
 			PackForge.LOGGER.info("PackForge compat: disabled ImmediatelyFast font atlas resizing for this session after removing resource pack(s) {} to avoid render-thread re-enable stall",
-				session.removed());
+				removedPacks);
 		}
 	}
 
@@ -46,7 +56,9 @@ public final class ImmediatelyFastFontAtlasCompat {
 			valueField.setBoolean(config, value);
 			return oldValue != value;
 		} catch (ReflectiveOperationException | LinkageError e) {
-			PackForge.LOGGER.debug("PackForge compat: could not adjust ImmediatelyFast {}", configFieldName, e);
+			if (diagnosticLogged.compareAndSet(false, true)) {
+				PackForge.LOGGER.debug("PackForge compat: could not adjust ImmediatelyFast {}", configFieldName, e);
+			}
 			return false;
 		}
 	}

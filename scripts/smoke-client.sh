@@ -13,6 +13,7 @@ reload_count="${PACKFORGE_RELOAD_COUNT:-2}"
 optimizer_enabled="${PACKFORGE_RELOAD_OPTIMIZER:-true}"
 artifact_smoke="${PACKFORGE_ARTIFACT_SMOKE:-true}"
 resource_hash="${PACKFORGE_RUNTIME_RESOURCE_HASH:-false}"
+smoke_profile="${PACKFORGE_SMOKE_PROFILE:-default}"
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 case "$platform" in
@@ -36,6 +37,29 @@ if [[ "$resource_hash" != "true" && "$resource_hash" != "false" ]]; then
   echo "PACKFORGE_RUNTIME_RESOURCE_HASH must be true or false" >&2
   exit 2
 fi
+
+case "$smoke_profile" in
+  core)
+    loading_status=false; fade_disabled=false; reload_toast=false
+    diagnostics=false
+    ;;
+  default)
+    loading_status=true; fade_disabled=false; reload_toast=true
+    diagnostics=false
+    ;;
+  diagnostics)
+    loading_status=true; fade_disabled=false; reload_toast=true
+    diagnostics=true
+    ;;
+  ui)
+    loading_status=true; fade_disabled=true; reload_toast=true
+    diagnostics=false
+    ;;
+  *)
+    echo "PACKFORGE_SMOKE_PROFILE must be core, default, diagnostics, or ui" >&2
+    exit 2
+    ;;
+esac
 
 if [[ -z "${DISPLAY:-}" ]]; then
   if ! command -v xvfb-run >/dev/null 2>&1; then
@@ -62,7 +86,8 @@ fixture="$fixture_root/deterministic-large-pack.zip"
 artifact_name=""
 
 mkdir -p "$run_root/logs" "$run_root/config" "$run_root/resourcepacks"
-rm -f "$log_file" "$gradle_log" "$run_root/logs/packforge-timings.csv"
+rm -f "$log_file" "$gradle_log" "$run_root/logs/packforge-timings.csv" \
+  "$run_root/logs/packforge-font-timings.csv" "$run_root/logs/packforge-atlas-timings.csv"
 
 ./gradlew -p "$platform_root" -Ppackforge_target="$target" benchmarkPackIndex --no-daemon
 cp "$fixture" "$run_root/resourcepacks/deterministic-large-pack.zip"
@@ -90,7 +115,22 @@ cat > "$run_root/config/packforge.json" <<JSON
   "reloadOptimizerEnabled": $optimizer_enabled,
   "loaderIndexEnabled": true,
   "loaderZipPoolEnabled": true,
-  "loaderTimingsEnabled": true
+  "loaderTimingsEnabled": true,
+  "reloadListenerTimingsEnabled": $diagnostics,
+  "shaderApplyStallDiagnosticsEnabled": $diagnostics,
+  "immediatelyFastFontAtlasCompatEnabled": true,
+  "loadingStatusOverlayEnabled": $loading_status,
+  "loadingScreenFadeOutDisabled": $fade_disabled,
+  "reloadSummaryToastEnabled": $reload_toast,
+  "fontReloadDiagnosticsEnabled": $diagnostics,
+  "fontPrepareProviderSelectionEnabled": true,
+  "fontBitmapProviderCacheEnabled": true,
+  "modelParseBatchingEnabled": true,
+  "modelParseTimingEnabled": $diagnostics,
+  "modelAdaptiveBatchingEnabled": true,
+  "modelDuplicateParseCacheEnabled": true,
+  "atlasPhaseTimingsEnabled": $diagnostics,
+  "atlasDecodeBatchingEnabled": true
 }
 JSON
 
@@ -225,4 +265,4 @@ if grep -Eiq "$fatal_pattern" "$log_file"; then
   exit 1
 fi
 
-echo "PackForge smoke passed: platform=$platform target=$target reloads=$reload_count optimizer=$optimizer_enabled packagedArtifact=$artifact_smoke resourceHash=$resource_hash cleanExit=true"
+echo "PackForge smoke passed: platform=$platform target=$target profile=$smoke_profile reloads=$reload_count optimizer=$optimizer_enabled packagedArtifact=$artifact_smoke resourceHash=$resource_hash cleanExit=true"

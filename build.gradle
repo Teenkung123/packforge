@@ -34,6 +34,100 @@ def platformBuilds = [
 ]
 
 def targetSupports = { target, platform -> target.platforms[platform.id] != null }
+// Capability declarations are release promises. Keep the proof close to
+// artifact validation so a registry promotion cannot ship without its adapter.
+def capabilityContract = [
+	RESOURCE_PACK_INDEX: [
+		classes: [
+			"com/teenkung/packforge/loader/PackIndex.class",
+			"com/teenkung/packforge/loader/PackIndexCache.class"
+		],
+		mainMixins: ["loader.FilePackResourcesMixin"]
+	],
+	ZIP_READ_POOL: [
+		classes: [
+			"com/teenkung/packforge/loader/ZipFilePools.class",
+			"com/teenkung/packforge/loader/ZipReadPool.class"
+		],
+		mainMixins: ["loader.FilePackResourcesMixin"]
+	],
+	LOADER_TIMINGS: [classes: ["com/teenkung/packforge/loader/LoaderTimings.class"], mainMixins: ["observe.ReloadableResourceManagerMixin"]],
+	RELOAD_LISTENER_TIMINGS: [classes: ["com/teenkung/packforge/loader/ReloadListenerTelemetry.class"], mainMixins: ["observe.SimpleReloadInstanceMixin"]],
+	SHADER_STALL_DIAGNOSTICS: [classes: ["com/teenkung/packforge/loader/ReloadListenerTelemetry.class"], mainMixins: ["observe.SimpleReloadInstanceMixin"]],
+	LOADING_STATUS_OVERLAY: [classes: ["com/teenkung/packforge/loader/ReloadStatus.class"], clientMixins: ["ui.LoadingOverlayMixin"]],
+	LOADING_FADE_CONTROL: [classes: ["com/teenkung/packforge/loader/ReloadStatus.class"], clientMixins: ["ui.LoadingOverlayMixin"]],
+	RELOAD_SUMMARY_TOAST: [clientMixins: ["ui.LoadingOverlayMixin"]],
+	IMMEDIATELY_FAST_FONT_ATLAS_COMPAT: [
+		classes: ["com/teenkung/packforge/client/compat/ImmediatelyFastFontAtlasCompat.class"],
+		anyClientMixins: ["compat.ShaderManagerCompatMixin", "options.OptionsMixin"]
+	],
+	FONT_RELOAD_DIAGNOSTICS: [
+		anyClasses: [
+			"com/teenkung/packforge/client/font/FontReloadDiagnostics.class",
+			"com/teenkung/packforge/client/font/FontOptimizationState.class"
+		],
+		clientMixins: ["font.FontManagerMixin"]
+	],
+	FONT_PROVIDER_PRESELECTION: [
+		anyClasses: [
+			"com/teenkung/packforge/client/font/FontSelectionRegistry.class",
+			"com/teenkung/packforge/client/font/FontOptimizationState.class"
+		],
+		clientMixins: ["font.FontManagerMixin", "font.FontSetMixin"]
+	],
+	FONT_BITMAP_CACHE: [classes: ["com/teenkung/packforge/client/font/FontBitmapProviderCache.class"], clientMixins: ["font.BitmapProviderDefinitionMixin"]],
+	MODEL_PARSE_BATCHING: [
+		classes: [
+			"com/teenkung/packforge/client/model/ModelBatchPlan.class",
+			"com/teenkung/packforge/client/model/ModelParseOptimizer.class"
+		],
+		clientMixins: ["model.ModelManagerMixin"]
+	],
+	MODEL_PARSE_TIMINGS: [
+		classes: [
+			"com/teenkung/packforge/client/model/ModelParseTimings.class",
+			"com/teenkung/packforge/client/model/ModelParseOptimizer.class"
+		],
+		clientMixins: ["model.ModelManagerMixin"]
+	],
+	MODEL_ADAPTIVE_BATCHING: [
+		classes: [
+			"com/teenkung/packforge/client/model/ModelBatchPlan.class",
+			"com/teenkung/packforge/client/model/ModelParseOptimizer.class"
+		],
+		clientMixins: ["model.ModelManagerMixin"]
+	],
+	MODEL_DUPLICATE_CACHE: [
+		classes: [
+			"com/teenkung/packforge/client/model/ModelBatchPlan.class",
+			"com/teenkung/packforge/client/model/ModelParseOptimizer.class"
+		],
+		clientMixins: ["model.ModelManagerMixin"]
+	],
+	ATLAS_PHASE_TIMINGS: [classes: ["com/teenkung/packforge/client/atlas/AtlasTimings.class"], clientMixins: ["atlas.SpriteLoaderMixin", "atlas.TextureAtlasMixin"]],
+	ATLAS_DECODE_BATCHING: [classes: ["com/teenkung/packforge/client/atlas/AtlasTimings.class"], clientMixins: ["atlas.SpriteLoaderMixin"]],
+	ATLAS_CAP: [
+		classes: [
+			"com/teenkung/packforge/client/atlas/SpriteCap.class",
+			"com/teenkung/packforge/client/atlas/CappedSpriteResourceLoader.class"
+		],
+		clientMixins: ["atlas.SpriteLoaderMixin", "atlas.TextureAtlasMixin"]
+	],
+	ATLAS_RETRY: [classes: ["com/teenkung/packforge/client/atlas/AtlasRetry.class"], clientMixins: ["atlas.SpriteLoaderMixin"]],
+	ATLAS_MIP_PARALLEL: [classes: ["com/teenkung/packforge/client/atlas/AtlasTimings.class"], clientMixins: ["atlas.SpriteLoaderMixin"]],
+	MODEL_UV_TRANSPARENCY_CLAMP: [classes: ["com/teenkung/packforge/client/atlas/SpriteCap.class"], clientMixins: ["model.FaceBakeryMixin"]],
+	STARTUP_OPTIMIZER: [
+		classes: ["com/teenkung/packforge/startup/StartupEarlyConfig.class"],
+		mainMixins: ["startup.UtilExecutorMixin"],
+		clientMixins: ["startup.MainStartupMixin", "startup.MinecraftStartupMixin"]
+	],
+	STARTUP_ASYNC_CLASS_SCAN: [classes: ["com/teenkung/packforge/startup/StartupAsyncFeatures.class"], clientMixins: ["startup.MainStartupMixin"]],
+	STARTUP_ASYNC_DATA: [classes: ["com/teenkung/packforge/startup/StartupAsyncFeatures.class"], clientMixins: ["startup.MinecraftStartupMixin"]],
+	STARTUP_ASYNC_FONT_ATLAS: [classes: ["com/teenkung/packforge/startup/StartupAsyncFeatures.class"], clientMixins: ["startup.MinecraftStartupMixin"]],
+	STARTUP_EXECUTOR_TUNING: [classes: ["com/teenkung/packforge/startup/StartupExecutorTuner.class"], mainMixins: ["startup.UtilExecutorMixin"]],
+	STARTUP_STATUS_OVERLAY: [classes: ["com/teenkung/packforge/startup/StartupStatus.class"], clientMixins: ["startup.GuiStartupMixin"]],
+	STARTUP_TIMINGS: [classes: ["com/teenkung/packforge/startup/StartupTimings.class"], clientMixins: ["startup.MainStartupMixin", "startup.MinecraftStartupMixin"]]
+]
 def artifactName = { target, platform ->
 	def loader = target.platforms[platform.id]
 	"packforge-${platform.id}-${project.version}${loader.versionSuffix}-mc${target.artifactMinecraft}.jar"
@@ -73,6 +167,16 @@ def verifyArtifact = { target, platform, File artifact ->
 			&& !names.contains("com/teenkung/packforge/internal/loader/SharedZipFileAccessBridge.class")) {
 			throw new GradleException("${artifact.name} is missing the shared ZIP access bridge outside its Mixin package.")
 		}
+		[
+			"com/teenkung/packforge/client/config/PackForgeConfigScreen.class",
+			"com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.class",
+			"assets/packforge/lang/en_us.json",
+			"assets/packforge/textures/gui/sprites/config_cog.png"
+		].each { requiredPath ->
+			if (!names.contains(requiredPath)) {
+				throw new GradleException("${artifact.name} is missing configuration-menu entry '${requiredPath}'.")
+			}
+		}
 
 		def expectedMixinExtras = "mixinextras-${platform.id}-${registry.mixinExtrasVersion}.jar"
 		def nestedMixinExtras = names.find { it.endsWith("/${expectedMixinExtras}") }
@@ -111,6 +215,36 @@ def verifyArtifact = { target, platform, File artifact ->
 				throw new GradleException("${artifact.name} has an incorrect mixin compatibility level in ${mixinPath}.")
 			}
 		}
+		def clientMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.client.toString()))
+		def mainMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.main.toString()))
+		if (!clientMixin.client.contains("config.PackSelectionScreenMixin")) {
+			throw new GradleException("${artifact.name} does not register the resource-pack configuration button mixin.")
+		}
+		capabilityContract.each { capability, contract ->
+			if (target.capabilities.contains(capability)) {
+				(contract.classes ?: []).each { requiredClass ->
+					if (!names.contains(requiredClass)) {
+						throw new GradleException("${artifact.name} declares ${capability} but is missing implementation class ${requiredClass}.")
+					}
+				}
+				if (contract.anyClasses && !contract.anyClasses.any { names.contains(it) }) {
+					throw new GradleException("${artifact.name} declares ${capability} but is missing every supported implementation class: ${contract.anyClasses.join(', ')}.")
+				}
+				(contract.mainMixins ?: []).each { requiredMixin ->
+					if (!(mainMixin.mixins ?: []).contains(requiredMixin)) {
+						throw new GradleException("${artifact.name} declares ${capability} but does not register main mixin ${requiredMixin}.")
+					}
+				}
+				(contract.clientMixins ?: []).each { requiredMixin ->
+					if (!(clientMixin.client ?: []).contains(requiredMixin)) {
+						throw new GradleException("${artifact.name} declares ${capability} but does not register client mixin ${requiredMixin}.")
+					}
+				}
+				if (contract.anyClientMixins && !contract.anyClientMixins.any { (clientMixin.client ?: []).contains(it) }) {
+					throw new GradleException("${artifact.name} declares ${capability} but does not register any supported client mixin: ${contract.anyClientMixins.join(', ')}.")
+				}
+			}
+		}
 
 		def coreClass = archive.getEntry("com/teenkung/packforge/PackForgeCore.class")
 		if (coreClass == null) {
@@ -125,10 +259,19 @@ def verifyArtifact = { target, platform, File artifact ->
 
 		if (platform.id == "fabric") {
 			def fabricMetadata = new JsonSlurper().parseText(readZipText(archive, "fabric.mod.json"))
-			if (fabricMetadata.depends.minecraft != loader.minecraftDependency
-				|| fabricMetadata.depends.fabricloader != loader.loaderDependency
-				|| fabricMetadata.depends.containsKey("fabric-api")) {
-				throw new GradleException("${artifact.name} has incorrect Fabric dependency ranges.")
+			def expectedFabricDepends = [
+				fabricloader: loader.loaderDependency.toString(),
+				minecraft: loader.minecraftDependency.toString(),
+				java: ">=${target.javaVersion}"
+			]
+			if (fabricMetadata.depends != expectedFabricDepends) {
+				throw new GradleException("${artifact.name} has incorrect Fabric dependencies; only Fabric Loader, Minecraft, and Java may be required.")
+			}
+			if (loader.modMenuEntrypoint
+				&& (fabricMetadata.entrypoints.modmenu != ["com.teenkung.packforge.client.config.PackForgeModMenuApi"]
+					|| fabricMetadata.suggests.modmenu != "*"
+					|| !names.contains("com/teenkung/packforge/client/config/PackForgeModMenuApi.class"))) {
+				throw new GradleException("${artifact.name} has incomplete optional Mod Menu configuration integration.")
 			}
 			def accessWidener = readZipText(archive, "packforge.accesswidener").readLines().first().trim().split(/\s+/).toList()
 			def expectedNamespace = target.legacyApi ? "intermediary" : "official"
@@ -167,9 +310,16 @@ tasks.register("validateTargetRegistry") {
 	description = "Validates the PackForge target registry and adapter declarations."
 	inputs.file registryFile
 	doLast {
-		if (registry.defaultTarget == null || !targetKeys.contains(registry.defaultTarget)) {
-			throw new GradleException("defaultTarget must identify a declared PackForge target.")
-		}
+	if (registry.defaultTarget == null || !targetKeys.contains(registry.defaultTarget)) {
+		throw new GradleException("defaultTarget must identify a declared PackForge target.")
+	}
+	def undeclaredContracts = targets
+		.collectMany { target -> target.capabilities }
+		.toSet()
+		.findAll { capability -> !capabilityContract.containsKey(capability) }
+	if (!undeclaredContracts.isEmpty()) {
+		throw new GradleException("PackForge target registry contains capabilities without artifact contracts: ${undeclaredContracts.sort().join(', ')}")
+	}
 		["mixinExtrasVersion", "fabricAsmVersion", "fabricMixinVersion"].each { field ->
 			if (registry[field] == null) {
 				throw new GradleException("PackForge target registry is missing '${field}'.")
@@ -212,6 +362,26 @@ tasks.register("validateTargetRegistry") {
 				}
 				if (target.legacyApi && platformId in ["forge", "neoforge"] && loader.minecraftVersionRange != "[${target.minecraftVersion}]") {
 					throw new GradleException("Legacy ${platformId} target '${target.key}' must declare an exact singleton Minecraft range.")
+				}
+				if (platformId == "fabric" && loader.loaderDependency != ">=${loader.loaderVersion}") {
+					throw new GradleException("Fabric target '${target.key}' must compile against its declared minimum Loader version.")
+				}
+				if (platformId == "forge") {
+					def forgeBuildVersion = loader.version.toString().substring(loader.version.toString().lastIndexOf("-") + 1)
+					if (!loader.versionRange.toString().startsWith("[${forgeBuildVersion},")) {
+						throw new GradleException("Forge target '${target.key}' must compile against the lower bound of its declared Forge range.")
+					}
+				}
+				if (platformId == "neoforge" && !loader.versionRange.toString().startsWith("[${loader.version},")) {
+					throw new GradleException("NeoForge target '${target.key}' must compile against the lower bound of its declared NeoForge range.")
+				}
+				if (platformId == "fabric"
+					&& (!(loader.modMenuVersion instanceof String)
+						|| loader.modMenuVersion.isBlank()
+						|| !(loader.fabricApiVersion instanceof String)
+						|| loader.fabricApiVersion.isBlank()
+						|| loader.modMenuEntrypoint != true)) {
+					throw new GradleException("Fabric target '${target.key}' must provide optional Mod Menu integration and its development-runtime Fabric API version.")
 				}
 			}
 		}

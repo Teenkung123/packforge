@@ -6,7 +6,8 @@
 		"loader.CompositePackResourcesMixin",
 		"loader.FilePackResourcesMixin",
 		"loader.SharedZipFileAccessMixin",
-		"observe.ReloadableResourceManagerMixin"
+		"observe.ReloadableResourceManagerMixin",
+		"observe.SimpleReloadInstanceMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

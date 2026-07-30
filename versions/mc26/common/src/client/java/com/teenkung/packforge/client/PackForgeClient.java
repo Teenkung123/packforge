@@ -6,6 +6,7 @@ import com.teenkung.packforge.client.atlas.SpriteMetadataCache;
 import com.teenkung.packforge.client.atlas.AtlasTimings;
 import com.teenkung.packforge.client.font.FontBitmapProviderCache;
 import com.teenkung.packforge.client.model.ModelParseOptimizer;
+import com.teenkung.packforge.client.compat.ResourcePackUnboundedBridge;
 import com.teenkung.packforge.config.PackForgeConfig;
 import com.teenkung.packforge.loader.ReloadHooks;
 import com.teenkung.packforge.platform.PackForgeCompat;
@@ -22,6 +23,7 @@ public final class PackForgeClient {
 		ReloadHooks.registerStartHook(AtlasTimings::resetForReload);
 		ReloadHooks.registerStartHook(FontBitmapProviderCache::resetForReload);
 		ReloadHooks.registerStartHook(ModelParseOptimizer::resetForReload);
+		ResourcePackUnboundedBridge.registerFallbackProviderIfAvailable();
 	}
 
 	private PackForgeClient() {}

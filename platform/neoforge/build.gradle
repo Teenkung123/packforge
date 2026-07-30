@@ -60,6 +60,9 @@ def mainJavaDirs = [
 	new File(packforgeAdapterPlatformRoot, "src/main/java"),
 	new File(packforgeAdapterPlatformRoot, "src/client/java")
 ]
+if (target.key in ["mc1_21_1", "mc1_21_4", "mc1_21_8"]) {
+	mainJavaDirs.add(2, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/client/java"))
+}
 def mainResourceDirs = [
 	new File(packforgeCommonRoot, "src/main/resources"),
 	new File(packforgeCommonRoot, "src/client/resources"),
@@ -142,6 +145,7 @@ dependencies {
 	testImplementation "org.apache.commons:commons-compress:1.27.1"
 	testImplementation "com.google.code.gson:gson:2.11.0"
 	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+	testRuntimeOnly "org.slf4j:slf4j-simple:2.0.17"
 }
 
 processResources {

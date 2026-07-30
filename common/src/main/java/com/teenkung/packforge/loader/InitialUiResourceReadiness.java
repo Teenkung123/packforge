@@ -5,19 +5,31 @@ final class InitialUiResourceReadiness {
 	private volatile boolean fontReady;
 
 	void listenerApplied(String listenerName) {
-		if (matchesListener(listenerName, "Shader Loader")) {
+		String canonical = canonical(listenerName);
+		if (canonical.contains("shaderloader") || canonical.endsWith("shader") || canonical.contains("shadermanager")) {
 			this.shaderReady = true;
-		} else if (matchesListener(listenerName, "FontManager")) {
+		} else if (canonical.contains("fontmanager") || canonical.contains("fontloader") || canonical.endsWith("font")) {
 			this.fontReady = true;
 		}
+	}
+
+	void reset() {
+		this.shaderReady = false;
+		this.fontReady = false;
 	}
 
 	boolean isReady() {
 		return this.shaderReady && this.fontReady;
 	}
 
-	private static boolean matchesListener(String listenerName, String expectedName) {
-		return expectedName.equals(listenerName)
-			|| listenerName != null && listenerName.endsWith("(" + expectedName + ")");
+	private static String canonical(String listenerName) {
+		if (listenerName == null) return "";
+		StringBuilder result = new StringBuilder(listenerName.length());
+		for (int index = 0; index < listenerName.length(); index++) {
+			char character = listenerName.charAt(index);
+			if (Character.isLetterOrDigit(character)) result.append(Character.toLowerCase(character));
+		}
+		String value = result.toString();
+		return value.replace("reloadlistener", "").replace("resources", "");
 	}
 }

@@ -7,6 +7,7 @@ import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.client.atlas.AtlasReport;
 import com.teenkung.packforge.client.atlas.AtlasRetry;
 import com.teenkung.packforge.client.atlas.CappedSpriteResourceLoader;
+import com.teenkung.packforge.client.compat.ResourcePackUnboundedBridge;
 import com.teenkung.packforge.config.FeatureFlags;
 import net.minecraft.CrashReport;
 import net.minecraft.CrashReportCategory;
@@ -65,7 +66,9 @@ public abstract class SpriteLoaderMixin {
 		)
 	)
 	private SpriteResourceLoader packforge$wrapLoader(Set<MetadataSectionType<?>> additional) {
-		if (!FeatureFlags.atlasCapEnabled() || FeatureFlags.atlasExcludes(this.location.toString())) {
+		if (packforge$resourcePackUnboundedOwnsAtlas()
+			|| !FeatureFlags.atlasCapEnabled()
+			|| FeatureFlags.atlasExcludes(this.location.toString())) {
 			return SpriteResourceLoader.create(additional);
 		}
 		return new CappedSpriteResourceLoader(this.location, additional);
@@ -74,7 +77,9 @@ public abstract class SpriteLoaderMixin {
 	@Inject(method = "loadAndStitch", at = @At("RETURN"))
 	private void packforge$reportAtlas(CallbackInfoReturnable<CompletableFuture<SpriteLoader.Preparations>> cir) {
 		cir.getReturnValue().thenRun(() -> {
-			AtlasReport.logAtlas(this.location);
+			if (!packforge$resourcePackUnboundedOwnsAtlas()) {
+				AtlasReport.logAtlas(this.location);
+			}
 			AtlasTimings.logAtlas(this.location);
 		});
 	}
@@ -88,6 +93,9 @@ public abstract class SpriteLoaderMixin {
 		Set<MetadataSectionType<?>> additionalMetadata,
 		Operation<CompletableFuture<SpriteLoader.Preparations>> original
 	) {
+		if (packforge$resourcePackUnboundedOwnsAtlas()) {
+			return original.call(manager, atlasInfoLocation, maxMipmapLevels, taskExecutor, additionalMetadata);
+		}
 		if (!FeatureFlags.atlasPhaseTimingsEnabled() && !FeatureFlags.atlasDecodeBatchingEnabled()) {
 			return original.call(manager, atlasInfoLocation, maxMipmapLevels, taskExecutor, additionalMetadata);
 		}
@@ -109,6 +117,9 @@ public abstract class SpriteLoaderMixin {
 
 	@WrapMethod(method = "stitch")
 	private SpriteLoader.Preparations packforge$retryStitch(List<SpriteContents> sprites, int maxMipmapLevels, Executor executor, Operation<SpriteLoader.Preparations> original) {
+		if (packforge$resourcePackUnboundedOwnsAtlas()) {
+			return original.call(sprites, maxMipmapLevels, executor);
+		}
 		if (!FeatureFlags.atlasRetryEnabled() && !FeatureFlags.atlasMipParallelEnabled() && !FeatureFlags.atlasPhaseTimingsEnabled()) {
 			return original.call(sprites, maxMipmapLevels, executor);
 		}
@@ -209,7 +220,9 @@ public abstract class SpriteLoaderMixin {
 	}
 
 	private SpriteResourceLoader packforge$createResourceLoader(Set<MetadataSectionType<?>> additional) {
-		if (!FeatureFlags.atlasCapEnabled() || FeatureFlags.atlasExcludes(this.location.toString())) {
+		if (packforge$resourcePackUnboundedOwnsAtlas()
+			|| !FeatureFlags.atlasCapEnabled()
+			|| FeatureFlags.atlasExcludes(this.location.toString())) {
 			return SpriteResourceLoader.create(additional);
 		}
 		return new CappedSpriteResourceLoader(this.location, additional);
@@ -238,5 +251,9 @@ public abstract class SpriteLoaderMixin {
 				}, executor);
 			})
 			.toList();
+	}
+
+	private boolean packforge$resourcePackUnboundedOwnsAtlas() {
+		return ResourcePackUnboundedBridge.configuredOwner(this.location);
 	}
 }

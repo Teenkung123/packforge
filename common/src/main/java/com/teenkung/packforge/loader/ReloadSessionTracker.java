@@ -18,6 +18,7 @@ public final class ReloadSessionTracker {
 		List<String> oldList = oldPacks == null ? List.of() : List.copyOf(oldPacks);
 		List<String> newList = newPacks == null ? List.of() : List.copyOf(newPacks);
 		if (oldList.equals(newList)) {
+			pendingDiff = PackDiff.empty();
 			return;
 		}
 		pendingDiff = PackDiff.from(oldList, newList);

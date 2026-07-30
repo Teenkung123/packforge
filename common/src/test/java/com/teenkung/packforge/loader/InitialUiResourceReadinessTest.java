@@ -46,4 +46,12 @@ class InitialUiResourceReadinessTest {
 
 		assertTrue(readiness.isReady());
 	}
+
+	@Test
+	void acceptsLegacyAliases() {
+		InitialUiResourceReadiness readiness = new InitialUiResourceReadiness();
+		readiness.listenerApplied("net.minecraft.client.renderer.ShaderManager Reload Listener");
+		readiness.listenerApplied("font_loader");
+		assertTrue(readiness.isReady());
+	}
 }

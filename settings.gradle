@@ -1,1 +1,6 @@
 rootProject.name = 'packforge'
+
+// Loader projects are standalone builds invoked by the root aggregation tasks
+// through the repository wrapper. Do not include them as composite builds here:
+// doing so would make a globally installed Gradle resolve loader plugins before
+// the compatible wrapper version gets a chance to run.
