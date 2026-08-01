@@ -7,3 +7,12 @@
 # These are Windows script files and should use crlf
 *.bat           text eol=crlf
 
+# Keep build and benchmark helper scripts out of GitHub's language breakdown.
+# They remain tracked and syntax-highlighted; this only excludes them from the
+# repository language percentages.
+/gradlew         -linguist-detectable
+/gradlew.bat     -linguist-detectable
+scripts/*.sh     -linguist-detectable
+scripts/*.ps1    -linguist-detectable
+scripts/*.bat    -linguist-detectable
+scripts/*.cmd    -linguist-detectable
