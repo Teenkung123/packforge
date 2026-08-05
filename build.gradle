@@ -146,6 +146,167 @@ def readZipText = { ZipFile archive, String path ->
 	}
 }
 
+def readZipBytes = { ZipFile archive, String path ->
+	def entry = archive.getEntry(path)
+	if (entry == null) {
+		throw new GradleException("Artifact is missing '${path}'.")
+	}
+	archive.getInputStream(entry).withCloseable { input -> input.readAllBytes() }
+}
+
+def inspectWrapOperationTargets = { byte[] classBytes ->
+	// Read only the annotation structures needed here, without depending on
+	// Gradle's internal ASM classpath.
+	def input = new java.io.DataInputStream(new java.io.ByteArrayInputStream(classBytes))
+	def state = [count: 0, targets: [:]]
+	def constantPool
+	def readUtf8 = { int index ->
+		def value = constantPool[index]
+		if (!(value instanceof String)) {
+			throw new GradleException("FilePackResources class has invalid constant-pool UTF-8 index ${index}.")
+		}
+		value
+	}
+	def skipFully = { java.io.DataInputStream stream, int length ->
+		int remaining = length
+		while (remaining > 0) {
+			int skipped = stream.skipBytes(remaining)
+			if (skipped <= 0) {
+				stream.readByte()
+				skipped = 1
+			}
+			remaining -= skipped
+		}
+	}
+	def consumeAnnotation
+	def consumeElementValue
+	consumeElementValue = { java.io.DataInputStream stream, int tag, boolean insideWrapOperation ->
+		switch (tag) {
+			case 66: case 67: case 68: case 70: case 73: case 74: case 83: case 90: case 115:
+				stream.readUnsignedShort()
+				break
+			case 101:
+				stream.readUnsignedShort()
+				stream.readUnsignedShort()
+				break
+			case 99:
+				stream.readUnsignedShort()
+				break
+			case 64:
+				consumeAnnotation(stream, insideWrapOperation)
+				break
+			case 91:
+				int valueCount = stream.readUnsignedShort()
+				valueCount.times { consumeElementValue(stream, stream.readUnsignedByte(), insideWrapOperation) }
+				break
+			default:
+				throw new GradleException("FilePackResources class has unsupported annotation element tag ${tag}.")
+		}
+	}
+	consumeAnnotation = { java.io.DataInputStream stream, boolean insideWrapOperation ->
+		def annotationDescriptor = readUtf8(stream.readUnsignedShort())
+		def isWrapOperation = annotationDescriptor == "Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;"
+		def operationScoped = insideWrapOperation || isWrapOperation
+		if (isWrapOperation) {
+			state.count++
+		}
+		int pairCount = stream.readUnsignedShort()
+		pairCount.times {
+			def elementName = readUtf8(stream.readUnsignedShort())
+			int tag = stream.readUnsignedByte()
+			if (operationScoped
+				&& annotationDescriptor == "Lorg/spongepowered/asm/mixin/injection/At;"
+				&& elementName == "target" && tag == 115) {
+				def target = readUtf8(stream.readUnsignedShort())
+				state.targets[target] = (state.targets[target] ?: 0) + 1
+			} else {
+				consumeElementValue(stream, tag, operationScoped)
+			}
+		}
+	}
+	try {
+		if (java.lang.Integer.toUnsignedLong(input.readInt()) != 0xCAFEBABEL) {
+			throw new GradleException("FilePackResources class has an invalid class-file header.")
+		}
+		input.readUnsignedShort()
+		input.readUnsignedShort()
+		int constantPoolCount = input.readUnsignedShort()
+		constantPool = new Object[constantPoolCount]
+		for (int index = 1; index < constantPoolCount; index++) {
+			switch (input.readUnsignedByte()) {
+				case 1:
+					byte[] bytes = new byte[input.readUnsignedShort()]
+					input.readFully(bytes)
+					constantPool[index] = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+					break
+				case 3: case 4:
+					input.readInt()
+					break
+				case 5: case 6:
+					input.readLong()
+					index++
+					break
+				case 7: case 8: case 16: case 19: case 20:
+					input.readUnsignedShort()
+					break
+				case 9: case 10: case 11: case 12: case 17: case 18:
+					input.readUnsignedShort()
+					input.readUnsignedShort()
+					break
+				case 15:
+					input.readUnsignedByte()
+					input.readUnsignedShort()
+					break
+				default:
+					throw new GradleException("FilePackResources class has an unsupported constant-pool tag.")
+			}
+		}
+		input.readUnsignedShort()
+		input.readUnsignedShort()
+		input.readUnsignedShort()
+		int interfaceCount = input.readUnsignedShort()
+		interfaceCount.times { input.readUnsignedShort() }
+		def skipMembers = {
+			int memberCount = input.readUnsignedShort()
+			memberCount.times {
+				input.readUnsignedShort()
+				input.readUnsignedShort()
+				input.readUnsignedShort()
+				int attributeCount = input.readUnsignedShort()
+				attributeCount.times {
+					input.readUnsignedShort()
+					int length = input.readInt()
+					skipFully(input, length)
+				}
+			}
+		}
+		skipMembers()
+		int methodCount = input.readUnsignedShort()
+		methodCount.times {
+			input.readUnsignedShort()
+			input.readUnsignedShort()
+			input.readUnsignedShort()
+			int attributeCount = input.readUnsignedShort()
+			attributeCount.times {
+				def attributeName = readUtf8(input.readUnsignedShort())
+				int length = input.readInt()
+				if (attributeName == "RuntimeVisibleAnnotations" || attributeName == "RuntimeInvisibleAnnotations") {
+					byte[] annotationBytes = new byte[length]
+					input.readFully(annotationBytes)
+					def annotationInput = new java.io.DataInputStream(new java.io.ByteArrayInputStream(annotationBytes))
+					int annotationCount = annotationInput.readUnsignedShort()
+					annotationCount.times { consumeAnnotation(annotationInput, false) }
+				} else {
+					skipFully(input, length)
+				}
+			}
+		}
+		state
+	} finally {
+		input.close()
+	}
+}
+
 def verifyArtifact = { target, platform, File artifact ->
 	if (!artifact.isFile()) {
 		throw new GradleException("Expected PackForge artifact was not produced: ${artifact}")
@@ -232,18 +393,33 @@ def verifyArtifact = { target, platform, File artifact ->
 		if (filePackMixinEntry == null) {
 			throw new GradleException("${artifact.name} is missing the operation-level FilePackResources mixin.")
 		}
-		def filePackConstants = archive.getInputStream(filePackMixinEntry).withCloseable { input ->
-			new String(input.readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1)
+		def filePackBytes = readZipBytes(archive, "com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.class")
+		def filePackConstants = new String(filePackBytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+		def ioSupplierNamespace = platform.id == "fabric" && target.legacyApi ? "intermediary" : "named/official"
+		def ioSupplierOwner = ioSupplierNamespace == "intermediary"
+			? "Lnet/minecraft/class_7367;"
+			: "Lnet/minecraft/server/packs/resources/IoSupplier;"
+		def ioSupplierTarget = "${ioSupplierOwner}create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)${ioSupplierOwner}".toString()
+		def expectedOperationTargets = [
+			"Ljava/util/zip/ZipFile;getEntry(Ljava/lang/String;)Ljava/util/zip/ZipEntry;": 1,
+			"Ljava/util/zip/ZipFile;entries()Ljava/util/Enumeration;": 2,
+			(ioSupplierTarget): 2
+		]
+		def operationAudit = inspectWrapOperationTargets(filePackBytes)
+		def unexpectedOperationTargets = operationAudit.targets.findAll { targetDescriptor, actualCount ->
+			!expectedOperationTargets.containsKey(targetDescriptor)
+			|| expectedOperationTargets[targetDescriptor] != actualCount
 		}
-		[
-			"Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;",
-			"Ljava/util/zip/ZipFile;getEntry(Ljava/lang/String;)Ljava/util/zip/ZipEntry;",
-			"Ljava/util/zip/ZipFile;entries()Ljava/util/Enumeration;",
-			"Lnet/minecraft/server/packs/resources/IoSupplier;create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)Lnet/minecraft/server/packs/resources/IoSupplier;"
-		].each { requiredConstant ->
-			if (!filePackConstants.contains(requiredConstant)) {
-				throw new GradleException("${artifact.name} FilePackResources mixin is missing operation-level anchor '${requiredConstant}'.")
-			}
+		def missingOperationTargets = expectedOperationTargets.findAll { targetDescriptor, expectedCount ->
+			(operationAudit.targets[targetDescriptor] ?: 0) != expectedCount
+		}
+		if (operationAudit.count != expectedOperationTargets.values().sum()
+			|| !unexpectedOperationTargets.isEmpty()
+			|| !missingOperationTargets.isEmpty()) {
+			throw new GradleException("${artifact.name} FilePackResources mixin has incorrect @WrapOperation targets for ${ioSupplierNamespace} namespace: ${operationAudit.targets}.")
+		}
+		if (!filePackConstants.contains("Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;")) {
+			throw new GradleException("${artifact.name} FilePackResources mixin is missing the @WrapOperation marker.")
 		}
 		if (filePackConstants.contains("CallbackInfoReturnable")
 			|| filePackConstants.contains("Lcom/llamalad7/mixinextras/injector/wrapmethod/WrapMethod;")) {
