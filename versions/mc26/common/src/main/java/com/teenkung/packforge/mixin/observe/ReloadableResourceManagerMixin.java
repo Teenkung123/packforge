@@ -1,53 +1,52 @@
 package com.teenkung.packforge.mixin.observe;
 
-import com.teenkung.packforge.loader.LoaderTimings;
-import com.teenkung.packforge.loader.ReloadSessionTracker;
-import com.teenkung.packforge.loader.ReloadStatus;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.teenkung.packforge.loader.ReloadExecutionContext;
+import com.teenkung.packforge.loader.ReloadLifecycle;
 import com.teenkung.packforge.loader.RuntimeResourceHash;
 import com.teenkung.packforge.startup.StartupStatus;
 import com.teenkung.packforge.startup.StartupTimings;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ReloadableResourceManager.class)
 public abstract class ReloadableResourceManagerMixin {
-	@Unique private long packforge$startupReloadStartNs;
-
-	@Inject(method = "createReload", at = @At("HEAD"))
-	private void packforge$reloadStart(CallbackInfoReturnable<ReloadInstance> cir) {
-		this.packforge$startupReloadStartNs = System.nanoTime();
-		ReloadSessionTracker.startReload();
-		LoaderTimings.onReloadStart();
-		ReloadStatus.start();
-		if (StartupTimings.isActive()) {
+	@WrapMethod(method = "createReload")
+	private ReloadInstance packforge$createReload(Operation<ReloadInstance> original) {
+		ReloadExecutionContext context = ReloadLifecycle.startReload();
+		long startupStartNs = System.nanoTime();
+		if (context.features().startupStatusOverlayEnabled() && context.features().startupTimingActiveAtStart()) {
 			StartupStatus.update("Loading", "client resources");
+		}
+		if (context.features().startupTimingActiveAtStart()) {
 			StartupTimings.event("resource_reload_start");
 		}
-	}
-
-	@Inject(method = "createReload", at = @At("RETURN"))
-	private void packforge$reloadEnd(CallbackInfoReturnable<ReloadInstance> cir) {
 		ReloadableResourceManager manager = (ReloadableResourceManager) (Object) this;
-		long reloadId = ReloadSessionTracker.current().id();
-		cir.getReturnValue().done().whenComplete((result, error) -> {
-			LoaderTimings.onReloadEnd(error);
-			LoaderTimings.onReloadComplete(error);
-			if (error == null) {
-				RuntimeResourceHash.report(manager, reloadId);
+		try {
+			ReloadInstance instance = original.call();
+			instance.done().whenComplete((result, error) -> {
+				if (error == null && ReloadExecutionContext.isCurrent(context)) {
+					RuntimeResourceHash.report(manager, context.reloadId());
+				}
+				ReloadLifecycle.finishReload(context, error);
+				if (context.features().startupStatusOverlayEnabled() && context.features().startupTimingActiveAtStart()) {
+					StartupStatus.update(error == null ? "Finishing" : "Failed", "client resources");
+				}
+				if (context.features().startupTimingActiveAtStart()) {
+					StartupTimings.recordDuration("resource_reload_wall", System.nanoTime() - startupStartNs);
+					StartupTimings.event(error == null ? "resource_reload_complete" : "resource_reload_failed");
+				}
+			});
+			return instance;
+		} catch (RuntimeException | Error error) {
+			ReloadLifecycle.finishReload(context, error);
+			if (context.features().startupTimingActiveAtStart()) {
+				StartupTimings.recordDuration("resource_reload_wall", System.nanoTime() - startupStartNs);
+				StartupTimings.event("resource_reload_failed");
 			}
-			ReloadStatus.finish(error);
-			if (StartupTimings.isActive()) {
-				StartupStatus.update(error == null ? "Finishing" : "Failed", "client resources");
-			}
-			if (this.packforge$startupReloadStartNs != 0L && StartupTimings.isActive()) {
-				StartupTimings.recordDuration("resource_reload_wall", System.nanoTime() - this.packforge$startupReloadStartNs);
-				StartupTimings.event(error == null ? "resource_reload_complete" : "resource_reload_failed");
-			}
-		});
+			throw error;
+		}
 	}
 }

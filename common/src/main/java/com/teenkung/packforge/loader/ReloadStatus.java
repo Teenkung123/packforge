@@ -1,71 +1,129 @@
 package com.teenkung.packforge.loader;
 
-import com.teenkung.packforge.config.FeatureFlags;
-
 import java.util.Locale;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
+/** Reload UI state backed by the exact context that owns the work. */
 public final class ReloadStatus {
-	private static final AtomicInteger activePrepareTasks = new AtomicInteger();
-	private static final AtomicInteger activeApplyTasks = new AtomicInteger();
+	private static final AtomicReference<ReloadSummary> pendingSummary = new AtomicReference<>();
 	private static final InitialUiResourceReadiness initialUiResources = new InitialUiResourceReadiness();
-	private static volatile boolean active;
-	private static volatile boolean complete;
-	private static volatile long startNs;
-	private static volatile ReloadSummary pendingSummary;
-	private static volatile String phase = "Starting";
-	private static volatile String detail = "resource reload";
 
 	public static void start() {
-		active = true;
-		complete = false;
-		startNs = System.nanoTime();
-		pendingSummary = null;
-		activePrepareTasks.set(0);
-		activeApplyTasks.set(0);
-		phase = "Starting";
-		detail = "resource reload";
+		ReloadExecutionContext context = ReloadExecutionContext.start(
+			System.nanoTime(),
+			com.teenkung.packforge.config.ReloadFeatureSnapshot.capture()
+		);
+		start(context);
+	}
+
+	public static void start(ReloadExecutionContext context) {
+		if (context == null) {
+			return;
+		}
+		context.metrics().beginStatus();
+		if (ReloadExecutionContext.isCurrent(context)) {
+			pendingSummary.set(null);
+		}
 	}
 
 	public static void finish(Throwable error) {
-		finish(error, FeatureFlags.reloadSummaryToastEnabled());
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		if (context != null) {
+			finish(context, error, context.features().reloadSummaryToastEnabled());
+		}
 	}
 
 	static void finish(Throwable error, boolean summaryToastEnabled) {
-		complete = true;
-		active = false;
-		long elapsedMs = startNs == 0L ? 0L : (System.nanoTime() - startNs) / 1_000_000L;
-		if (summaryToastEnabled) {
-			pendingSummary = new ReloadSummary(elapsedMs, error == null);
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		if (context != null) {
+			finish(context, error, summaryToastEnabled);
 		}
-		phase = error == null ? "Finishing" : "Failed";
-		detail = error == null ? "applying resources" : "resource reload";
-		activePrepareTasks.set(0);
-		activeApplyTasks.set(0);
+	}
+
+	public static void finish(ReloadExecutionContext context, Throwable error) {
+		if (context != null) {
+			finish(context, error, context.features().reloadSummaryToastEnabled());
+		}
+	}
+
+	static void finish(ReloadExecutionContext context, Throwable error, boolean summaryToastEnabled) {
+		if (context == null) {
+			return;
+		}
+		boolean current = ReloadExecutionContext.isCurrent(context);
+		if (current && summaryToastEnabled) {
+			pendingSummary.set(new ReloadSummary(
+				context.metrics().elapsedNs() / 1_000_000L,
+				error == null
+			));
+		}
+		context.metrics().finishStatus(
+			error == null ? "Finishing" : "Failed",
+			error == null ? "applying resources" : "resource reload"
+		);
+		ReloadExecutionContext.finish(context);
 	}
 
 	public static void prepareStarted(String listenerName) {
-		activePrepareTasks.incrementAndGet();
-		phase = "Preparing";
-		detail = readableListener(listenerName);
+		prepareStarted(ReloadExecutionContext.current(), listenerName);
+	}
+
+	static void prepareStarted(ReloadExecutionContext context, String listenerName) {
+		if (context != null) {
+			context.metrics().prepareStarted(readableListener(listenerName));
+		}
 	}
 
 	public static void prepareFinished() {
-		activePrepareTasks.updateAndGet(value -> Math.max(0, value - 1));
+		prepareFinished(ReloadExecutionContext.current());
+	}
+
+	static void prepareFinished(ReloadExecutionContext context) {
+		if (context != null) {
+			context.metrics().prepareFinished();
+		}
 	}
 
 	public static void applyStarted(String listenerName) {
-		activeApplyTasks.incrementAndGet();
-		phase = "Applying";
-		detail = readableListener(listenerName);
+		applyStarted(ReloadExecutionContext.current(), listenerName);
+	}
+
+	static void applyStarted(ReloadExecutionContext context, String listenerName) {
+		if (context != null) {
+			context.metrics().applyStarted(readableListener(listenerName));
+		}
 	}
 
 	public static void applyFinished() {
-		activeApplyTasks.updateAndGet(value -> Math.max(0, value - 1));
+		applyFinished(ReloadExecutionContext.current());
+	}
+
+	static void applyFinished(ReloadExecutionContext context) {
+		if (context != null) {
+			context.metrics().applyFinished();
+		}
+	}
+
+	static void listenerStarted(ReloadExecutionContext context, String listenerName) {
+		if (context != null) {
+			context.metrics().listenerStarted(readableListener(listenerName));
+		}
+	}
+
+	static void listenerFinished(ReloadExecutionContext context) {
+		if (context != null) {
+			context.metrics().listenerFinished();
+		}
+	}
+
+	static void resourceApplied(ReloadExecutionContext context, String listenerName) {
+		if (context != null && ReloadExecutionContext.isCurrent(context)) {
+			initialUiResources.listenerApplied(listenerName);
+		}
 	}
 
 	public static void resourceApplied(String listenerName) {
-		initialUiResources.listenerApplied(listenerName);
+		resourceApplied(ReloadExecutionContext.current(), listenerName);
 	}
 
 	public static boolean isStatusTextReady() {
@@ -73,54 +131,62 @@ public final class ReloadStatus {
 	}
 
 	public static boolean isActive() {
-		return active;
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context != null && context.metrics().isActive();
 	}
 
 	public static boolean isComplete() {
-		return complete;
+		ReloadExecutionContext context = ReloadExecutionContext.visible();
+		return context != null && context.metrics().isComplete();
 	}
 
 	public static String line(float progress) {
 		int percent = Math.max(0, Math.min(100, Math.round(progress * 100.0f)));
-		long elapsedMs = startNs == 0L ? 0L : (System.nanoTime() - startNs) / 1_000_000L;
+		ReloadExecutionContext context = ReloadExecutionContext.visible();
+		long elapsedMs = context == null ? 0L : context.metrics().elapsedNs() / 1_000_000L;
 		return "Loading resources - " + percent + "% - " + elapsedMs + "ms";
 	}
 
 	public static float displayProgress(float progress) {
 		float normalized = Math.max(0.0F, Math.min(1.0F, progress));
-		return complete ? 1.0F : Math.min(0.99F, normalized);
+		return isComplete() ? 1.0F : Math.min(0.99F, normalized);
 	}
 
 	public static String detailLine() {
-		String currentPhase = phase;
-		String currentDetail = detail;
-		int prepare = activePrepareTasks.get();
-		int apply = activeApplyTasks.get();
+		ReloadExecutionContext context = ReloadExecutionContext.visible();
+		if (context == null) {
+			return "Starting resource reload";
+		}
+		ReloadMetrics metrics = context.metrics();
+		String currentPhase = metrics.phase();
+		String currentDetail = metrics.detail();
+		int prepare = metrics.activePrepareTasks();
+		int apply = metrics.activeApplyTasks();
+		int listeners = metrics.activeListeners();
 		if (prepare > 1 && "Preparing".equals(currentPhase)) {
 			return currentPhase + " " + currentDetail + " (" + prepare + " tasks)";
 		}
 		if (apply > 1 && "Applying".equals(currentPhase)) {
 			return currentPhase + " " + currentDetail + " (" + apply + " tasks)";
 		}
+		if (listeners > 1 && "Loading".equals(currentPhase)) {
+			return currentPhase + " " + currentDetail + " (" + listeners + " listeners)";
+		}
 		return currentPhase + " " + currentDetail;
 	}
 
 	public static ReloadSummary consumeSummaryToast() {
-		ReloadSummary summary = pendingSummary;
-		pendingSummary = null;
-		return summary;
+		return pendingSummary.getAndSet(null);
+	}
+
+	static boolean statusTrackingEnabled(ReloadExecutionContext context) {
+		return context != null && context.features().statusTrackingEnabled();
 	}
 
 	static void resetForTesting() {
-		active = false;
-		complete = false;
-		startNs = 0L;
-		pendingSummary = null;
-		activePrepareTasks.set(0);
-		activeApplyTasks.set(0);
+		ReloadExecutionContext.resetForTesting();
+		pendingSummary.set(null);
 		initialUiResources.reset();
-		phase = "Starting";
-		detail = "resource reload";
 	}
 
 	private static String readableListener(String listenerName) {
