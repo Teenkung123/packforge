@@ -12,12 +12,12 @@ Outcome meanings:
 
 | Profile | Outcome | Evidence / remaining check |
 |---|---|---|
-| Forge 1.20.1 `47.0.0`, exact beta.2 JAR | `SAFE_ORIGINAL_PATH` | issue hotfix exact-JAR startup reached final atlas; controlled termination; no F3+T series |
-| Forge 1.20.1 `47.4.20`, exact beta.2 JAR | `SAFE_ORIGINAL_PATH` | Modrinth production startup reached atlas creation; no F3+T series |
-| Forge 1.20.1 `47.4.22`, exact beta.2 JAR | `SAFE_ORIGINAL_PATH` | issue hotfix exact-JAR startup reached final atlas; controlled termination; no F3+T series |
-| Primary Fabric vanilla | `UNTESTED` | build/tests pass; runtime/manifest series pending |
-| Primary Forge vanilla | `UNTESTED` | build/tests pass; runtime/manifest series pending |
-| Primary NeoForge vanilla | `UNTESTED` | build/tests pass; runtime/manifest series pending |
+| Forge 1.20.1 `47.0.0`, final integrated beta.2 JAR | `SAFE_ORIGINAL_PATH` | exact JAR SHA-256 `d8fe15c7...adbd` reached readiness; controlled termination; no F3+T series |
+| Forge 1.20.1 `47.4.20`, crash-hotfix beta.2 JAR | `SAFE_ORIGINAL_PATH` | earlier Modrinth production startup reached atlas creation; final integrated JAR not rerun; no F3+T series |
+| Forge 1.20.1 `47.4.22`, final integrated beta.2 JAR | `SAFE_ORIGINAL_PATH` | exact JAR SHA-256 `d8fe15c7...adbd` reached readiness after runtime-discovered Mixin fixes; controlled termination; no F3+T series |
+| Primary Fabric vanilla | `UNTESTED` | clean build/tests/package verification passed for every supported Fabric target; live runtime/manifest series pending |
+| Primary Forge vanilla | `UNTESTED` | clean build/tests/package verification passed for every supported Forge target; only Forge 1.20.1 endpoint startups were run live |
+| Primary NeoForge vanilla | `UNTESTED` | clean build/tests/package verification passed for every supported NeoForge target; live runtime/manifest series pending |
 | Fabric + Sodium | `UNTESTED` | exact profile unavailable |
 | Fabric + Sodium + Iris | `UNTESTED` | exact profile unavailable |
 | Fabric + ImmediatelyFast | `UNTESTED` | exact profile unavailable |
@@ -31,7 +31,21 @@ Outcome meanings:
 
 Build proof is not runtime proof. Matrix outcomes will be updated only from exact artifact/profile evidence. Missing external profiles are reported as unexecuted, not inferred compatible.
 
+The model path is intentionally `HOOK_PRESERVING_COALESCED_PATH` only when model features are requested and no platform compatibility guard is active. Guarded profiles use `SAFE_ORIGINAL_PATH`. These labels describe selected code paths, not live acceptance outcomes.
+
+## Final build/test/package coverage
+
+| Target family | Clean evidence |
+|---|---|
+| 1.20.1 | Fabric + Forge |
+| 1.21.1 | Fabric + Forge + NeoForge |
+| 1.21.4 | Fabric + Forge + NeoForge |
+| 1.21.8 | Fabric + Forge + NeoForge |
+| 1.21.11 | Fabric + Forge + NeoForge |
+| 26.1-26.2 | Fabric + Forge + NeoForge |
+
+`gradlew.bat clean buildAllSupported verifyAllArtifacts --no-daemon` passed in 3m21s with 32/32 root tasks executed after commit `bef22bc`. The verifier accepted exactly 17 artifacts and checked metadata, configured mixin classes, refmap/selector safety, structural operation anchors, duplicate-free packaging, and target/platform cardinality. `verifyExistingArtifacts` also passed independently. This is build/test/package proof, not live client proof for the unexecuted cells.
+
 ## Required target-wide checks
 
 Every one of the 17 target/platform artifacts must retain correct metadata, class version, capabilities, mixin configuration, refmap behavior, and duplicate-free packaging. Each exact runtime cell additionally requires startup, deterministic fixture reload, semantic hash comparison, repeated reloads, no injection failure, and no resource-leak evidence.
-
