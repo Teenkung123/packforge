@@ -220,6 +220,31 @@ def verifyArtifact = { target, platform, File artifact ->
 		}
 		def clientMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.client.toString()))
 		def mainMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.main.toString()))
+		if ((mainMixin.mixins ?: []).contains("loader.CompositePackResourcesMixin")
+			|| names.contains("com/teenkung/packforge/mixin/loader/CompositePackResourcesMixin.class")) {
+			throw new GradleException("${artifact.name} retains the removed broad CompositePackResources mixin.")
+		}
+		def filePackMixinEntry = archive.getEntry("com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.class")
+		if (filePackMixinEntry == null) {
+			throw new GradleException("${artifact.name} is missing the operation-level FilePackResources mixin.")
+		}
+		def filePackConstants = archive.getInputStream(filePackMixinEntry).withCloseable { input ->
+			new String(input.readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1)
+		}
+		[
+			"Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;",
+			"Ljava/util/zip/ZipFile;getEntry(Ljava/lang/String;)Ljava/util/zip/ZipEntry;",
+			"Ljava/util/zip/ZipFile;entries()Ljava/util/Enumeration;",
+			"Lnet/minecraft/server/packs/resources/IoSupplier;create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)Lnet/minecraft/server/packs/resources/IoSupplier;"
+		].each { requiredConstant ->
+			if (!filePackConstants.contains(requiredConstant)) {
+				throw new GradleException("${artifact.name} FilePackResources mixin is missing operation-level anchor '${requiredConstant}'.")
+			}
+		}
+		if (filePackConstants.contains("CallbackInfoReturnable")
+			|| filePackConstants.contains("Lcom/llamalad7/mixinextras/injector/wrapmethod/WrapMethod;")) {
+			throw new GradleException("${artifact.name} FilePackResources mixin retains a broad public-method replacement hook.")
+		}
 		if (!clientMixin.client.contains("config.PackSelectionScreenMixin")) {
 			throw new GradleException("${artifact.name} does not register the resource-pack configuration button mixin.")
 		}
@@ -360,6 +385,10 @@ tasks.register("validateTargetRegistry") {
 	group = "verification"
 	description = "Validates the PackForge target registry and adapter declarations."
 	inputs.file registryFile
+	inputs.files(fileTree("versions") {
+		include "**/*Mixin.java"
+		include "**/packforge.fabric.mixins.json"
+	})
 	doLast {
 	if (registry.defaultTarget == null || !targetKeys.contains(registry.defaultTarget)) {
 		throw new GradleException("defaultTarget must identify a declared PackForge target.")
@@ -434,6 +463,33 @@ tasks.register("validateTargetRegistry") {
 						|| loader.modMenuEntrypoint != true)) {
 					throw new GradleException("Fabric target '${target.key}' must provide optional Mod Menu integration and its development-runtime Fabric API version.")
 				}
+			}
+		}
+
+		def mixinSources = fileTree("versions") { include "**/*Mixin.java" }.files
+		mixinSources.each { source ->
+			def sourceText = source.getText("UTF-8")
+			def rawSelector = sourceText =~ /\b(?:method|field)_[0-9]+\b/
+			if (rawSelector.find()) {
+				throw new GradleException("${source} contains raw intermediary selector '${rawSelector.group()}'.")
+			}
+		}
+		def filePackSources = mixinSources.findAll { it.name == "FilePackResourcesMixin.java" }
+		if (filePackSources.size() != targets.size()) {
+			throw new GradleException("Expected one FilePackResources mixin per target adapter; found ${filePackSources.size()} for ${targets.size()} targets.")
+		}
+		filePackSources.each { source ->
+			def sourceText = source.getText("UTF-8")
+			if (!sourceText.contains("@WrapOperation")
+				|| sourceText.contains("@WrapMethod")
+				|| sourceText.contains("CallbackInfoReturnable")
+				|| sourceText.contains("cancellable = true")) {
+				throw new GradleException("${source} must use operation-level hooks without broad cancellable public-method replacement.")
+			}
+		}
+		fileTree("versions") { include "**/packforge.fabric.mixins.json" }.files.each { descriptor ->
+			if (descriptor.getText("UTF-8").contains("CompositePackResourcesMixin")) {
+				throw new GradleException("${descriptor} still registers the removed CompositePackResources mixin.")
 			}
 		}
 	}
