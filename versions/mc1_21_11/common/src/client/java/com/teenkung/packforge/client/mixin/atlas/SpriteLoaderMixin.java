@@ -2,6 +2,7 @@ package com.teenkung.packforge.client.mixin.atlas;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.teenkung.packforge.client.atlas.AtlasTimings;
 import com.teenkung.packforge.client.model.ModelBatchPlan;
 import com.teenkung.packforge.config.FeatureFlags;
@@ -10,59 +11,49 @@ import net.minecraft.client.renderer.texture.SpriteLoader;
 import net.minecraft.client.renderer.texture.atlas.SpriteResourceLoader;
 import net.minecraft.client.renderer.texture.atlas.SpriteSource;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.packs.metadata.MetadataSectionType;
-import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.Util;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.function.Supplier;
 
 @Mixin(SpriteLoader.class)
 public abstract class SpriteLoaderMixin {
-	@Unique private static final Map<String, String> packforge$atlasLocations = new ConcurrentHashMap<>();
 	@Unique private static final Map<List<?>, String> packforge$loaderOwners =
 		Collections.synchronizedMap(new IdentityHashMap<>());
 
 	@Shadow @Final private Identifier location;
 
-	@Inject(method = "loadAndStitch", at = @At("HEAD"))
-	private void packforge$rememberAtlas(
-		ResourceManager manager,
-		Identifier atlasInfo,
-		int mipLevel,
+	@WrapOperation(
+		method = "loadAndStitch",
+		at = @At(
+			value = "INVOKE",
+			target = "Ljava/util/concurrent/CompletableFuture;supplyAsync(Ljava/util/function/Supplier;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;"
+		)
+	)
+	private CompletableFuture<List<SpriteSource.Loader>> packforge$timeSources(
+		Supplier<List<SpriteSource.Loader>> sourceSupplier,
 		Executor executor,
-		Set<MetadataSectionType<?>> metadataSections,
-		CallbackInfoReturnable<CompletableFuture<SpriteLoader.Preparations>> cir
+		Operation<CompletableFuture<List<SpriteSource.Loader>>> original
 	) {
-		packforge$atlasLocations.put(atlasInfo.toString(), this.location.toString());
-	}
-
-	@WrapMethod(method = "method_47660")
-	private static List<SpriteSource.Loader> packforge$timeSources(
-		ResourceManager manager,
-		Identifier atlasInfo,
-		Operation<List<SpriteSource.Loader>> original
-	) {
-		String atlas = packforge$atlasLocations.getOrDefault(atlasInfo.toString(), atlasInfo.toString());
-		long startNs = AtlasTimings.start();
-		List<SpriteSource.Loader> loaders = original.call(manager, atlasInfo);
-		AtlasTimings.recordSource(atlas, startNs);
-		packforge$loaderOwners.put(loaders, atlas);
-		return loaders;
+		Supplier<List<SpriteSource.Loader>> timedSupplier = () -> {
+			long startNs = AtlasTimings.start();
+			List<SpriteSource.Loader> loaders = sourceSupplier.get();
+			AtlasTimings.recordSource(this.location, startNs);
+			packforge$loaderOwners.put(loaders, this.location.toString());
+			return loaders;
+		};
+		return original.call(timedSupplier, executor);
 	}
 
 	@WrapMethod(method = "runSpriteSuppliers")

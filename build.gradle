@@ -132,6 +132,9 @@ def artifactName = { target, platform ->
 	def loader = target.platforms[platform.id]
 	"packforge-${platform.id}-${project.version}${loader.versionSuffix}-mc${target.artifactMinecraft}.jar"
 }
+def expectedArtifactNames = targets.collectMany { target ->
+	platformBuilds.findAll { targetSupports(target, it) }.collect { platform -> artifactName(target, platform) }
+}.sort()
 
 def readZipText = { ZipFile archive, String path ->
 	def entry = archive.getEntry(path)
@@ -220,6 +223,28 @@ def verifyArtifact = { target, platform, File artifact ->
 		if (!clientMixin.client.contains("config.PackSelectionScreenMixin")) {
 			throw new GradleException("${artifact.name} does not register the resource-pack configuration button mixin.")
 		}
+		def configuredMixinClasses = [
+			[config: target.mixinConfigs.main.toString(), packageName: mainMixin.package, entries: mainMixin.mixins ?: []],
+			[config: target.mixinConfigs.client.toString(), packageName: clientMixin.package, entries: clientMixin.client ?: []]
+		]
+		configuredMixinClasses.each { mixinConfig ->
+			mixinConfig.entries.each { mixinName ->
+				def classPath = "${mixinConfig.packageName.toString().replace('.', '/')}/${mixinName.toString().replace('.', '/')}.class"
+				def classEntry = archive.getEntry(classPath)
+				if (classEntry == null) {
+					throw new GradleException("${artifact.name} registers ${mixinName} in ${mixinConfig.config} but does not package ${classPath}.")
+				}
+				if (platform.id != "fabric") {
+					def classConstants = archive.getInputStream(classEntry).withCloseable { input ->
+						new String(input.readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1)
+					}
+					def intermediarySelector = classConstants =~ /\b(?:method|field)_[0-9]+\b/
+					if (intermediarySelector.find()) {
+						throw new GradleException("${artifact.name} packages Fabric intermediary selector '${intermediarySelector.group()}' in configured mixin ${mixinName}.")
+					}
+				}
+			}
+		}
 		capabilityContract.each { capability, contract ->
 			if (target.capabilities.contains(capability)) {
 				(contract.classes ?: []).each { requiredClass ->
@@ -285,11 +310,37 @@ def verifyArtifact = { target, platform, File artifact ->
 				throw new GradleException("${artifact.name} has incorrect Forge dependency ranges.")
 			}
 			if (target.minecraftVersion == "1.20.1") {
+				def legacyRefmaps = []
 				[target.mixinConfigs.main, target.mixinConfigs.client].each { mixinPath ->
 					def mixin = new JsonSlurper().parseText(readZipText(archive, mixinPath.toString()))
 					if (!(mixin.refmap instanceof String) || mixin.refmap.isBlank() || archive.getEntry(mixin.refmap) == null) {
 						throw new GradleException("${artifact.name} is missing the generated legacy Forge Mixin refmap for ${mixinPath}.")
 					}
+					def refmapText = readZipText(archive, mixin.refmap)
+					def intermediarySelector = refmapText =~ /\b(?:method|field)_[0-9]+\b/
+					if (intermediarySelector.find()) {
+						throw new GradleException("${artifact.name} retains unmapped intermediary selector '${intermediarySelector.group()}' in ${mixin.refmap}.")
+					}
+					legacyRefmaps << new JsonSlurper().parseText(refmapText)
+				}
+
+				def legacyMappings = legacyRefmaps.collect { it.mappings ?: [:] }.inject([:]) { merged, mappings ->
+					merged.putAll(mappings as Map)
+					merged
+				}
+				def reloadMappings = legacyMappings["com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin"] as Map
+				def remappedStateFactoryHook = reloadMappings?.find { selector, mapped ->
+					selector.toString().startsWith("Lnet/minecraft/server/packs/resources/SimpleReloadInstance\$StateFactory;create(")
+						&& mapped.toString().contains(";m_")
+				}
+				if (remappedStateFactoryHook == null || !reloadMappings.containsKey("<init>")) {
+					throw new GradleException("${artifact.name} is missing the remapped structural SimpleReloadInstance constructor/StateFactory hook required by Forge 1.20.1.")
+				}
+
+				def spriteMappings = legacyMappings["com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin"] as Map
+				def remappedAtlasHook = spriteMappings?.get("loadAndStitch")?.toString()
+				if (remappedAtlasHook == null || !remappedAtlasHook.contains(";m_")) {
+					throw new GradleException("${artifact.name} is missing the remapped structural SpriteLoader loadAndStitch hook required by Forge 1.20.1.")
 				}
 			}
 		} else if (platform.id == "neoforge") {
@@ -489,6 +540,38 @@ tasks.register("verifyAllArtifacts") {
 	group = "verification"
 	description = "Verifies every declared PackForge artifact."
 	dependsOn verificationTasksByTarget.values()
+	doLast {
+		def outputDirectory = layout.buildDirectory.dir("libs").get().asFile
+		def actualArtifactNames = fileTree(outputDirectory) {
+			include "packforge-*.jar"
+		}.files.collect { it.name }.sort()
+		if (actualArtifactNames != expectedArtifactNames) {
+			def missing = expectedArtifactNames - actualArtifactNames
+			def stale = actualArtifactNames - expectedArtifactNames
+			throw new GradleException("Expected exactly ${expectedArtifactNames.size()} current release artifacts; missing=${missing}, stale=${stale}.")
+		}
+	}
+}
+
+tasks.register("verifyExistingArtifacts") {
+	group = "verification"
+	description = "Verifies the already-collected 17-artifact release set without rebuilding child projects."
+	doLast {
+		targets.each { target ->
+			platformBuilds.findAll { targetSupports(target, it) }.each { platform ->
+				verifyArtifact(target, platform, layout.buildDirectory.file("libs/${artifactName(target, platform)}").get().asFile)
+			}
+		}
+		def outputDirectory = layout.buildDirectory.dir("libs").get().asFile
+		def actualArtifactNames = fileTree(outputDirectory) {
+			include "packforge-*.jar"
+		}.files.collect { it.name }.sort()
+		if (actualArtifactNames != expectedArtifactNames) {
+			def missing = expectedArtifactNames - actualArtifactNames
+			def stale = actualArtifactNames - expectedArtifactNames
+			throw new GradleException("Expected exactly ${expectedArtifactNames.size()} current release artifacts; missing=${missing}, stale=${stale}.")
+		}
+	}
 }
 
 platformBuilds.findAll { targetSupports(selectedTarget, it) }.each { platform ->

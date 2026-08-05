@@ -19,6 +19,11 @@ def clientMixinConfig = target.mixinConfigs.client.toString()
 def needsLegacyRuntimeRemap = target.minecraftVersion == "1.20.1"
 def legacyMixinRefmap = "packforge.refmap.json"
 def artifactSmoke = providers.gradleProperty("packforge_artifact_smoke").map(Boolean::parseBoolean).orElse(false).get()
+if (artifactSmoke) {
+	throw new GradleException("Forge production artifacts use SRG names and cannot run in ForgeGradle's Mojmap userdev namespace. Use scripts/Smoke-Forge-Production.ps1 for final-JAR validation.")
+}
+def forgeRuntimeVersionOverride = providers.gradleProperty("packforge_forge_version_override").orNull
+def forgeDependencyVersion = forgeRuntimeVersionOverride ?: loaderConfig.version.toString()
 
 layout.buildDirectory.set(file("build/${target.key}"))
 
@@ -58,7 +63,7 @@ tasks.register("benchmarkPackIndex", JavaExec) {
 
 minecraft {
 	mappings channel: "official", version: target.minecraftVersion
-	dependency "net.minecraftforge:forge:${loaderConfig.version}"
+	dependency "net.minecraftforge:forge:${forgeDependencyVersion}"
 
 	runs {
 		client {
@@ -68,11 +73,9 @@ minecraft {
 				"forge.logging.console.level": "debug"
 			]
 
-			if (!artifactSmoke) {
-				mods {
-					packforge {
-						source sourceSets.main
-					}
+			mods {
+				packforge {
+					source sourceSets.main
 				}
 			}
 		}

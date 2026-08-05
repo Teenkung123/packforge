@@ -8,9 +8,9 @@ import com.teenkung.packforge.loader.ReloadListenerTelemetry;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
-import net.minecraft.util.profiling.ProfilerFiller;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Coerce;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -18,38 +18,38 @@ import java.util.concurrent.Executor;
 @Mixin(SimpleReloadInstance.class)
 public abstract class SimpleReloadInstanceMixin {
 	@WrapOperation(
-		method = "method_18368",
+		method = "<init>",
 		at = @At(
 			value = "INVOKE",
-			target = "Lnet/minecraft/server/packs/resources/PreparableReloadListener;reload(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/util/profiling/ProfilerFiller;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;"
+			target = "Lnet/minecraft/server/packs/resources/SimpleReloadInstance$StateFactory;create(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/server/packs/resources/PreparableReloadListener;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;"
 		)
 	)
-	private static CompletableFuture<Void> packforge$trackReloadStep(
-		PreparableReloadListener listener,
+	private CompletableFuture<?> packforge$telemetry(
+		@Coerce Object factory,
 		PreparableReloadListener.PreparationBarrier barrier,
-		ResourceManager resourceManager,
-		ProfilerFiller preparationProfiler,
-		ProfilerFiller reloadProfiler,
+		ResourceManager manager,
+		PreparableReloadListener listener,
 		Executor preparationExecutor,
-		Executor reloadExecutor,
-		Operation<CompletableFuture<Void>> original
+		Executor applyExecutor,
+		Operation<CompletableFuture<?>> original
 	) {
 		String name = listener.getName();
-		Executor trackedPreparation = command -> preparationExecutor.execute(ReloadListenerTelemetry.prepare(name, command));
-		Executor trackedReload = command -> reloadExecutor.execute(ReloadListenerTelemetry.apply(name, command));
-		boolean recordWall = FeatureFlags.reloadListenerTimingsEnabled();
-		long startNs = recordWall ? System.nanoTime() : 0L;
-		CompletableFuture<Void> future = original.call(
-			listener,
+		Executor trackedPreparation = command ->
+			preparationExecutor.execute(ReloadListenerTelemetry.prepare(name, command));
+		Executor trackedApply = command ->
+			applyExecutor.execute(ReloadListenerTelemetry.apply(name, command));
+		long started = FeatureFlags.reloadListenerTimingsEnabled() ? System.nanoTime() : 0L;
+		CompletableFuture<?> future = original.call(
+			factory,
 			barrier,
-			resourceManager,
-			preparationProfiler,
-			reloadProfiler,
+			manager,
+			listener,
 			trackedPreparation,
-			trackedReload
+			trackedApply
 		);
-		return recordWall
-			? future.whenComplete((result, error) -> LoaderTimings.recordListenerWall(name, System.nanoTime() - startNs))
-			: future;
+		return started == 0L
+			? future
+			: future.whenComplete((ignored, error) ->
+				LoaderTimings.recordListenerWall(name, System.nanoTime() - started));
 	}
 }

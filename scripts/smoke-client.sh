@@ -14,6 +14,8 @@ optimizer_enabled="${PACKFORGE_RELOAD_OPTIMIZER:-true}"
 artifact_smoke="${PACKFORGE_ARTIFACT_SMOKE:-true}"
 resource_hash="${PACKFORGE_RUNTIME_RESOURCE_HASH:-false}"
 smoke_profile="${PACKFORGE_SMOKE_PROFILE:-default}"
+forge_version_override="${PACKFORGE_FORGE_VERSION_OVERRIDE:-}"
+artifact_input_dir="${PACKFORGE_ARTIFACT_INPUT_DIR:-}"
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 case "$platform" in
@@ -35,6 +37,14 @@ if [[ "$artifact_smoke" != "true" && "$artifact_smoke" != "false" ]]; then
 fi
 if [[ "$resource_hash" != "true" && "$resource_hash" != "false" ]]; then
   echo "PACKFORGE_RUNTIME_RESOURCE_HASH must be true or false" >&2
+  exit 2
+fi
+if [[ -n "$forge_version_override" && "$platform" != "forge" ]]; then
+  echo "PACKFORGE_FORGE_VERSION_OVERRIDE is valid only for Forge smoke runs" >&2
+  exit 2
+fi
+if [[ "$platform" == "forge" && "$artifact_smoke" == "true" ]]; then
+  echo "Forge final SRG JARs cannot be tested in ForgeGradle's Mojmap userdev runtime; use source mode here and scripts/Smoke-Forge-Production.ps1 for final-JAR acceptance" >&2
   exit 2
 fi
 
@@ -77,13 +87,33 @@ fi
 cd "$repository_root"
 chmod +x gradlew
 
+artifact_name="$(python - "$platform" "$target" <<'PY'
+import json
+import pathlib
+import sys
+
+platform, target_key = sys.argv[1:]
+root = pathlib.Path.cwd()
+registry = json.loads((root / "gradle/minecraft-targets.json").read_text(encoding="utf-8"))
+target = next((item for item in registry["targets"] if item["key"] == target_key), None)
+if target is None or platform not in target["platforms"]:
+    raise SystemExit(f"unsupported target/platform: {target_key}/{platform}")
+properties = {}
+for line in (root / "gradle.properties").read_text(encoding="utf-8").splitlines():
+    if "=" in line and not line.lstrip().startswith("#"):
+        key, value = line.split("=", 1)
+        properties[key.strip()] = value.strip()
+version = properties["mod_version"] + target["platforms"][platform]["versionSuffix"]
+print(f"packforge-{platform}-{version}-mc{target['artifactMinecraft']}.jar")
+PY
+)"
+
 platform_root="platform/$platform"
 run_root="$platform_root/run/$target"
 log_file="$run_root/logs/latest.log"
 gradle_log="$run_root/logs/packforge-smoke-gradle.log"
 fixture_root="$platform_root/build/$target/benchmark"
 fixture="$fixture_root/deterministic-large-pack.zip"
-artifact_name=""
 
 mkdir -p "$run_root/logs" "$run_root/config" "$run_root/resourcepacks"
 rm -f "$log_file" "$gradle_log" "$run_root/logs/packforge-timings.csv" \
@@ -92,21 +122,21 @@ rm -f "$log_file" "$gradle_log" "$run_root/logs/packforge-timings.csv" \
 ./gradlew -p "$platform_root" -Ppackforge_target="$target" benchmarkPackIndex --no-daemon
 cp "$fixture" "$run_root/resourcepacks/deterministic-large-pack.zip"
 
+mkdir -p "$run_root/mods"
+find "$run_root/mods" -maxdepth 1 -type f -name 'packforge-*.jar' -delete
+
 if [[ "$artifact_smoke" == "true" ]]; then
-  ./gradlew -p "$platform_root" -Ppackforge_target="$target" build --no-daemon
-  artifact_directory="$platform_root/build/$target/libs"
-  mapfile -t artifacts < <(find "$artifact_directory" -maxdepth 1 -type f \
-    -name "packforge-$platform-*.jar" \
-    ! -name '*-sources.jar' ! -name '*-slim.jar' ! -name '*-named.jar' | sort)
-  if [[ "${#artifacts[@]}" -ne 1 ]]; then
-    echo "expected exactly one packaged artifact in $artifact_directory, found ${#artifacts[@]}" >&2
-    printf '%s\n' "${artifacts[@]}" >&2
+  if [[ -n "$artifact_input_dir" ]]; then
+    artifact_path="$artifact_input_dir/$artifact_name"
+  else
+    ./gradlew -p "$platform_root" -Ppackforge_target="$target" build --no-daemon
+    artifact_path="$platform_root/build/$target/libs/$artifact_name"
+  fi
+  if [[ ! -f "$artifact_path" ]]; then
+    echo "expected packaged artifact not found: $artifact_path" >&2
     exit 1
   fi
-  artifact_name="$(basename "${artifacts[0]}")"
-  mkdir -p "$run_root/mods"
-  find "$run_root/mods" -maxdepth 1 -type f -name 'packforge-*.jar' -delete
-  cp "${artifacts[0]}" "$run_root/mods/$artifact_name"
+  cp "$artifact_path" "$run_root/mods/$artifact_name"
 fi
 
 cat > "$run_root/config/packforge.json" <<JSON
@@ -155,6 +185,30 @@ cleanup() {
 }
 trap cleanup EXIT
 
+is_descendant_process() {
+  local child_pid="$1"
+  while [[ "$child_pid" =~ ^[0-9]+$ ]] && (( child_pid > 1 )); do
+    if [[ "$child_pid" == "$gradle_pid" ]]; then
+      return 0
+    fi
+    child_pid="$(ps -o ppid= -p "$child_pid" 2>/dev/null | tr -d '[:space:]')"
+  done
+  return 1
+}
+
+find_owned_minecraft_window() {
+  local candidate window_pid
+  while read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    window_pid="$(xdotool getwindowpid "$candidate" 2>/dev/null || true)"
+    if [[ -n "$window_pid" ]] && is_descendant_process "$window_pid"; then
+      echo "$candidate"
+      return 0
+    fi
+  done < <(xdotool search --onlyvisible --name 'Minecraft' 2>/dev/null || true)
+  return 1
+}
+
 if command -v openbox >/dev/null 2>&1; then
   openbox --sm-disable >"$run_root/logs/packforge-smoke-window-manager.log" 2>&1 &
   wm_pid=$!
@@ -164,6 +218,9 @@ fi
 run_arguments=(-p "$platform_root" -Ppackforge_target="$target")
 if [[ "$artifact_smoke" == "true" ]]; then
   run_arguments+=(-Ppackforge_artifact_smoke=true)
+fi
+if [[ -n "$forge_version_override" ]]; then
+  run_arguments+=("-Ppackforge_forge_version_override=$forge_version_override")
 fi
 run_arguments+=(runClient --no-daemon)
 ./gradlew "${run_arguments[@]}" >"$gradle_log" 2>&1 &
@@ -177,7 +234,7 @@ while (( SECONDS < deadline )); do
     grep -Ein "$fatal_pattern" "$log_file" >&2 || true
     exit 1
   fi
-  window_id="$(xdotool search --onlyvisible --name 'Minecraft' 2>/dev/null | head -n 1 || true)"
+  window_id="$(find_owned_minecraft_window || true)"
   if [[ -n "$window_id" && -f "$log_file" ]] \
     && grep -Fq 'PackForge capabilities:' "$log_file" \
     && grep -Fq 'PackForge reload complete:' "$log_file" \
