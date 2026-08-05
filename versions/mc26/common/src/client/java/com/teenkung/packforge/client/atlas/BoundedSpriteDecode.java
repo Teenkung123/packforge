@@ -27,6 +27,9 @@ public final class BoundedSpriteDecode {
 				features.atlasDecodeBatchingEnabled(),
 				features.atlasPhaseTimingsEnabled(),
 				features.atlasCapEnabled(),
+				features.atlasCapPx(),
+				features.atlasRetryEnabled(),
+				features.atlasRetryMaxAttempts(),
 				features.workerBudget(),
 				features.atlasDecodeBatchSize(),
 				features.atlasExclusionIds()
@@ -37,6 +40,9 @@ public final class BoundedSpriteDecode {
 			FeatureFlags.atlasDecodeBatchingEnabled(),
 			FeatureFlags.atlasPhaseTimingsEnabled(),
 			FeatureFlags.atlasCapEnabled(),
+			FeatureFlags.atlasCapPx(),
+			FeatureFlags.atlasRetryEnabled(),
+			FeatureFlags.atlasRetryMaxAttempts(),
 			ReloadFeatureSnapshot.boundedWorkerBudget(0, Runtime.getRuntime().availableProcessors()),
 			FeatureFlags.atlasDecodeBatchSize(),
 			Set.copyOf(FeatureFlags.atlasExclusionIds())
@@ -112,11 +118,16 @@ public final class BoundedSpriteDecode {
 		boolean decodeEnabled,
 		boolean phaseTimingsEnabled,
 		boolean atlasCapEnabled,
+		int atlasCapPx,
+		boolean atlasRetryEnabled,
+		int atlasRetryMaxAttempts,
 		int workerBudget,
 		int chunkSize,
 		Set<String> atlasExclusionIds
 	) {
 		public Plan {
+			atlasCapPx = Math.max(1, atlasCapPx);
+			atlasRetryMaxAttempts = Math.max(1, atlasRetryMaxAttempts);
 			workerBudget = Math.max(1, workerBudget);
 			chunkSize = Math.max(1, chunkSize);
 			atlasExclusionIds = atlasExclusionIds == null ? Set.of() : Set.copyOf(atlasExclusionIds);
@@ -124,6 +135,10 @@ public final class BoundedSpriteDecode {
 
 		public boolean atlasCapApplies(String atlasId) {
 			return atlasCapEnabled && !atlasExclusionIds.contains(atlasId);
+		}
+
+		public boolean atlasRetryApplies(String atlasId) {
+			return atlasRetryEnabled && !atlasExclusionIds.contains(atlasId);
 		}
 	}
 }
