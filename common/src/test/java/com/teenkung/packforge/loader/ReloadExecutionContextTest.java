@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -56,6 +57,56 @@ class ReloadExecutionContextTest {
 	}
 
 	@Test
+	void nestedBindingsRestoreThePreviousContextAndGlobalFallback() {
+		ReloadExecutionContext older = ReloadExecutionContext.startForTesting(snapshot(false, false, Set.of(), 1));
+		ReloadExecutionContext newer = ReloadExecutionContext.startForTesting(snapshot(true, false, Set.of(), 1));
+
+		assertSame(newer, ReloadExecutionContext.current());
+		try (ReloadExecutionContext.Scope olderBinding = ReloadExecutionContext.bind(older)) {
+			assertSame(older, ReloadExecutionContext.current());
+			try (ReloadExecutionContext.Scope newerBinding = ReloadExecutionContext.bind(newer)) {
+				assertSame(newer, ReloadExecutionContext.current());
+			}
+			assertSame(older, ReloadExecutionContext.current());
+		}
+		assertSame(newer, ReloadExecutionContext.current());
+	}
+
+	@Test
+	void queuedListenerTasksKeepOlderSnapshotAndMetricsAfterNewerReloadStarts() {
+		ReloadExecutionContext older = ReloadExecutionContext.startForTesting(snapshot(false, false, Set.of(), 1));
+		AtomicReference<Runnable> queuedPrepare = new AtomicReference<>();
+		AtomicReference<Runnable> queuedApply = new AtomicReference<>();
+		Executor prepareDelegate = queuedPrepare::set;
+		Executor applyDelegate = queuedApply::set;
+		Executor prepare = ReloadListenerTelemetry.prepareExecutor(older, "older", prepareDelegate);
+		Executor apply = ReloadListenerTelemetry.applyExecutor(older, "older", applyDelegate);
+		AtomicReference<ReloadFeatureSnapshot> prepareSnapshot = new AtomicReference<>();
+		AtomicReference<ReloadFeatureSnapshot> applySnapshot = new AtomicReference<>();
+
+		prepare.execute(() -> {
+			prepareSnapshot.set(ReloadExecutionContext.current().features());
+			LoaderTimings.recordGetResource();
+		});
+		apply.execute(() -> {
+			applySnapshot.set(ReloadExecutionContext.current().features());
+			LoaderTimings.recordGetResource();
+		});
+
+		ReloadExecutionContext newer = ReloadExecutionContext.startForTesting(snapshot(true, false, Set.of(), 1));
+		assertNotSame(older.features(), newer.features());
+
+		queuedPrepare.get().run();
+		queuedApply.get().run();
+
+		assertSame(newer, ReloadExecutionContext.current());
+		assertSame(older.features(), prepareSnapshot.get());
+		assertSame(older.features(), applySnapshot.get());
+		assertEquals(2L, older.metrics().counters().getResourceCalls());
+		assertEquals(0L, newer.metrics().counters().getResourceCalls());
+	}
+
+	@Test
 	void failureCleanupFinishesExactContext() {
 		ReloadExecutionContext context = ReloadExecutionContext.startForTesting(snapshot(false, true, Set.of(), 1));
 		ReloadStatus.start(context);
@@ -69,13 +120,13 @@ class ReloadExecutionContextTest {
 	}
 
 	@Test
-	void normalPathKeepsOriginalExecutorsAndFutureIdentity() {
+	void normalPathOnlyAddsContextBindingAndKeepsFutureIdentity() {
 		ReloadExecutionContext context = ReloadExecutionContext.startForTesting(snapshot(false, false, Set.of(), 1));
 		ReloadStatus.start(context);
 		Executor executor = command -> command.run();
 
-		assertSame(executor, ReloadListenerTelemetry.prepareExecutor(context, "listener", executor));
-		assertSame(executor, ReloadListenerTelemetry.applyExecutor(context, "listener", executor));
+		assertNotSame(executor, ReloadListenerTelemetry.prepareExecutor(context, "listener", executor));
+		assertNotSame(executor, ReloadListenerTelemetry.applyExecutor(context, "listener", executor));
 		CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
 
 		assertSame(future, ReloadListenerTelemetry.observeListenerFuture(context, "listener", future, 0L));

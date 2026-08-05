@@ -242,6 +242,32 @@ class OrderedAsyncTest {
 	}
 
 	@Test
+	void failedMappingDetachesStateAndClearsOwnedSlots() {
+		Owned owned = new Owned(1);
+		RuntimeException expected = new RuntimeException("expected");
+		AtomicInteger disposed = new AtomicInteger();
+		CompletableFuture<List<Owned>> future = OrderedAsync.map(
+			List.of(1, 2),
+			Runnable::run,
+			1,
+			1,
+			value -> {
+				if (value == 2) {
+					throw expected;
+				}
+				return owned;
+			},
+			value -> disposed.incrementAndGet()
+		);
+
+		assertSame(expected, failureCause(future));
+		assertEquals(1, disposed.get());
+		OrderedAsync.RetentionDiagnostics retention = OrderedAsync.retentionForTesting(future);
+		assertFalse(retention.stateAttached());
+		assertEquals(0, retention.retainedResultSlots());
+	}
+
+	@Test
 	void cancellationDisposesCompletedAndLateOwnedValuesOnce() throws Exception {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		CountDownLatch firstProduced = new CountDownLatch(1);
@@ -277,6 +303,9 @@ class OrderedAsyncTest {
 			assertTrue(secondStarted.await(5, TimeUnit.SECONDS));
 			assertTrue(future.cancel(false));
 			assertTrue(future.isCancelled());
+			OrderedAsync.RetentionDiagnostics retention = OrderedAsync.retentionForTesting(future);
+			assertFalse(retention.stateAttached());
+			assertEquals(0, retention.retainedResultSlots());
 			releaseSecond.countDown();
 			assertThrows(CancellationException.class, future::join);
 			assertTrue(disposed.await(5, TimeUnit.SECONDS));

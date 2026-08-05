@@ -8,17 +8,23 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 /**
- * Reload listener boundaries.  The normal path delegates the original
- * executors unchanged and observes the listener future once; task wrappers
- * are reserved for detailed listener or active startup timing.
+ * Reload listener boundaries. Detailed task telemetry remains conditional,
+ * but every supplied listener executor gets one lightweight context-binding
+ * runnable so queued work keeps its reload snapshot when a newer reload starts.
  */
 public final class ReloadListenerTelemetry {
 	public static Runnable prepare(String listenerName, Runnable command) {
-		return prepare(ReloadExecutionContext.current(), canonicalName(listenerName), command);
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context == null
+			? command
+			: ReloadExecutionContext.bindRunnable(context, prepare(context, canonicalName(listenerName), command));
 	}
 
 	public static Runnable apply(String listenerName, Runnable command) {
-		return apply(ReloadExecutionContext.current(), canonicalName(listenerName), command);
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context == null
+			? command
+			: ReloadExecutionContext.bindRunnable(context, apply(context, canonicalName(listenerName), command));
 	}
 
 	static Runnable prepare(String listenerName, Runnable command, boolean timings, boolean status) {
@@ -78,20 +84,28 @@ public final class ReloadListenerTelemetry {
 
 	public static Executor prepareExecutor(ReloadExecutionContext context, String listenerName, Executor original) {
 		Objects.requireNonNull(original, "original");
-		if (context == null || !context.features().taskExecutorWrappingEnabled()) {
+		if (context == null) {
 			return original;
 		}
 		String canonical = canonicalName(listenerName);
-		return command -> original.execute(prepare(context, canonical, command));
+		boolean detailed = context.features().taskExecutorWrappingEnabled();
+		return command -> {
+			Runnable task = detailed ? prepare(context, canonical, command) : command;
+			original.execute(ReloadExecutionContext.bindRunnable(context, task));
+		};
 	}
 
 	public static Executor applyExecutor(ReloadExecutionContext context, String listenerName, Executor original) {
 		Objects.requireNonNull(original, "original");
-		if (context == null || !context.features().taskExecutorWrappingEnabled()) {
+		if (context == null) {
 			return original;
 		}
 		String canonical = canonicalName(listenerName);
-		return command -> original.execute(apply(context, canonical, command));
+		boolean detailed = context.features().taskExecutorWrappingEnabled();
+		return command -> {
+			Runnable task = detailed ? apply(context, canonical, command) : command;
+			original.execute(ReloadExecutionContext.bindRunnable(context, task));
+		};
 	}
 
 	static Runnable prepare(ReloadExecutionContext context, String listenerName, Runnable command) {

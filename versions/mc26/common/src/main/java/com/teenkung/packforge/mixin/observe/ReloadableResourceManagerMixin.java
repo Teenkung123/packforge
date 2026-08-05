@@ -25,7 +25,10 @@ public abstract class ReloadableResourceManagerMixin {
 		}
 		ReloadableResourceManager manager = (ReloadableResourceManager) (Object) this;
 		try {
-			ReloadInstance instance = original.call();
+			ReloadInstance instance;
+			try (ReloadExecutionContext.Scope ignored = ReloadExecutionContext.bind(context)) {
+				instance = original.call();
+			}
 			instance.done().whenComplete((result, error) -> {
 				if (error == null && ReloadExecutionContext.isCurrent(context)) {
 					RuntimeResourceHash.report(manager, context.reloadId());

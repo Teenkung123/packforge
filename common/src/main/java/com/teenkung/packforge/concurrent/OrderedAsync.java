@@ -9,6 +9,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -76,16 +77,43 @@ public final class OrderedAsync {
 		return future;
 	}
 
+	/** Package-private retention proof used by focused lifecycle tests. */
+	static RetentionDiagnostics retentionForTesting(CompletableFuture<?> future) {
+		if (!(future instanceof MappingFuture<?> mappingFuture)) {
+			return new RetentionDiagnostics(false, 0);
+		}
+		return mappingFuture.retentionSnapshot();
+	}
+
+	record RetentionDiagnostics(boolean stateAttached, int retainedResultSlots) {
+	}
+
 	private static final class MappingFuture<O> extends CompletableFuture<List<O>> {
-		private MappingState<?, O> state;
+		private final AtomicReference<MappingState<?, O>> state = new AtomicReference<>();
+		private volatile int terminalRetainedResultSlots = -1;
 
 		private void attach(MappingState<?, O> state) {
-			this.state = state;
+			this.state.set(state);
+		}
+
+		private void detach(MappingState<?, O> expected) {
+			state.compareAndSet(expected, null);
+		}
+
+		private void recordTerminalRetention(int retainedResultSlots) {
+			terminalRetainedResultSlots = retainedResultSlots;
+		}
+
+		private RetentionDiagnostics retentionSnapshot() {
+			MappingState<?, O> current = state.get();
+			return current == null
+				? new RetentionDiagnostics(false, Math.max(0, terminalRetainedResultSlots))
+				: current.retentionSnapshot();
 		}
 
 		@Override
 		public boolean cancel(boolean mayInterruptIfRunning) {
-			MappingState<?, O> current = state;
+			MappingState<?, O> current = state.get();
 			return current != null && current.cancel();
 		}
 	}
@@ -238,7 +266,10 @@ public final class OrderedAsync {
 				nextChunk.set(TERMINAL_CHUNK);
 				stopClaims.set(true);
 				failure = new Failure(Integer.MIN_VALUE, failureSequence.getAndIncrement(), cause);
+				finalized = true;
 				toDispose = takeOwnedResultsLocked();
+				future.recordTerminalRetention(retainedResultSlotsLocked());
+				future.detach(this);
 			}
 			disposeAll(toDispose);
 			attachCleanupFailures(cause);
@@ -272,6 +303,8 @@ public final class OrderedAsync {
 				} else {
 					result = orderedResultList();
 				}
+				future.recordTerminalRetention(retainedResultSlotsLocked());
+				future.detach(this);
 			}
 
 			disposeAll(toDispose);
@@ -285,10 +318,13 @@ public final class OrderedAsync {
 
 		private List<O> orderedResultList() {
 			List<O> result = new ArrayList<>(orderedResults.length);
-			for (Object value : orderedResults) {
+			for (int index = 0; index < orderedResults.length; index++) {
+				Object value = orderedResults[index];
 				@SuppressWarnings("unchecked")
 				O typedValue = (O) value;
 				result.add(typedValue);
+				orderedResults[index] = null;
+				disposed[index] = true;
 			}
 			return Collections.unmodifiableList(result);
 		}
@@ -301,10 +337,28 @@ public final class OrderedAsync {
 			for (int i = 0; i < orderedResults.length; i++) {
 				if (produced[i] && !disposed[i] && orderedResults[i] != null) {
 					disposed[i] = true;
-					owned.add(orderedResults[i]);
+					Object value = orderedResults[i];
+					orderedResults[i] = null;
+					owned.add(value);
 				}
 			}
 			return owned;
+		}
+
+		private RetentionDiagnostics retentionSnapshot() {
+			synchronized (lifecycleLock) {
+				return new RetentionDiagnostics(true, retainedResultSlotsLocked());
+			}
+		}
+
+		private int retainedResultSlotsLocked() {
+			int retained = 0;
+			for (Object value : orderedResults) {
+				if (value != null) {
+					retained++;
+				}
+			}
+			return retained;
 		}
 
 		private void disposeAll(List<Object> values) {
