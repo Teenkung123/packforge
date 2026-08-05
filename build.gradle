@@ -224,6 +224,10 @@ def verifyArtifact = { target, platform, File artifact ->
 			|| names.contains("com/teenkung/packforge/mixin/loader/CompositePackResourcesMixin.class")) {
 			throw new GradleException("${artifact.name} retains the removed broad CompositePackResources mixin.")
 		}
+		if (target.key != "mc1_20_1"
+			&& !(mainMixin.mixins ?: []).contains("loader.SharedZipFileAccessMixin")) {
+			throw new GradleException("${artifact.name} is missing the SharedZipFileAccess bridge mixin required by FilePackResourcesMixin.")
+		}
 		def filePackMixinEntry = archive.getEntry("com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.class")
 		if (filePackMixinEntry == null) {
 			throw new GradleException("${artifact.name} is missing the operation-level FilePackResources mixin.")
@@ -474,9 +478,15 @@ tasks.register("validateTargetRegistry") {
 				throw new GradleException("${source} contains raw intermediary selector '${rawSelector.group()}'.")
 			}
 		}
-		def filePackSources = mixinSources.findAll { it.name == "FilePackResourcesMixin.java" }
-		if (filePackSources.size() != targets.size()) {
-			throw new GradleException("Expected one FilePackResources mixin per target adapter; found ${filePackSources.size()} for ${targets.size()} targets.")
+		def filePackSources = []
+		targets.each { target ->
+			def adapterSources = fileTree("versions/${target.apiAdapter}") {
+				include "**/FilePackResourcesMixin.java"
+			}.files
+			if (adapterSources.size() != 1) {
+				throw new GradleException("Target ${target.key} must own exactly one FilePackResources mixin; found ${adapterSources.size()}.")
+			}
+			filePackSources.addAll(adapterSources)
 		}
 		filePackSources.each { source ->
 			def sourceText = source.getText("UTF-8")
@@ -485,6 +495,17 @@ tasks.register("validateTargetRegistry") {
 				|| sourceText.contains("CallbackInfoReturnable")
 				|| sourceText.contains("cancellable = true")) {
 				throw new GradleException("${source} must use operation-level hooks without broad cancellable public-method replacement.")
+			}
+			def expectedAnchors = [
+				"ZipFile;getEntry(Ljava/lang/String;)Ljava/util/zip/ZipEntry;": 1,
+				"ZipFile;entries()Ljava/util/Enumeration;": 2,
+				"IoSupplier;create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)": 2
+			]
+			expectedAnchors.each { anchor, expectedCount ->
+				int actualCount = sourceText.count(anchor)
+				if (actualCount != expectedCount) {
+					throw new GradleException("${source} must contain ${expectedCount} '${anchor}' operation anchors; found ${actualCount}.")
+				}
 			}
 		}
 		fileTree("versions") { include "**/packforge.fabric.mixins.json" }.files.each { descriptor ->

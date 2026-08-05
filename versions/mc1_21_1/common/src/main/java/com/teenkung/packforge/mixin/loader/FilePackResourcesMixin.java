@@ -139,7 +139,9 @@ public abstract class FilePackResourcesMixin {
 		String prefix,
 		org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci
 	) {
-		this.packforge$archive = (SharedZipFileAccessBridge) zipFileAccess;
+		if (zipFileAccess instanceof SharedZipFileAccessBridge bridge) {
+			this.packforge$archive = bridge;
+		}
 	}
 
 	@Unique
