@@ -672,7 +672,11 @@ tasks.register("validateTargetRegistry") {
 				|| sourceText.contains("cancellable = true")) {
 				throw new GradleException("${source} must use operation-level hooks without broad cancellable public-method replacement.")
 			}
+			if ((sourceText =~ /(?s)@Local(?:\([^)]*\))?[^{}]*Operation</).find()) {
+				throw new GradleException("${source} places MixinExtras sugar before the @WrapOperation Operation parameter; sugar parameters must be trailing.")
+			}
 			def expectedAnchors = [
+				"getResource(Ljava/lang/String;)Lnet/minecraft/server/packs/resources/IoSupplier;": 2,
 				"ZipFile;getEntry(Ljava/lang/String;)Ljava/util/zip/ZipEntry;": 1,
 				"ZipFile;entries()Ljava/util/Enumeration;": 2,
 				"IoSupplier;create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)": 2

@@ -178,8 +178,8 @@ public abstract class FilePackResourcesMixin {
 	)
 	private Enumeration<? extends ZipEntry> packforge$namespaceEntries(
 		ZipFile zipFile,
-		@Local(argsOnly = true) PackType type,
-		Operation<Enumeration<? extends ZipEntry>> original
+		Operation<Enumeration<? extends ZipEntry>> original,
+		@Local(argsOnly = true) PackType type
 	) {
 		PackIndex index = this.packforge$index(zipFile);
 		if (index == null) {
@@ -198,10 +198,10 @@ public abstract class FilePackResourcesMixin {
 	)
 	private Enumeration<? extends ZipEntry> packforge$listEntries(
 		ZipFile zipFile,
+		Operation<Enumeration<? extends ZipEntry>> original,
 		@Local(argsOnly = true) PackType type,
 		@Local(argsOnly = true, ordinal = 0) String namespace,
-		@Local(argsOnly = true, ordinal = 1) String directory,
-		Operation<Enumeration<? extends ZipEntry>> original
+		@Local(argsOnly = true, ordinal = 1) String directory
 	) {
 		PackIndex index = this.packforge$index(zipFile);
 		if (index == null) {
