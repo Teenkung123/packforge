@@ -27,7 +27,7 @@ public final class PackIndexBenchmark {
 		String packMetadata = arguments.length < 2
 			? DeterministicZipFixture.defaultPackMetadata()
 			: new String(Base64.getDecoder().decode(arguments[1]), StandardCharsets.UTF_8);
-		DeterministicZipFixture.create(archive, 20_000, packMetadata);
+		DeterministicZipFixture.createRuntimeCompatible(archive, 20_000, packMetadata);
 
 		try (ZipFile zipFile = new ZipFile(archive.toFile())) {
 			long buildStarted = System.nanoTime();

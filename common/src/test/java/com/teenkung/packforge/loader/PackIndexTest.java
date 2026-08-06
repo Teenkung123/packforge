@@ -93,6 +93,37 @@ class PackIndexTest {
 	}
 
 	@Test
+	void runtimeFixtureContainsOnlyValidResourceNames() throws IOException {
+		Path archive = DeterministicZipFixture.createRuntimeCompatible(
+			temporaryDirectory.resolve("runtime-fixture.zip"),
+			100,
+			DeterministicZipFixture.defaultPackMetadata()
+		);
+		try (ZipFile zipFile = new ZipFile(archive.toFile())) {
+			ResourceNamePolicy policy = ResourceNamePolicy.current();
+			PackIndex.NamespaceResult namespaces = PackIndex.build(zipFile)
+				.namespacesFor("assets/", policy);
+			assertTrue(namespaces.invalid().isEmpty());
+			assertFalse(namespaces.valid().isEmpty());
+
+			Enumeration<? extends ZipEntry> entries = zipFile.entries();
+			while (entries.hasMoreElements()) {
+				ZipEntry entry = entries.nextElement();
+				if (entry.isDirectory() || entry.getName().equals("pack.mcmeta")) {
+					continue;
+				}
+				int assetsStart = entry.getName().indexOf("assets/");
+				assertTrue(assetsStart == 0 || assetsStart > 0 && entry.getName().charAt(assetsStart - 1) == '/');
+				String resourceName = entry.getName().substring(assetsStart + "assets/".length());
+				int namespaceEnd = resourceName.indexOf('/');
+				assertTrue(namespaceEnd > 0);
+				assertTrue(policy.isValidNamespace(resourceName.substring(0, namespaceEnd)), entry.getName());
+				assertTrue(policy.isValidPath(resourceName.substring(namespaceEnd + 1)), entry.getName());
+			}
+		}
+	}
+
+	@Test
 	void preservesDuplicateWinnerAndStableDuplicateOrder() throws IOException {
 		Path archive = DeterministicZipFixture.createWithDuplicateEntry(temporaryDirectory.resolve("duplicates.zip"));
 		try (ZipFile zipFile = new ZipFile(archive.toFile())) {

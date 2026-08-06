@@ -20,12 +20,17 @@ final class DeterministicZipFixture {
 	}
 
 	static Path create(Path path, int generatedEntries, String packMetadata) throws IOException {
+		return create(path, generatedEntries, packMetadata, true);
+	}
+
+	static Path createRuntimeCompatible(Path path, int generatedEntries, String packMetadata) throws IOException {
+		return create(path, generatedEntries, packMetadata, false);
+	}
+
+	private static Path create(Path path, int generatedEntries, String packMetadata, boolean includeMalformedEntries) throws IOException {
 		try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(path))) {
 			add(output, "pack.mcmeta", packMetadata.getBytes(StandardCharsets.UTF_8), false);
 			addDirectory(output, "assets/minecraft/");
-			addDirectory(output, "assets/empty_namespace/");
-			addDirectory(output, "assets/BadNamespace/");
-			addDirectory(output, "assets/foo@bar/");
 			add(output, "assets/minecraft/textures/a.txt", "alpha".getBytes(StandardCharsets.UTF_8), false);
 			add(output, "assets/minecraft/models/block/a.json", "{}".getBytes(StandardCharsets.UTF_8), true);
 			add(output, "assets/minecraft/font/default.json", "{\"providers\":[]}".getBytes(StandardCharsets.UTF_8), false);
@@ -35,11 +40,16 @@ final class DeterministicZipFixture {
 			add(output, "assets/example/textures/duplicate.txt", "base".getBytes(StandardCharsets.UTF_8), false);
 			add(output, "overlay/assets/example/textures/overlay.txt", "overlay".getBytes(StandardCharsets.UTF_8), false);
 			add(output, "overlay/assets/example/textures/duplicate.txt", "overlay-wins-in-overlay-pack".getBytes(StandardCharsets.UTF_8), true);
-			add(output, "assets/BadNamespace/textures/ignored.txt", new byte[] { 1 }, true);
-			add(output, "assets/foo@bar/textures/legacy.txt", new byte[] { 2 }, false);
-			add(output, "assets/minecraft/textures/Bad Path.png", new byte[] { 3 }, true);
-			add(output, "assets/minecraft/../escape.txt", new byte[] { 4 }, false);
-			add(output, "assets//textures/empty-namespace.txt", new byte[] { 5 }, true);
+			if (includeMalformedEntries) {
+				addDirectory(output, "assets/empty_namespace/");
+				addDirectory(output, "assets/BadNamespace/");
+				addDirectory(output, "assets/foo@bar/");
+				add(output, "assets/BadNamespace/textures/ignored.txt", new byte[] { 1 }, true);
+				add(output, "assets/foo@bar/textures/legacy.txt", new byte[] { 2 }, false);
+				add(output, "assets/minecraft/textures/Bad Path.png", new byte[] { 3 }, true);
+				add(output, "assets/minecraft/../escape.txt", new byte[] { 4 }, false);
+				add(output, "assets//textures/empty-namespace.txt", new byte[] { 5 }, true);
+			}
 			if (generatedEntries >= 20_000) {
 				add(output, "assets/minecraft/textures/large/fixture.png", png(1024, 1024), true);
 				add(output, "assets/minecraft/textures/animated/fixture.png", png(32, 128), false);
