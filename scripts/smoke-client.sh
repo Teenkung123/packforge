@@ -198,7 +198,7 @@ is_descendant_process() {
 }
 
 list_x11_client_windows() {
-  local managed_windows
+  local managed_windows client_windows
   managed_windows="$(
     xprop -root _NET_CLIENT_LIST 2>/dev/null \
       | sed -n 's/.*# //p' \
@@ -210,6 +210,17 @@ list_x11_client_windows() {
   if [[ -n "$managed_windows" ]]; then
     printf '%s\n' "$managed_windows"
     return
+  fi
+  if command -v xlsclients >/dev/null 2>&1; then
+    client_windows="$(
+      xlsclients -display "$DISPLAY" -l 2>/dev/null \
+        | sed -n 's/^[[:space:]]*Window[[:space:]]\+\(0x[0-9A-Fa-f]\+\).*/\1/p' \
+        || true
+    )"
+    if [[ -n "$client_windows" ]]; then
+      printf '%s\n' "$client_windows"
+      return
+    fi
   fi
   {
     xdotool search --name '.*' 2>/dev/null || true
