@@ -1,0 +1,221 @@
+name: Runtime client smoke
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build exact smoke artifact bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Restore Gradle and Mavenizer caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            platform/forge/.gradle/mavenizer
+          key: packforge-runtime-smoke-${{ runner.os }}-all-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          restore-keys: |
+            packforge-runtime-smoke-${{ runner.os }}-all-
+
+      - name: Build and verify all artifacts
+        run: |
+          chmod +x gradlew
+          ./gradlew buildAllSupported verifyAllArtifacts --no-daemon --stacktrace
+
+      - name: Write exact release SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
+          if [[ "${#artifacts[@]}" -ne 17 ]]; then
+            echo "Expected exactly 17 release artifacts, found ${#artifacts[@]}."
+            printf '%s\n' "${artifacts[@]}"
+            exit 1
+          fi
+          (
+            cd build/libs
+            sha256sum "${artifacts[@]}" > SHA256SUMS
+          )
+          checksum_count="$(wc -l < build/libs/SHA256SUMS)"
+          if [[ "$checksum_count" -ne 17 ]]; then
+            echo "Expected 17 checksum rows, found $checksum_count."
+            exit 1
+          fi
+
+      - name: Upload verified artifact bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: packforge-all-supported
+          path: |
+            build/libs/packforge-*.jar
+            build/libs/SHA256SUMS
+          if-no-files-found: error
+
+  smoke:
+    name: ${{ matrix.target }} / ${{ matrix.platform }} / ${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: mc26_1_to_26_2, platform: fabric }
+          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.1" }
+          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.2" }
+          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.2" }
+          - { target: mc26_1_to_26_2, platform: forge }
+          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.1-63.0.2" }
+          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.2-64.1.0" }
+          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.2-65.1.0" }
+          - { target: mc26_1_to_26_2, platform: neoforge }
+          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.1.15-beta" }
+          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.2.94" }
+          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.2.0.48-beta" }
+          - { target: mc1_21_1, platform: fabric }
+          - { target: mc1_21_1, platform: forge }
+          - { target: mc1_21_1, platform: neoforge }
+          - { target: mc1_21_4, platform: fabric }
+          - { target: mc1_21_4, platform: forge }
+          - { target: mc1_21_4, platform: neoforge }
+          - { target: mc1_21_8, platform: fabric }
+          - { target: mc1_21_8, platform: forge }
+          - { target: mc1_21_8, platform: neoforge }
+          - { target: mc1_21_11, platform: fabric }
+          - { target: mc1_21_11, platform: forge }
+          - { target: mc1_21_11, platform: neoforge }
+          - { target: mc1_20_1, platform: fabric }
+          - { target: mc1_20_1, platform: forge }
+          - { target: mc1_20_1, platform: forge, forge_version: "1.20.1-47.4.22" }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified artifact bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: packforge-all-supported
+          path: build/libs
+
+      - name: Verify exact release SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f build/libs/SHA256SUMS
+          mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
+          if [[ "${#artifacts[@]}" -ne 17 ]]; then
+            echo "Expected exactly 17 downloaded artifacts, found ${#artifacts[@]}."
+            printf '%s\n' "${artifacts[@]}"
+            exit 1
+          fi
+          (
+            cd build/libs
+            sha256sum -c SHA256SUMS
+          )
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Restore target-scoped runtime cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            platform/forge/.gradle/mavenizer
+          key: packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          restore-keys: |
+            packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
+
+      - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
+        env:
+          PACKFORGE_FORGE_VERSION_OVERRIDE: ${{ matrix.forge_version }}
+          PACKFORGE_MINECRAFT_VERSION_OVERRIDE: ${{ matrix.minecraft_version }}
+          PACKFORGE_NEOFORGE_VERSION_OVERRIDE: ${{ matrix.neoforge_version }}
+          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.platform == 'neoforge' || (matrix.platform == 'fabric' && matrix.target == 'mc26_1_to_26_2') }}
+          PACKFORGE_ARTIFACT_INPUT_DIR: build/libs
+        run: |
+          # Packaged smoke is limited to official-mapped NeoForge and mc26 Fabric.
+          # Legacy Fabric and all Forge use source mode here; exact legacy Fabric
+          # final-JAR acceptance uses the production harness.
+          chmod +x gradlew scripts/smoke-client.sh
+          ./scripts/smoke-client.sh "${{ matrix.platform }}" "${{ matrix.target }}" 900
+
+      - name: Upload client logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
+          path: |
+            platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/latest.log
+            platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/packforge-smoke-gradle.log
+          if-no-files-found: warn
+
+  benchmark:
+    name: 1.21.1 Fabric release benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Restore benchmark cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: packforge-benchmark-${{ runner.os }}-mc1_21_1-fabric-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          restore-keys: |
+            packforge-benchmark-${{ runner.os }}-mc1_21_1-fabric-
+
+      - name: Enforce warm, cold, and resource-equivalence gates
+        run: |
+          chmod +x gradlew scripts/smoke-client.sh scripts/benchmark-client.sh
+          ./scripts/benchmark-client.sh fabric mc1_21_1 build/runtime-benchmark/mc1_21_1-fabric 900
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-mc1_21_1-fabric
+          path: |
+            build/runtime-benchmark/mc1_21_1-fabric
+            platform/fabric/run/mc1_21_1/logs/latest.log
+            platform/fabric/run/mc1_21_1/logs/packforge-smoke-gradle.log
+          if-no-files-found: warn

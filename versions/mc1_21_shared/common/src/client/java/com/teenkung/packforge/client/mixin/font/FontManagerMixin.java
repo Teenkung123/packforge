@@ -1,15 +1,17 @@
 package com.teenkung.packforge.client.mixin.font;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.mojang.blaze3d.font.GlyphProvider;
 import com.teenkung.packforge.client.font.FontPreparationBundle;
 import com.teenkung.packforge.client.font.FontReloadDiagnostics;
 import com.teenkung.packforge.client.font.FontSelectionRegistry;
-import com.teenkung.packforge.config.FeatureFlags;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.font.FontManager;
 import net.minecraft.client.gui.font.FontOption;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.profiling.ProfilerFiller;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,19 +21,44 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 @Mixin(FontManager.class)
 public abstract class FontManagerMixin {
+	@WrapOperation(
+		method = "apply",
+		at = @At(
+			value = "INVOKE",
+			target = "Ljava/util/Map;forEach(Ljava/util/function/BiConsumer;)V"
+		)
+	)
+	private void packforge$bindFontId(
+		Map<ResourceLocation, List<GlyphProvider.Conditional>> fontSets,
+		BiConsumer<ResourceLocation, List<GlyphProvider.Conditional>> action,
+		Operation<Void> original
+	) {
+		original.call(fontSets, (BiConsumer<ResourceLocation, List<GlyphProvider.Conditional>>) (id, providers) -> {
+			FontSelectionRegistry.beginFontSet(id);
+			try {
+				action.accept(id, providers);
+			} finally {
+				FontSelectionRegistry.endFontSet();
+			}
+		});
+	}
+
 	@Inject(method = "prepare", at = @At("RETURN"), cancellable = true)
 	private void packforge$prepare(
 		ResourceManager manager,
 		Executor executor,
 		CallbackInfoReturnable<CompletableFuture<?>> cir
 	) {
-		if (!FeatureFlags.fontPrepareProviderSelectionEnabled() && !FeatureFlags.fontReloadDiagnosticsEnabled()) {
+		if (!FontSelectionRegistry.preparationHooksEnabled()) {
 			return;
 		}
 		Set<FontOption> options = packforge$options(Minecraft.getInstance().options);

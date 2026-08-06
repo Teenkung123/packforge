@@ -2,255 +2,167 @@ package com.teenkung.packforge.client.mixin.atlas;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.teenkung.packforge.client.atlas.AtlasTimings;
-import com.teenkung.packforge.PackForge;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.teenkung.packforge.client.atlas.AtlasReport;
+import com.teenkung.packforge.client.atlas.AtlasLoadInvocation;
 import com.teenkung.packforge.client.atlas.AtlasRetry;
+import com.teenkung.packforge.client.atlas.AtlasTimings;
+import com.teenkung.packforge.client.atlas.BoundedSpriteDecode;
 import com.teenkung.packforge.client.atlas.CappedSpriteResourceLoader;
+import com.teenkung.packforge.client.atlas.SpriteMetadataCache;
 import com.teenkung.packforge.client.compat.ResourcePackUnboundedBridge;
-import com.teenkung.packforge.config.FeatureFlags;
-import net.minecraft.CrashReport;
-import net.minecraft.CrashReportCategory;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.Options;
-import net.minecraft.client.TextureFilteringMethod;
-import net.minecraft.ReportedException;
-import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.SpriteLoader;
-import net.minecraft.client.renderer.texture.Stitcher;
-import net.minecraft.client.renderer.texture.StitcherException;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.atlas.SpriteResourceLoader;
 import net.minecraft.client.renderer.texture.atlas.SpriteSource;
-import net.minecraft.client.renderer.texture.atlas.SpriteSourceList;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.metadata.MetadataSectionType;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.util.Mth;
-import net.minecraft.util.Util;
-import net.minecraft.util.profiling.Profiler;
-import net.minecraft.util.profiling.Zone;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.gen.Invoker;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.HashMap;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.stream.Collectors;
 
+/** Narrow mc26 sprite hooks; vanilla load/stitch control flow remains authoritative. */
 @Mixin(SpriteLoader.class)
 public abstract class SpriteLoaderMixin {
 	@Shadow @Final private Identifier location;
-	@Shadow @Final private int maxSupportedTextureSize;
+	@Unique private static final ThreadLocal<Deque<AtlasLoadInvocation>> PACKFORGE_ATLAS_LOADS = ThreadLocal.withInitial(ArrayDeque::new);
 
-	@Invoker("getStitchedSprites")
-	protected abstract Map<Identifier, TextureAtlasSprite> packforge$getStitchedSprites(Stitcher<SpriteContents> stitcher, int atlasWidth, int atlasHeight);
-
-	@Redirect(
+	@WrapOperation(
 		method = "loadAndStitch",
 		at = @At(
 			value = "INVOKE",
 			target = "Lnet/minecraft/client/renderer/texture/atlas/SpriteResourceLoader;create(Ljava/util/Set;)Lnet/minecraft/client/renderer/texture/atlas/SpriteResourceLoader;"
 		)
 	)
-	private SpriteResourceLoader packforge$wrapLoader(Set<MetadataSectionType<?>> additional) {
-		if (packforge$resourcePackUnboundedOwnsAtlas()
-			|| !FeatureFlags.atlasCapEnabled()
-			|| FeatureFlags.atlasExcludes(this.location.toString())) {
-			return SpriteResourceLoader.create(additional);
+	private SpriteResourceLoader packforge$wrapLoader(
+		Set<MetadataSectionType<?>> additional,
+		Operation<SpriteResourceLoader> original
+	) {
+		SpriteResourceLoader vanilla = original.call(additional);
+		BoundedSpriteDecode.Plan plan = BoundedSpriteDecode.capturePlan();
+		if (packforge$resourcePackUnboundedOwnsAtlas()) {
+			return vanilla;
 		}
-		return new CappedSpriteResourceLoader(this.location, additional);
-	}
-
-	@Inject(method = "loadAndStitch", at = @At("RETURN"))
-	private void packforge$reportAtlas(CallbackInfoReturnable<CompletableFuture<SpriteLoader.Preparations>> cir) {
-		cir.getReturnValue().thenRun(() -> {
-			if (!packforge$resourcePackUnboundedOwnsAtlas()) {
-				AtlasReport.logAtlas(this.location);
-			}
-			AtlasTimings.logAtlas(this.location);
-		});
+		if (plan.atlasCapApplies(this.location.toString())) {
+			AtlasRetry.logCapUnavailable(this.location);
+		}
+		if (!plan.atlasRetryApplies(this.location.toString())) {
+			return vanilla;
+		}
+		AtlasLoadInvocation invocation = PACKFORGE_ATLAS_LOADS.get().peek();
+		if (invocation == null || invocation.state() != null) {
+			AtlasRetry.logRetryUnavailable(this.location);
+			return vanilla;
+		}
+		SpriteMetadataCache.AtlasState state = SpriteMetadataCache.bind(this.location, plan);
+		invocation.bindState(state);
+		return CappedSpriteResourceLoader.wrap(vanilla, state);
 	}
 
 	@WrapMethod(method = "loadAndStitch")
-	private CompletableFuture<SpriteLoader.Preparations> packforge$timeLoadAndStitch(
-		ResourceManager manager,
-		Identifier atlasInfoLocation,
-		int maxMipmapLevels,
-		Executor taskExecutor,
-		Set<MetadataSectionType<?>> additionalMetadata,
+	private CompletableFuture<SpriteLoader.Preparations> packforge$associateAtlasState(
+		ResourceManager resourceManager,
+		Identifier atlasId,
+		int mipLevel,
+		Executor executor,
+		Set<MetadataSectionType<?>> additional,
 		Operation<CompletableFuture<SpriteLoader.Preparations>> original
 	) {
-		if (packforge$resourcePackUnboundedOwnsAtlas()) {
-			return original.call(manager, atlasInfoLocation, maxMipmapLevels, taskExecutor, additionalMetadata);
-		}
-		if (!FeatureFlags.atlasPhaseTimingsEnabled() && !FeatureFlags.atlasDecodeBatchingEnabled()) {
-			return original.call(manager, atlasInfoLocation, maxMipmapLevels, taskExecutor, additionalMetadata);
-		}
-		SpriteResourceLoader spriteResourceLoader = packforge$createResourceLoader(additionalMetadata);
-		return CompletableFuture.supplyAsync(() -> {
-			long startNs = AtlasTimings.start();
-			List<SpriteSource.Loader> loaders = SpriteSourceList.load(manager, atlasInfoLocation).list(manager);
-			AtlasTimings.recordSource(this.location, startNs);
-			return loaders;
-		}, taskExecutor).thenCompose(loaders -> {
-			long startNs = AtlasTimings.start();
-			List<CompletableFuture<List<SpriteContents>>> spriteFutures = packforge$decodeSpriteBatches(loaders, spriteResourceLoader, taskExecutor);
-			return Util.sequence(spriteFutures).thenApply(batches -> {
-				AtlasTimings.recordDecode(this.location, startNs);
-				return batches.stream().flatMap(List::stream).filter(Objects::nonNull).toList();
+		Identifier atlas = this.location;
+		AtlasLoadInvocation invocation = new AtlasLoadInvocation(
+			atlas,
+			ResourcePackUnboundedBridge.configuredOwner(atlas)
+		);
+		Deque<AtlasLoadInvocation> invocations = PACKFORGE_ATLAS_LOADS.get();
+		invocations.push(invocation);
+		try {
+			CompletableFuture<SpriteLoader.Preparations> future = original.call(resourceManager, atlasId, mipLevel, executor, additional);
+			SpriteMetadataCache.AtlasState state = invocation.state();
+			if (state == null) {
+				return future;
+			}
+			if (future == null) {
+				SpriteMetadataCache.fail(state, null);
+				return null;
+			}
+			future.whenComplete((ignored, error) -> {
+				if (error != null) {
+					SpriteMetadataCache.fail(state, null);
+				} else {
+					AtlasReport.logAtlas(atlas, state);
+					SpriteMetadataCache.finish(state);
+				}
+				AtlasTimings.logAtlas(atlas);
 			});
-		}).thenApply(sprites -> this.packforge$stitchWithFeatures(sprites, maxMipmapLevels, taskExecutor));
+			return future;
+		} catch (RuntimeException | Error failure) {
+			SpriteMetadataCache.fail(invocation.state(), null);
+			throw failure;
+		} finally {
+			invocations.removeFirstOccurrence(invocation);
+			if (invocations.isEmpty()) {
+				PACKFORGE_ATLAS_LOADS.remove();
+			}
+		}
 	}
 
 	@WrapMethod(method = "stitch")
-	private SpriteLoader.Preparations packforge$retryStitch(List<SpriteContents> sprites, int maxMipmapLevels, Executor executor, Operation<SpriteLoader.Preparations> original) {
-		if (packforge$resourcePackUnboundedOwnsAtlas()) {
-			return original.call(sprites, maxMipmapLevels, executor);
+	private SpriteLoader.Preparations packforge$retryOriginalStitch(
+		List<SpriteContents> sprites,
+		int mipLevel,
+		Executor executor,
+		Operation<SpriteLoader.Preparations> original
+	) {
+		SpriteMetadataCache.AtlasState state = SpriteMetadataCache.findState(this.location, sprites);
+		if (state == null) {
+			return original.call(sprites, mipLevel, executor);
 		}
-		if (!FeatureFlags.atlasRetryEnabled() && !FeatureFlags.atlasMipParallelEnabled() && !FeatureFlags.atlasPhaseTimingsEnabled()) {
-			return original.call(sprites, maxMipmapLevels, executor);
-		}
-		return packforge$stitchWithFeatures(sprites, maxMipmapLevels, executor);
+		return AtlasRetry.stitch(
+			this.location,
+			sprites,
+			mipLevel,
+			executor,
+			(originalSprites, originalMipLevel, originalExecutor) ->
+				original.call(originalSprites, originalMipLevel, originalExecutor),
+			state
+		);
 	}
 
-	private SpriteLoader.Preparations packforge$stitchWithFeatures(List<SpriteContents> sprites, int maxMipmapLevels, Executor executor) {
-		if (!FeatureFlags.atlasRetryEnabled() || FeatureFlags.atlasExcludes(this.location.toString())) {
-			return packforge$stitchOnce(sprites, maxMipmapLevels, executor);
+	@WrapMethod(method = "runSpriteSuppliers")
+	private static CompletableFuture<List<SpriteContents>> packforge$decodeBounded(
+		SpriteResourceLoader resourceLoader,
+		List<SpriteSource.Loader> loaders,
+		Executor executor,
+		Operation<CompletableFuture<List<SpriteContents>>> original
+	) {
+		AtlasLoadInvocation invocation = PACKFORGE_ATLAS_LOADS.get().peek();
+		if (invocation != null && invocation.resourcePackUnboundedOwner()) {
+			return original.call(resourceLoader, loaders, executor);
 		}
-		int maxAttempts = FeatureFlags.atlasRetryMaxAttempts();
-		List<SpriteContents> current = sprites;
-		ReportedException last = null;
-		for (int attempt = 0; attempt <= maxAttempts; attempt++) {
-			try {
-				return packforge$stitchOnce(current, maxMipmapLevels, executor);
-			} catch (ReportedException e) {
-				if (!(e.getCause() instanceof StitcherException)) throw e;
-				last = e;
-				if (attempt == maxAttempts) break;
-				PackForge.LOGGER.warn("PackForge atlas {} stitch failed (attempt {}); retrying with halved sprites", this.location, attempt + 1);
-				current = AtlasRetry.halveAll(current, this.location);
-			}
-		}
-		PackForge.LOGGER.error("PackForge atlas {} retry exhausted after {} attempts", this.location, maxAttempts);
-		throw last;
-	}
 
-	private SpriteLoader.Preparations packforge$stitchOnce(List<SpriteContents> sprites, int maxMipmapLevels, Executor executor) {
-		long stitchStartNs = AtlasTimings.start();
-		try (Zone ignored = Profiler.get().zone(() -> "stitch " + this.location)) {
-			int mipLevel;
-			int maxTextureSize = this.maxSupportedTextureSize;
-			int minTexelSize = Integer.MAX_VALUE;
-			int lowestOneBit = 1 << maxMipmapLevels;
-			for (SpriteContents spriteInfo : sprites) {
-				minTexelSize = Math.min(minTexelSize, Math.min(spriteInfo.width(), spriteInfo.height()));
-				int lowestTextureBit = Math.min(Integer.lowestOneBit(spriteInfo.width()), Integer.lowestOneBit(spriteInfo.height()));
-				if (lowestTextureBit >= lowestOneBit) continue;
-				PackForge.LOGGER.warn("Texture {} with size {}x{} limits mip level from {} to {}", spriteInfo.name(), spriteInfo.width(), spriteInfo.height(), Mth.log2(lowestOneBit), Mth.log2(lowestTextureBit));
-				lowestOneBit = lowestTextureBit;
-			}
-			int minSize = Math.min(minTexelSize, lowestOneBit);
-			int minPowerOfTwo = Mth.log2(minSize);
-			if (minPowerOfTwo < maxMipmapLevels) {
-				PackForge.LOGGER.warn("{}: dropping miplevel from {} to {}, because of minimum power of two: {}", this.location, maxMipmapLevels, minPowerOfTwo, minSize);
-				mipLevel = minPowerOfTwo;
-			} else {
-				mipLevel = maxMipmapLevels;
-			}
-			Options options = Minecraft.getInstance().options;
-			int anisotropyBit = options.textureFiltering().get() != TextureFilteringMethod.ANISOTROPIC ? 0 : options.maxAnisotropyBit().get();
-			Stitcher<SpriteContents> stitcher = new Stitcher<>(maxTextureSize, maxTextureSize, mipLevel, anisotropyBit);
-			for (SpriteContents spriteInfo : sprites) {
-				stitcher.registerSprite(spriteInfo);
-			}
-			try {
-				stitcher.stitch();
-			} catch (StitcherException e) {
-				CrashReport report = CrashReport.forThrowable(e, "Stitching");
-				CrashReportCategory category = report.addCategory("Stitcher");
-				category.setDetail("Sprites", e.getAllSprites().stream().map(s -> String.format(Locale.ROOT, "%s[%dx%d]", s.name(), s.width(), s.height())).collect(Collectors.joining(",")));
-				category.setDetail("Max Texture Size", maxTextureSize);
-				throw new ReportedException(report);
-			}
-			int width = stitcher.getWidth();
-			int height = stitcher.getHeight();
-			Map<Identifier, TextureAtlasSprite> result = new HashMap<>(this.packforge$getStitchedSprites(stitcher, width, height));
-			TextureAtlasSprite missingSprite = result.get(MissingTextureAtlasSprite.getLocation());
-			AtlasTimings.recordStitch(this.location, stitchStartNs);
-			int finalMipLevel = mipLevel;
-			CompletableFuture<Void> readyForUpload = FeatureFlags.atlasMipParallelEnabled()
-				? packforge$mipParallel(result, finalMipLevel, executor)
-				: CompletableFuture.runAsync(() -> {
-					long startNs = AtlasTimings.start();
-					result.values().forEach(sprite -> sprite.contents().increaseMipLevel(finalMipLevel));
-					AtlasTimings.recordMip(this.location, startNs);
-				}, executor);
-			return new SpriteLoader.Preparations(width, height, mipLevel, missingSprite, result, readyForUpload);
+		BoundedSpriteDecode.Plan plan = BoundedSpriteDecode.capturePlan();
+		if (!plan.decodeEnabled() && !plan.phaseTimingsEnabled()) {
+			return original.call(resourceLoader, loaders, executor);
 		}
-	}
 
-	private CompletableFuture<Void> packforge$mipParallel(Map<Identifier, TextureAtlasSprite> result, int mipLevel, Executor executor) {
-		List<TextureAtlasSprite> sprites = List.copyOf(result.values());
-		int batchSize = Math.max(16, FeatureFlags.atlasMipBatchSize());
-		CompletableFuture<?>[] jobs = new CompletableFuture<?>[(sprites.size() + batchSize - 1) / batchSize];
 		long startNs = AtlasTimings.start();
-		for (int i = 0; i < jobs.length; i++) {
-			int from = i * batchSize;
-			int to = Math.min(sprites.size(), from + batchSize);
-			jobs[i] = CompletableFuture.runAsync(() -> {
-				for (int index = from; index < to; index++) {
-					sprites.get(index).contents().increaseMipLevel(mipLevel);
-				}
-			}, executor);
-		}
-		return CompletableFuture.allOf(jobs).whenComplete((ignored, error) -> AtlasTimings.recordMip(this.location, startNs));
-	}
-
-	private SpriteResourceLoader packforge$createResourceLoader(Set<MetadataSectionType<?>> additional) {
-		if (packforge$resourcePackUnboundedOwnsAtlas()
-			|| !FeatureFlags.atlasCapEnabled()
-			|| FeatureFlags.atlasExcludes(this.location.toString())) {
-			return SpriteResourceLoader.create(additional);
-		}
-		return new CappedSpriteResourceLoader(this.location, additional);
-	}
-
-	private List<CompletableFuture<List<SpriteContents>>> packforge$decodeSpriteBatches(List<SpriteSource.Loader> loaders, SpriteResourceLoader spriteResourceLoader, Executor executor) {
-		if (!FeatureFlags.atlasDecodeBatchingEnabled()) {
-			return loaders.stream()
-				.map(loader -> CompletableFuture.supplyAsync(() -> java.util.Collections.singletonList(loader.get(spriteResourceLoader)), executor))
-				.toList();
-		}
-		int batchSize = Math.max(16, FeatureFlags.atlasDecodeBatchSize());
-		return java.util.stream.IntStream.range(0, (loaders.size() + batchSize - 1) / batchSize)
-			.mapToObj(batch -> {
-				int from = batch * batchSize;
-				int to = Math.min(loaders.size(), from + batchSize);
-				return CompletableFuture.supplyAsync(() -> {
-					java.util.ArrayList<SpriteContents> sprites = new java.util.ArrayList<>(to - from);
-					for (int index = from; index < to; index++) {
-						SpriteContents sprite = loaders.get(index).get(spriteResourceLoader);
-						if (sprite != null) {
-							sprites.add(sprite);
-						}
-					}
-					return List.copyOf(sprites);
-				}, executor);
-			})
-			.toList();
+		String atlas = invocation == null ? "unknown" : invocation.atlas().toString();
+		CompletableFuture<List<SpriteContents>> future = plan.decodeEnabled()
+			? BoundedSpriteDecode.decode(loaders, executor, plan, loader -> loader.get(resourceLoader))
+			: original.call(resourceLoader, loaders, executor);
+		return plan.phaseTimingsEnabled()
+			? future.whenComplete((ignored, error) -> AtlasTimings.recordDecode(atlas, startNs))
+			: future;
 	}
 
 	private boolean packforge$resourcePackUnboundedOwnsAtlas() {

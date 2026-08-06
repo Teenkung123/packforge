@@ -1,125 +1,125 @@
 package com.teenkung.packforge.loader;
 
 import com.teenkung.packforge.PackForge;
-import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.platform.PackForgeServices;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.LongAdder;
 
+/** Reload counters and listener timings scoped to one immutable feature snapshot. */
 public final class LoaderTimings {
-	private static final AtomicLong getResourceCalls = new AtomicLong();
-	private static final AtomicLong getNamespacesCalls = new AtomicLong();
-	private static final AtomicLong listResourcesCalls = new AtomicLong();
-	private static final AtomicLong fullScansAvoided = new AtomicLong();
-	private static final ConcurrentHashMap<String, ListenerTiming> listenerTimings = new ConcurrentHashMap<>();
-	private static volatile long reloadStartNs;
-	private static volatile long reloadSessionId;
-
 	public static void recordGetResource() {
-		if (!FeatureFlags.loaderTimingsEnabled()) return;
-		getResourceCalls.incrementAndGet();
+		recordGetResource(ReloadExecutionContext.current());
 	}
 
-	public static void recordGetNamespaces() {
-		if (!FeatureFlags.loaderTimingsEnabled()) return;
-		getNamespacesCalls.incrementAndGet();
-		fullScansAvoided.incrementAndGet();
-	}
-
-	public static void recordListResources() {
-		if (!FeatureFlags.loaderTimingsEnabled()) return;
-		listResourcesCalls.incrementAndGet();
-		fullScansAvoided.incrementAndGet();
-	}
-
-	public static void onReloadStart() {
-		ReloadHooks.fireStart();
-		reloadSessionId = ReloadSessionTracker.current().id();
-		reloadStartNs = System.nanoTime();
-		if (!FeatureFlags.loaderTimingsEnabled() && !FeatureFlags.reloadListenerTimingsEnabled()) return;
-		getResourceCalls.set(0);
-		getNamespacesCalls.set(0);
-		listResourcesCalls.set(0);
-		fullScansAvoided.set(0);
-		listenerTimings.clear();
-	}
-
-	public static void onReloadEnd(Throwable error) {
-		if (!FeatureFlags.loaderTimingsEnabled()) return;
-		long elapsedMs = (System.nanoTime() - reloadStartNs) / 1_000_000L;
-		long gr = getResourceCalls.get();
-		long gn = getNamespacesCalls.get();
-		long lr = listResourcesCalls.get();
-		long avoided = fullScansAvoided.get();
-		PackForge.LOGGER.info("PackForge reload complete: id={} elapsed={}ms status={} getResource={} getNamespaces={} listResources={} fullScansAvoided={}",
-			reloadSessionId, elapsedMs, error == null ? "ok" : "failed", gr, gn, lr, avoided);
-		writeReloadCountersCsvAsync(reloadSessionId, elapsedMs, gr, gn, lr, avoided);
-	}
-
-	private static void writeReloadCountersCsvAsync(long sessionId, long elapsedMs, long gr, long gn, long lr, long avoided) {
-		CompletableFuture.runAsync(() -> writeReloadCountersCsv(sessionId, elapsedMs, gr, gn, lr, avoided), backgroundExecutor());
-	}
-
-	private static void writeReloadCountersCsv(long sessionId, long elapsedMs, long gr, long gn, long lr, long avoided) {
-		try {
-			Path csv = Path.of("logs", "packforge-timings.csv");
-			Files.createDirectories(csv.getParent());
-			boolean exists = Files.exists(csv);
-			try (var w = Files.newBufferedWriter(csv, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
-				if (!exists) w.write("timestamp,reload_id,elapsed_ms,getResource,getNamespaces,listResources,fullScansAvoided\n");
-				w.write(System.currentTimeMillis() + "," + sessionId + "," + elapsedMs + "," + gr + "," + gn + "," + lr + "," + avoided + "\n");
-			}
-		} catch (IOException e) {
-			PackForge.LOGGER.warn("Failed to write timings CSV", e);
+	public static void recordGetResource(ReloadExecutionContext context) {
+		if (loaderTimingsEnabled(context)) {
+			context.metrics().recordGetResource();
 		}
 	}
 
+	public static void recordGetNamespaces() {
+		recordGetNamespaces(ReloadExecutionContext.current());
+	}
+
+	public static void recordGetNamespaces(ReloadExecutionContext context) {
+		if (loaderTimingsEnabled(context)) {
+			context.metrics().recordGetNamespaces();
+		}
+	}
+
+	public static void recordListResources() {
+		recordListResources(ReloadExecutionContext.current());
+	}
+
+	public static void recordListResources(ReloadExecutionContext context) {
+		if (loaderTimingsEnabled(context)) {
+			context.metrics().recordListResources();
+		}
+	}
+
+	public static void onReloadStart() {
+		onReloadStart(ReloadExecutionContext.current());
+	}
+
+	public static void onReloadStart(ReloadExecutionContext context) {
+		if (context != null) {
+			ReloadHooks.fireStart();
+		}
+	}
+
+	public static void onReloadEnd(Throwable error) {
+		onReloadEnd(ReloadExecutionContext.current(), error);
+	}
+
+	public static void onReloadEnd(ReloadExecutionContext context, Throwable error) {
+		if (!current(context) || !loaderTimingsEnabled(context)) {
+			return;
+		}
+		long elapsedMs = context.metrics().elapsedNs() / 1_000_000L;
+		ReloadMetrics.CounterSnapshot counters = context.metrics().counters();
+		PackForge.LOGGER.info("PackForge reload complete: id={} elapsed={}ms status={} getResource={} getNamespaces={} listResources={} fullScansAvoided={}",
+			context.reloadId(), elapsedMs, error == null ? "ok" : "failed",
+			counters.getResourceCalls(), counters.getNamespacesCalls(),
+			counters.listResourcesCalls(), counters.fullScansAvoided());
+		writeReloadCountersCsvAsync(context.reloadId(), elapsedMs, counters);
+	}
+
 	public static void recordListenerWall(String listenerName, long elapsedNs) {
-		if (!FeatureFlags.reloadListenerTimingsEnabled()) return;
-		timing(listenerName).wallNs.add(elapsedNs);
+		recordListenerWall(ReloadExecutionContext.current(), listenerName, elapsedNs);
+	}
+
+	public static void recordListenerWall(ReloadExecutionContext context, String listenerName, long elapsedNs) {
+		if (listenerTimingsEnabled(context)) {
+			context.metrics().recordListenerWall(listenerName, elapsedNs);
+		}
 	}
 
 	public static void recordListenerPrepare(String listenerName, long elapsedNs) {
-		if (!FeatureFlags.reloadListenerTimingsEnabled()) return;
-		ListenerTiming timing = timing(listenerName);
-		timing.prepareNs.add(elapsedNs);
-		timing.prepareTasks.increment();
-		timing.prepareMaxNs.accumulateAndGet(elapsedNs, Math::max);
+		recordListenerPrepare(ReloadExecutionContext.current(), listenerName, elapsedNs);
+	}
+
+	public static void recordListenerPrepare(ReloadExecutionContext context, String listenerName, long elapsedNs) {
+		if (listenerTimingsEnabled(context)) {
+			context.metrics().recordListenerPrepare(listenerName, elapsedNs);
+		}
 	}
 
 	public static void recordListenerApply(String listenerName, long elapsedNs) {
-		if (!FeatureFlags.reloadListenerTimingsEnabled()) return;
-		ListenerTiming timing = timing(listenerName);
-		timing.applyNs.add(elapsedNs);
-		timing.applyTasks.increment();
-		timing.applyMaxNs.accumulateAndGet(elapsedNs, Math::max);
+		recordListenerApply(ReloadExecutionContext.current(), listenerName, elapsedNs);
+	}
+
+	public static void recordListenerApply(ReloadExecutionContext context, String listenerName, long elapsedNs) {
+		if (listenerTimingsEnabled(context)) {
+			context.metrics().recordListenerApply(listenerName, elapsedNs);
+		}
 	}
 
 	public static void onReloadComplete(Throwable error) {
-		if (!FeatureFlags.reloadListenerTimingsEnabled()) return;
-		long elapsedMs = (System.nanoTime() - reloadStartNs) / 1_000_000L;
-		List<ListenerReport> reports = listenerTimings.entrySet().stream()
-			.map(entry -> ListenerReport.from(entry.getKey(), entry.getValue()))
+		onReloadComplete(ReloadExecutionContext.current(), error);
+	}
+
+	public static void onReloadComplete(ReloadExecutionContext context, Throwable error) {
+		if (!current(context) || !listenerTimingsEnabled(context)) {
+			return;
+		}
+		long elapsedMs = context.metrics().elapsedNs() / 1_000_000L;
+		List<ListenerReport> reports = context.metrics().listenerSnapshots().stream()
+			.map(ListenerReport::from)
 			.sorted(Comparator.comparingLong(ListenerReport::activeMs).reversed())
 			.toList();
 		if (reports.isEmpty()) {
 			return;
 		}
 
-		ReloadSessionTracker.ReloadSession session = ReloadSessionTracker.current();
-		PackForge.LOGGER.info("PackForge Loading Summary: id={} elapsed={}ms status={} source={} added={} removed={}",
-			session.id(), elapsedMs, error == null ? "ok" : "failed", session.source(), session.added(), session.removed());
+		PackForge.LOGGER.info("PackForge Loading Summary: id={} elapsed={}ms status={}",
+			context.reloadId(), elapsedMs, error == null ? "ok" : "failed");
 		PackForge.LOGGER.info("PackForge Loading Summary: slowest active work");
 		for (ListenerReport report : reports.stream().filter(ListenerReport::hasActiveWork).limit(12).toList()) {
 			PackForge.LOGGER.info("  {} - {}ms active (prepare {}ms/{} tasks, max {}ms; apply {}ms/{} tasks, max {}ms; wall {}ms)",
@@ -139,12 +139,12 @@ public final class LoaderTimings {
 					report.name, report.applyMs, report.applyTasks, report.applyMaxMs);
 			}
 		}
-		logApplyStalls(session.id(), applyReports);
-		writeListenerCsvAsync(session.id(), elapsedMs, reports);
+		logApplyStalls(context, applyReports);
+		writeListenerCsvAsync(context.reloadId(), elapsedMs, reports);
 	}
 
-	private static void logApplyStalls(long sessionId, List<ListenerReport> applyReports) {
-		if (!FeatureFlags.shaderApplyStallDiagnosticsEnabled()) {
+	private static void logApplyStalls(ReloadExecutionContext context, List<ListenerReport> applyReports) {
+		if (!context.features().shaderApplyStallDiagnosticsEnabled()) {
 			return;
 		}
 		for (ListenerReport report : applyReports) {
@@ -154,17 +154,35 @@ public final class LoaderTimings {
 			}
 			if ("Shader Loader".equals(report.name)) {
 				PackForge.LOGGER.info("PackForge reload stall: id={} listener={} apply={}ms max={}ms reason=shader pipeline apply on render thread; observed only",
-					sessionId, report.name, report.applyMs, report.applyMaxMs);
+					context.reloadId(), report.name, report.applyMs, report.applyMaxMs);
 			} else {
 				PackForge.LOGGER.info("PackForge reload stall: id={} listener={} apply={}ms max={}ms reason=render-thread apply work",
-					sessionId, report.name, report.applyMs, report.applyMaxMs);
+					context.reloadId(), report.name, report.applyMs, report.applyMaxMs);
 			}
 		}
 	}
 
-	private static ListenerTiming timing(String listenerName) {
-		String name = listenerName == null || listenerName.isBlank() ? "unknown" : listenerName;
-		return listenerTimings.computeIfAbsent(name, ignored -> new ListenerTiming());
+	private static void writeReloadCountersCsvAsync(long sessionId, long elapsedMs, ReloadMetrics.CounterSnapshot counters) {
+		CompletableFuture.runAsync(
+			() -> writeReloadCountersCsv(sessionId, elapsedMs, counters),
+			backgroundExecutor()
+		);
+	}
+
+	private static void writeReloadCountersCsv(long sessionId, long elapsedMs, ReloadMetrics.CounterSnapshot counters) {
+		try {
+			Path csv = Path.of("logs", "packforge-timings.csv");
+			Files.createDirectories(csv.getParent());
+			boolean exists = Files.exists(csv);
+			try (var writer = Files.newBufferedWriter(csv, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
+				if (!exists) writer.write("timestamp,reload_id,elapsed_ms,getResource,getNamespaces,listResources,fullScansAvoided\n");
+				writer.write(System.currentTimeMillis() + "," + sessionId + "," + elapsedMs + "," +
+					counters.getResourceCalls() + "," + counters.getNamespacesCalls() + "," +
+					counters.listResourcesCalls() + "," + counters.fullScansAvoided() + "\n");
+			}
+		} catch (IOException exception) {
+			PackForge.LOGGER.warn("Failed to write timings CSV", exception);
+		}
 	}
 
 	private static void writeListenerCsvAsync(long sessionId, long elapsedMs, List<ListenerReport> reports) {
@@ -176,18 +194,18 @@ public final class LoaderTimings {
 			Path csv = Path.of("logs", "packforge-listener-timings.csv");
 			Files.createDirectories(csv.getParent());
 			boolean exists = Files.exists(csv);
-			try (var w = Files.newBufferedWriter(csv, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
+			try (var writer = Files.newBufferedWriter(csv, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
 				if (!exists) {
-					w.write("timestamp,reload_id,reload_elapsed_ms,listener,wall_ms,prepare_ms,prepare_tasks,prepare_max_ms,apply_ms,apply_tasks,apply_max_ms\n");
+					writer.write("timestamp,reload_id,reload_elapsed_ms,listener,wall_ms,prepare_ms,prepare_tasks,prepare_max_ms,apply_ms,apply_tasks,apply_max_ms\n");
 				}
 				long now = System.currentTimeMillis();
 				for (ListenerReport report : reports) {
-					w.write(now + "," + sessionId + "," + elapsedMs + "," + csv(report.name) + "," + report.wallMs + "," + report.prepareMs + "," +
+					writer.write(now + "," + sessionId + "," + elapsedMs + "," + csv(report.name) + "," + report.wallMs + "," + report.prepareMs + "," +
 						report.prepareTasks + "," + report.prepareMaxMs + "," + report.applyMs + "," + report.applyTasks + "," + report.applyMaxMs + "\n");
 				}
 			}
-		} catch (IOException e) {
-			PackForge.LOGGER.warn("Failed to write listener timings CSV", e);
+		} catch (IOException exception) {
+			PackForge.LOGGER.warn("Failed to write listener timings CSV", exception);
 		}
 	}
 
@@ -198,8 +216,16 @@ public final class LoaderTimings {
 		return "\"" + value.replace("\"", "\"\"") + "\"";
 	}
 
-	private static long ms(long ns) {
-		return ns / 1_000_000L;
+	private static boolean current(ReloadExecutionContext context) {
+		return ReloadExecutionContext.isCurrent(context);
+	}
+
+	private static boolean loaderTimingsEnabled(ReloadExecutionContext context) {
+		return context != null && context.features().loaderTimingsEnabled();
+	}
+
+	private static boolean listenerTimingsEnabled(ReloadExecutionContext context) {
+		return context != null && context.features().reloadListenerTimingsEnabled();
 	}
 
 	private static Executor backgroundExecutor() {
@@ -207,16 +233,6 @@ public final class LoaderTimings {
 	}
 
 	private LoaderTimings() {}
-
-	private static final class ListenerTiming {
-		final LongAdder wallNs = new LongAdder();
-		final LongAdder prepareNs = new LongAdder();
-		final LongAdder prepareTasks = new LongAdder();
-		final AtomicLong prepareMaxNs = new AtomicLong();
-		final LongAdder applyNs = new LongAdder();
-		final LongAdder applyTasks = new LongAdder();
-		final AtomicLong applyMaxNs = new AtomicLong();
-	}
 
 	private record ListenerReport(
 		String name,
@@ -228,29 +244,33 @@ public final class LoaderTimings {
 		long applyTasks,
 		long applyMaxMs
 	) {
-		static ListenerReport from(String name, ListenerTiming timing) {
+		static ListenerReport from(ReloadMetrics.ListenerSnapshot snapshot) {
 			return new ListenerReport(
-				name,
-				ms(timing.wallNs.sum()),
-				ms(timing.prepareNs.sum()),
-				timing.prepareTasks.sum(),
-				ms(timing.prepareMaxNs.get()),
-				ms(timing.applyNs.sum()),
-				timing.applyTasks.sum(),
-				ms(timing.applyMaxNs.get())
+				snapshot.name(),
+				ms(snapshot.wallNs()),
+				ms(snapshot.prepareNs()),
+				snapshot.prepareTasks(),
+				ms(snapshot.prepareMaxNs()),
+				ms(snapshot.applyNs()),
+				snapshot.applyTasks(),
+				ms(snapshot.applyMaxNs())
 			);
 		}
 
 		long activeMs() {
-			return this.prepareMs + this.applyMs;
+			return prepareMs + applyMs;
 		}
 
 		long applySortMs() {
-			return Math.max(this.applyMs, this.applyMaxMs);
+			return Math.max(applyMs, applyMaxMs);
 		}
 
 		boolean hasActiveWork() {
-			return this.prepareTasks > 0L || this.applyTasks > 0L || this.activeMs() > 0L;
+			return prepareTasks > 0L || applyTasks > 0L || activeMs() > 0L;
 		}
+	}
+
+	private static long ms(long ns) {
+		return Math.max(0L, ns / 1_000_000L);
 	}
 }

@@ -3,16 +3,23 @@ package com.teenkung.packforge.client.atlas;
 import com.teenkung.packforge.PackForge;
 import net.minecraft.resources.Identifier;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 public final class AtlasReport {
-	public static void logAtlas(Identifier atlasId) {
-		AtomicInteger spriteCount = SpriteMetadataCache.spriteCountByAtlas().get(atlasId);
-		AtomicInteger downCount = SpriteMetadataCache.downscaledByAtlas().get(atlasId);
-		int sprites = spriteCount == null ? 0 : spriteCount.get();
-		int downscaled = downCount == null ? 0 : downCount.get();
-		if (sprites == 0 && downscaled == 0) return;
-		PackForge.LOGGER.info("PackForge atlas {}: sprites={} downscaled={}", atlasId, sprites, downscaled);
+	public static void logAtlas(Identifier atlasId, SpriteMetadataCache.AtlasState state) {
+		if (state == null) {
+			return;
+		}
+		int sprites = state.spriteCount();
+		int replaced = state.replacementCount();
+		if (sprites == 0 && replaced == 0) {
+			return;
+		}
+		PackForge.LOGGER.info(
+			"PackForge atlas {}: sprites={} replacements={} stitchAttempts={}",
+			atlasId,
+			sprites,
+			replaced,
+			state.stitchAttempts()
+		);
 	}
 
 	private AtlasReport() {}

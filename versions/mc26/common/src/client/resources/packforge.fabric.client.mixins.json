@@ -5,6 +5,7 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"atlas.SpriteLoaderMixin",
+		"atlas.SpriteContentsMixin",
 		"atlas.TextureAtlasMixin",
 		"compat.ShaderManagerCompatMixin",
 		"compat.MinecraftGui26_1Mixin",

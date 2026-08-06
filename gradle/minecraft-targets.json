@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "defaultTarget": "mc26_1_to_26_2",
   "mixinExtrasVersion": "0.5.4",
+  "mixinExtrasFabricLoaderMinimum": "0.14.25",
   "fabricAsmVersion": "9.10.1",
   "fabricMixinVersion": "0.17.3+mixin.0.8.7",
   "targets": [
@@ -124,7 +125,7 @@
       "platforms": {
         "fabric": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "loomVersion": "1.17.16",
           "loaderVersion": "0.15.11",
           "loaderDependency": ">=0.15.11",
@@ -137,14 +138,14 @@
         },
         "forge": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "version": "1.21.1-52.0.0",
           "versionRange": "[52.0.0,53)",
           "minecraftVersionRange": "[1.21.1]"
         },
         "neoforge": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "version": "21.1.1",
           "versionRange": "[21.1.1,21.2)",
           "minecraftVersionRange": "[1.21.1]"
@@ -191,7 +192,7 @@
       "platforms": {
         "fabric": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "loomVersion": "1.17.16",
           "loaderVersion": "0.16.9",
           "loaderDependency": ">=0.16.9",
@@ -204,14 +205,14 @@
         },
         "forge": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "version": "1.21.4-54.0.0",
           "versionRange": "[54.0.0,55)",
           "minecraftVersionRange": "[1.21.4]"
         },
         "neoforge": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "version": "21.4.0-beta",
           "versionRange": "[21.4.0-beta,21.5)",
           "minecraftVersionRange": "[1.21.4]"
@@ -258,7 +259,7 @@
       "platforms": {
         "fabric": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "loomVersion": "1.17.16",
           "loaderVersion": "0.16.14",
           "loaderDependency": ">=0.16.14",
@@ -271,14 +272,14 @@
         },
         "forge": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "version": "1.21.8-58.0.0",
           "versionRange": "[58.0.0,59)",
           "minecraftVersionRange": "[1.21.8]"
         },
         "neoforge": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "version": "21.8.0-beta",
           "versionRange": "[21.8.0-beta,21.9)",
           "minecraftVersionRange": "[1.21.8]"
@@ -326,7 +327,7 @@
       "platforms": {
         "fabric": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "loomVersion": "1.17.16",
           "loaderVersion": "0.18.1",
           "loaderDependency": ">=0.18.1",
@@ -339,14 +340,14 @@
         },
         "forge": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "version": "1.21.11-61.0.1",
           "versionRange": "[61.0.1,62)",
           "minecraftVersionRange": "[1.21.11]"
         },
         "neoforge": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "version": "21.11.0-beta",
           "versionRange": "[21.11.0-beta,21.12)",
           "minecraftVersionRange": "[1.21.11]"
@@ -392,10 +393,10 @@
       "platforms": {
         "fabric": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "loomVersion": "1.17.16",
-          "loaderVersion": "0.14.19",
-          "loaderDependency": ">=0.14.19",
+          "loaderVersion": "0.14.25",
+          "loaderDependency": ">=0.14.25",
           "fabricApiVersion": "0.92.11+1.20.1",
           "minecraftDependency": "=1.20.1",
           "mappingMode": "named",
@@ -405,7 +406,7 @@
         },
         "forge": {
           "maturity": "beta",
-          "versionSuffix": "-beta.1",
+          "versionSuffix": "-beta.2",
           "version": "1.20.1-47.0.0",
           "versionRange": "[47.0.0,48)",
           "minecraftVersionRange": "[1.20.1]"

@@ -10,6 +10,20 @@ if (registry.schemaVersion != 1) {
 	throw new GradleException("Unsupported PackForge target registry schema: ${registry.schemaVersion}")
 }
 
+def compareNumericVersions = { left, right ->
+	def leftParts = left.toString().tokenize('.').collect { it as int }
+	def rightParts = right.toString().tokenize('.').collect { it as int }
+	int length = Math.max(leftParts.size(), rightParts.size())
+	for (int index = 0; index < length; index++) {
+		int leftPart = index < leftParts.size() ? leftParts[index] : 0
+		int rightPart = index < rightParts.size() ? rightParts[index] : 0
+		if (leftPart != rightPart) {
+			return leftPart <=> rightPart
+		}
+	}
+	return 0
+}
+
 def targets = registry.targets
 def targetKeys = targets.collect { it.key }
 if (targetKeys.size() != targetKeys.toSet().size()) {
@@ -132,6 +146,9 @@ def artifactName = { target, platform ->
 	def loader = target.platforms[platform.id]
 	"packforge-${platform.id}-${project.version}${loader.versionSuffix}-mc${target.artifactMinecraft}.jar"
 }
+def expectedArtifactNames = targets.collectMany { target ->
+	platformBuilds.findAll { targetSupports(target, it) }.collect { platform -> artifactName(target, platform) }
+}.sort()
 
 def readZipText = { ZipFile archive, String path ->
 	def entry = archive.getEntry(path)
@@ -140,6 +157,167 @@ def readZipText = { ZipFile archive, String path ->
 	}
 	archive.getInputStream(entry).withCloseable { input ->
 		new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+	}
+}
+
+def readZipBytes = { ZipFile archive, String path ->
+	def entry = archive.getEntry(path)
+	if (entry == null) {
+		throw new GradleException("Artifact is missing '${path}'.")
+	}
+	archive.getInputStream(entry).withCloseable { input -> input.readAllBytes() }
+}
+
+def inspectWrapOperationTargets = { byte[] classBytes ->
+	// Read only the annotation structures needed here, without depending on
+	// Gradle's internal ASM classpath.
+	def input = new java.io.DataInputStream(new java.io.ByteArrayInputStream(classBytes))
+	def state = [count: 0, targets: [:]]
+	def constantPool
+	def readUtf8 = { int index ->
+		def value = constantPool[index]
+		if (!(value instanceof String)) {
+			throw new GradleException("FilePackResources class has invalid constant-pool UTF-8 index ${index}.")
+		}
+		value
+	}
+	def skipFully = { java.io.DataInputStream stream, int length ->
+		int remaining = length
+		while (remaining > 0) {
+			int skipped = stream.skipBytes(remaining)
+			if (skipped <= 0) {
+				stream.readByte()
+				skipped = 1
+			}
+			remaining -= skipped
+		}
+	}
+	def consumeAnnotation
+	def consumeElementValue
+	consumeElementValue = { java.io.DataInputStream stream, int tag, boolean insideWrapOperation ->
+		switch (tag) {
+			case 66: case 67: case 68: case 70: case 73: case 74: case 83: case 90: case 115:
+				stream.readUnsignedShort()
+				break
+			case 101:
+				stream.readUnsignedShort()
+				stream.readUnsignedShort()
+				break
+			case 99:
+				stream.readUnsignedShort()
+				break
+			case 64:
+				consumeAnnotation(stream, insideWrapOperation)
+				break
+			case 91:
+				int valueCount = stream.readUnsignedShort()
+				valueCount.times { consumeElementValue(stream, stream.readUnsignedByte(), insideWrapOperation) }
+				break
+			default:
+				throw new GradleException("FilePackResources class has unsupported annotation element tag ${tag}.")
+		}
+	}
+	consumeAnnotation = { java.io.DataInputStream stream, boolean insideWrapOperation ->
+		def annotationDescriptor = readUtf8(stream.readUnsignedShort())
+		def isWrapOperation = annotationDescriptor == "Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;"
+		def operationScoped = insideWrapOperation || isWrapOperation
+		if (isWrapOperation) {
+			state.count++
+		}
+		int pairCount = stream.readUnsignedShort()
+		pairCount.times {
+			def elementName = readUtf8(stream.readUnsignedShort())
+			int tag = stream.readUnsignedByte()
+			if (operationScoped
+				&& annotationDescriptor == "Lorg/spongepowered/asm/mixin/injection/At;"
+				&& elementName == "target" && tag == 115) {
+				def target = readUtf8(stream.readUnsignedShort())
+				state.targets[target] = (state.targets[target] ?: 0) + 1
+			} else {
+				consumeElementValue(stream, tag, operationScoped)
+			}
+		}
+	}
+	try {
+		if (java.lang.Integer.toUnsignedLong(input.readInt()) != 0xCAFEBABEL) {
+			throw new GradleException("FilePackResources class has an invalid class-file header.")
+		}
+		input.readUnsignedShort()
+		input.readUnsignedShort()
+		int constantPoolCount = input.readUnsignedShort()
+		constantPool = new Object[constantPoolCount]
+		for (int index = 1; index < constantPoolCount; index++) {
+			switch (input.readUnsignedByte()) {
+				case 1:
+					byte[] bytes = new byte[input.readUnsignedShort()]
+					input.readFully(bytes)
+					constantPool[index] = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+					break
+				case 3: case 4:
+					input.readInt()
+					break
+				case 5: case 6:
+					input.readLong()
+					index++
+					break
+				case 7: case 8: case 16: case 19: case 20:
+					input.readUnsignedShort()
+					break
+				case 9: case 10: case 11: case 12: case 17: case 18:
+					input.readUnsignedShort()
+					input.readUnsignedShort()
+					break
+				case 15:
+					input.readUnsignedByte()
+					input.readUnsignedShort()
+					break
+				default:
+					throw new GradleException("FilePackResources class has an unsupported constant-pool tag.")
+			}
+		}
+		input.readUnsignedShort()
+		input.readUnsignedShort()
+		input.readUnsignedShort()
+		int interfaceCount = input.readUnsignedShort()
+		interfaceCount.times { input.readUnsignedShort() }
+		def skipMembers = {
+			int memberCount = input.readUnsignedShort()
+			memberCount.times {
+				input.readUnsignedShort()
+				input.readUnsignedShort()
+				input.readUnsignedShort()
+				int attributeCount = input.readUnsignedShort()
+				attributeCount.times {
+					input.readUnsignedShort()
+					int length = input.readInt()
+					skipFully(input, length)
+				}
+			}
+		}
+		skipMembers()
+		int methodCount = input.readUnsignedShort()
+		methodCount.times {
+			input.readUnsignedShort()
+			input.readUnsignedShort()
+			input.readUnsignedShort()
+			int attributeCount = input.readUnsignedShort()
+			attributeCount.times {
+				def attributeName = readUtf8(input.readUnsignedShort())
+				int length = input.readInt()
+				if (attributeName == "RuntimeVisibleAnnotations" || attributeName == "RuntimeInvisibleAnnotations") {
+					byte[] annotationBytes = new byte[length]
+					input.readFully(annotationBytes)
+					def annotationInput = new java.io.DataInputStream(new java.io.ByteArrayInputStream(annotationBytes))
+					int annotationCount = annotationInput.readUnsignedShort()
+					annotationCount.times { consumeAnnotation(annotationInput, false) }
+				} else {
+					skipFully(input, length)
+				}
+			}
+		}
+		state
+	} finally {
+		input.close()
 	}
 }
 
@@ -217,8 +395,84 @@ def verifyArtifact = { target, platform, File artifact ->
 		}
 		def clientMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.client.toString()))
 		def mainMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.main.toString()))
+		if ((mainMixin.mixins ?: []).contains("loader.CompositePackResourcesMixin")
+			|| names.contains("com/teenkung/packforge/mixin/loader/CompositePackResourcesMixin.class")) {
+			throw new GradleException("${artifact.name} retains the removed broad CompositePackResources mixin.")
+		}
+		if (target.key != "mc1_20_1"
+			&& !(mainMixin.mixins ?: []).contains("loader.SharedZipFileAccessMixin")) {
+			throw new GradleException("${artifact.name} is missing the SharedZipFileAccess bridge mixin required by FilePackResourcesMixin.")
+		}
+		def filePackMixinEntry = archive.getEntry("com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.class")
+		if (filePackMixinEntry == null) {
+			throw new GradleException("${artifact.name} is missing the operation-level FilePackResources mixin.")
+		}
+		def filePackBytes = readZipBytes(archive, "com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.class")
+		def filePackConstants = new String(filePackBytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+		def ioSupplierNamespace = platform.id == "fabric" && target.legacyApi ? "intermediary" : "named/official"
+		def ioSupplierOwner = ioSupplierNamespace == "intermediary"
+			? "Lnet/minecraft/class_7367;"
+			: "Lnet/minecraft/server/packs/resources/IoSupplier;"
+		def ioSupplierTarget = "${ioSupplierOwner}create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)${ioSupplierOwner}".toString()
+		def expectedOperationTargets = [
+			"Ljava/util/zip/ZipFile;getEntry(Ljava/lang/String;)Ljava/util/zip/ZipEntry;": 1,
+			"Ljava/util/zip/ZipFile;entries()Ljava/util/Enumeration;": 2,
+			(ioSupplierTarget): 2
+		]
+		def operationAudit = inspectWrapOperationTargets(filePackBytes)
+		def unexpectedOperationTargets = operationAudit.targets.findAll { targetDescriptor, actualCount ->
+			!expectedOperationTargets.containsKey(targetDescriptor)
+			|| expectedOperationTargets[targetDescriptor] != actualCount
+		}
+		def missingOperationTargets = expectedOperationTargets.findAll { targetDescriptor, expectedCount ->
+			(operationAudit.targets[targetDescriptor] ?: 0) != expectedCount
+		}
+		if (operationAudit.count != expectedOperationTargets.values().sum()
+			|| !unexpectedOperationTargets.isEmpty()
+			|| !missingOperationTargets.isEmpty()) {
+			throw new GradleException("${artifact.name} FilePackResources mixin has incorrect @WrapOperation targets for ${ioSupplierNamespace} namespace: ${operationAudit.targets}.")
+		}
+		if (!filePackConstants.contains("Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;")) {
+			throw new GradleException("${artifact.name} FilePackResources mixin is missing the @WrapOperation marker.")
+		}
+		if (filePackConstants.contains("CallbackInfoReturnable")
+			|| filePackConstants.contains("Lcom/llamalad7/mixinextras/injector/wrapmethod/WrapMethod;")) {
+			throw new GradleException("${artifact.name} FilePackResources mixin retains a broad public-method replacement hook.")
+		}
 		if (!clientMixin.client.contains("config.PackSelectionScreenMixin")) {
 			throw new GradleException("${artifact.name} does not register the resource-pack configuration button mixin.")
+		}
+		def configuredMixinClasses = [
+			[config: target.mixinConfigs.main.toString(), packageName: mainMixin.package, entries: mainMixin.mixins ?: []],
+			[config: target.mixinConfigs.client.toString(), packageName: clientMixin.package, entries: clientMixin.client ?: []]
+		]
+		configuredMixinClasses.each { mixinConfig ->
+			mixinConfig.entries.each { mixinName ->
+				def classPath = "${mixinConfig.packageName.toString().replace('.', '/')}/${mixinName.toString().replace('.', '/')}.class"
+				def classEntry = archive.getEntry(classPath)
+				if (classEntry == null) {
+					throw new GradleException("${artifact.name} registers ${mixinName} in ${mixinConfig.config} but does not package ${classPath}.")
+				}
+				if (platform.id != "fabric") {
+					def classConstants = archive.getInputStream(classEntry).withCloseable { input ->
+						new String(input.readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1)
+					}
+					def intermediarySelector = classConstants =~ /\b(?:method|field)_[0-9]+\b/
+					if (intermediarySelector.find()) {
+						throw new GradleException("${artifact.name} packages Fabric intermediary selector '${intermediarySelector.group()}' in configured mixin ${mixinName}.")
+					}
+				}
+			}
+		}
+		if (target.apiAdapter == "mc26") {
+			def atlasInvocationClass = "com/teenkung/packforge/client/atlas/AtlasLoadInvocation.class"
+			if (!names.contains(atlasInvocationClass)) {
+				throw new GradleException("${artifact.name} is missing the external mc26 atlas invocation state class.")
+			}
+			def nestedSpriteMixinPrefix = 'com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin$'
+			if (names.any { it.startsWith(nestedSpriteMixinPrefix) && it.endsWith('.class') }) {
+				throw new GradleException("${artifact.name} packages a directly loadable nested class under the mc26 SpriteLoader mixin package.")
+			}
 		}
 		capabilityContract.each { capability, contract ->
 			if (target.capabilities.contains(capability)) {
@@ -285,11 +539,37 @@ def verifyArtifact = { target, platform, File artifact ->
 				throw new GradleException("${artifact.name} has incorrect Forge dependency ranges.")
 			}
 			if (target.minecraftVersion == "1.20.1") {
+				def legacyRefmaps = []
 				[target.mixinConfigs.main, target.mixinConfigs.client].each { mixinPath ->
 					def mixin = new JsonSlurper().parseText(readZipText(archive, mixinPath.toString()))
 					if (!(mixin.refmap instanceof String) || mixin.refmap.isBlank() || archive.getEntry(mixin.refmap) == null) {
 						throw new GradleException("${artifact.name} is missing the generated legacy Forge Mixin refmap for ${mixinPath}.")
 					}
+					def refmapText = readZipText(archive, mixin.refmap)
+					def intermediarySelector = refmapText =~ /\b(?:method|field)_[0-9]+\b/
+					if (intermediarySelector.find()) {
+						throw new GradleException("${artifact.name} retains unmapped intermediary selector '${intermediarySelector.group()}' in ${mixin.refmap}.")
+					}
+					legacyRefmaps << new JsonSlurper().parseText(refmapText)
+				}
+
+				def legacyMappings = legacyRefmaps.collect { it.mappings ?: [:] }.inject([:]) { merged, mappings ->
+					merged.putAll(mappings as Map)
+					merged
+				}
+				def reloadMappings = legacyMappings["com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin"] as Map
+				def remappedStateFactoryHook = reloadMappings?.find { selector, mapped ->
+					selector.toString().startsWith("Lnet/minecraft/server/packs/resources/SimpleReloadInstance\$StateFactory;create(")
+						&& mapped.toString().contains(";m_")
+				}
+				if (remappedStateFactoryHook == null || !reloadMappings.containsKey("<init>")) {
+					throw new GradleException("${artifact.name} is missing the remapped structural SimpleReloadInstance constructor/StateFactory hook required by Forge 1.20.1.")
+				}
+
+				def spriteMappings = legacyMappings["com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin"] as Map
+				def remappedAtlasHook = spriteMappings?.get("loadAndStitch")?.toString()
+				if (remappedAtlasHook == null || !remappedAtlasHook.contains(";m_")) {
+					throw new GradleException("${artifact.name} is missing the remapped structural SpriteLoader loadAndStitch hook required by Forge 1.20.1.")
 				}
 			}
 		} else if (platform.id == "neoforge") {
@@ -309,6 +589,10 @@ tasks.register("validateTargetRegistry") {
 	group = "verification"
 	description = "Validates the PackForge target registry and adapter declarations."
 	inputs.file registryFile
+	inputs.files(fileTree("versions") {
+		include "**/*Mixin.java"
+		include "**/packforge.fabric.mixins.json"
+	})
 	doLast {
 	if (registry.defaultTarget == null || !targetKeys.contains(registry.defaultTarget)) {
 		throw new GradleException("defaultTarget must identify a declared PackForge target.")
@@ -320,7 +604,7 @@ tasks.register("validateTargetRegistry") {
 	if (!undeclaredContracts.isEmpty()) {
 		throw new GradleException("PackForge target registry contains capabilities without artifact contracts: ${undeclaredContracts.sort().join(', ')}")
 	}
-		["mixinExtrasVersion", "fabricAsmVersion", "fabricMixinVersion"].each { field ->
+		["mixinExtrasVersion", "mixinExtrasFabricLoaderMinimum", "fabricAsmVersion", "fabricMixinVersion"].each { field ->
 			if (registry[field] == null) {
 				throw new GradleException("PackForge target registry is missing '${field}'.")
 			}
@@ -366,6 +650,10 @@ tasks.register("validateTargetRegistry") {
 				if (platformId == "fabric" && loader.loaderDependency != ">=${loader.loaderVersion}") {
 					throw new GradleException("Fabric target '${target.key}' must compile against its declared minimum Loader version.")
 				}
+				if (platformId == "fabric"
+					&& compareNumericVersions(loader.loaderVersion, registry.mixinExtrasFabricLoaderMinimum) < 0) {
+					throw new GradleException("Fabric target '${target.key}' Loader ${loader.loaderVersion} is below MixinExtras ${registry.mixinExtrasVersion} minimum ${registry.mixinExtrasFabricLoaderMinimum}.")
+				}
 				if (platformId == "forge") {
 					def forgeBuildVersion = loader.version.toString().substring(loader.version.toString().lastIndexOf("-") + 1)
 					if (!loader.versionRange.toString().startsWith("[${forgeBuildVersion},")) {
@@ -383,6 +671,88 @@ tasks.register("validateTargetRegistry") {
 						|| loader.modMenuEntrypoint != true)) {
 					throw new GradleException("Fabric target '${target.key}' must provide optional Mod Menu integration and its development-runtime Fabric API version.")
 				}
+			}
+		}
+
+		def mixinSources = fileTree("versions") { include "**/*Mixin.java" }.files
+		mixinSources.each { source ->
+			def sourceText = source.getText("UTF-8")
+			def rawSelector = sourceText =~ /\b(?:method|field)_[0-9]+\b/
+			if (rawSelector.find()) {
+				throw new GradleException("${source} contains raw intermediary selector '${rawSelector.group()}'.")
+			}
+		}
+		def filePackSources = []
+		targets.each { target ->
+			def adapterSources = fileTree("versions/${target.apiAdapter}") {
+				include "**/FilePackResourcesMixin.java"
+			}.files
+			if (adapterSources.size() != 1) {
+				throw new GradleException("Target ${target.key} must own exactly one FilePackResources mixin; found ${adapterSources.size()}.")
+			}
+			filePackSources.addAll(adapterSources)
+		}
+		filePackSources.each { source ->
+			def sourceText = source.getText("UTF-8")
+			if (!sourceText.contains("@WrapOperation")
+				|| sourceText.contains("@WrapMethod")
+				|| sourceText.contains("CallbackInfoReturnable")
+				|| sourceText.contains("cancellable = true")) {
+				throw new GradleException("${source} must use operation-level hooks without broad cancellable public-method replacement.")
+			}
+			if ((sourceText =~ /(?s)@Local(?:\([^)]*\))?[^{}]*Operation</).find()) {
+				throw new GradleException("${source} places MixinExtras sugar before the @WrapOperation Operation parameter; sugar parameters must be trailing.")
+			}
+			def expectedAnchors = [
+				"getResource(Ljava/lang/String;)Lnet/minecraft/server/packs/resources/IoSupplier;": 2,
+				"ZipFile;getEntry(Ljava/lang/String;)Ljava/util/zip/ZipEntry;": 1,
+				"ZipFile;entries()Ljava/util/Enumeration;": 2,
+				"IoSupplier;create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)": 2
+			]
+			expectedAnchors.each { anchor, expectedCount ->
+				int actualCount = sourceText.count(anchor)
+				if (actualCount != expectedCount) {
+					throw new GradleException("${source} must contain ${expectedCount} '${anchor}' operation anchors; found ${actualCount}.")
+				}
+			}
+		}
+		def reloadManagerSources = []
+		targets.each { target ->
+			def adapterSources = fileTree("versions/${target.apiAdapter}") {
+				include "**/ReloadableResourceManagerMixin.java"
+			}.files
+			if (adapterSources.size() != 1) {
+				throw new GradleException("Target ${target.key} must own exactly one ReloadableResourceManager mixin; found ${adapterSources.size()}.")
+			}
+			reloadManagerSources.addAll(adapterSources)
+		}
+		reloadManagerSources.each { source ->
+			def sourceText = source.getText("UTF-8")
+			def expectedWrapper = ~'(?s)private\\s+ReloadInstance\\s+packforge\\$createReload\\(\\s*Executor\\s+preparationExecutor,\\s*Executor\\s+reloadExecutor,\\s*CompletableFuture<Unit>\\s+initialStage,\\s*List<PackResources>\\s+packs,\\s*Operation<ReloadInstance>\\s+original\\s*\\)'
+			if (!(sourceText =~ expectedWrapper).find()
+				|| !sourceText.contains("original.call(preparationExecutor, reloadExecutor, initialStage, packs)")) {
+				throw new GradleException("${source} must mirror the four createReload arguments before Operation and forward them in order.")
+			}
+		}
+		def modernSpriteLoader = file("versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java")
+		def modernSpriteLoaderText = modernSpriteLoader.getText("UTF-8")
+		def expectedLoadAndStitchWrapper = ~'(?s)packforge\\$associateAtlasState\\(\\s*ResourceManager\\s+resourceManager,\\s*Identifier\\s+atlasId,\\s*int\\s+mipLevel,\\s*Executor\\s+executor,\\s*Set<MetadataSectionType<\\?>>\\s+additional,\\s*Operation<CompletableFuture<SpriteLoader\\.Preparations>>\\s+original\\s*\\)'
+		if (!(modernSpriteLoaderText =~ expectedLoadAndStitchWrapper).find()
+			|| !modernSpriteLoaderText.contains("original.call(resourceManager, atlasId, mipLevel, executor, additional)")) {
+			throw new GradleException("${modernSpriteLoader} must mirror the mc26 loadAndStitch arguments before Operation and forward them in order.")
+		}
+		if (!modernSpriteLoaderText.contains("private static CompletableFuture<List<SpriteContents>> packforge\$decodeBounded(")) {
+			throw new GradleException("${modernSpriteLoader} must keep the runSpriteSuppliers @WrapMethod handler static.")
+		}
+		def legacy121SpriteLoader = file("versions/mc1_21_shared/common/src/client/java/com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java")
+		def legacy121SpriteLoaderText = legacy121SpriteLoader.getText("UTF-8")
+		def legacy121LoadAndStitchDescriptor = "loadAndStitch(Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/resources/ResourceLocation;ILjava/util/concurrent/Executor;Ljava/util/Collection;)Ljava/util/concurrent/CompletableFuture;"
+		if (!legacy121SpriteLoaderText.contains("method = \"${legacy121LoadAndStitchDescriptor}\"")) {
+			throw new GradleException("${legacy121SpriteLoader} must target the five-argument loadAndStitch overload explicitly.")
+		}
+		fileTree("versions") { include "**/packforge.fabric.mixins.json" }.files.each { descriptor ->
+			if (descriptor.getText("UTF-8").contains("CompositePackResourcesMixin")) {
+				throw new GradleException("${descriptor} still registers the removed CompositePackResources mixin.")
 			}
 		}
 	}
@@ -489,6 +859,38 @@ tasks.register("verifyAllArtifacts") {
 	group = "verification"
 	description = "Verifies every declared PackForge artifact."
 	dependsOn verificationTasksByTarget.values()
+	doLast {
+		def outputDirectory = layout.buildDirectory.dir("libs").get().asFile
+		def actualArtifactNames = fileTree(outputDirectory) {
+			include "packforge-*.jar"
+		}.files.collect { it.name }.sort()
+		if (actualArtifactNames != expectedArtifactNames) {
+			def missing = expectedArtifactNames - actualArtifactNames
+			def stale = actualArtifactNames - expectedArtifactNames
+			throw new GradleException("Expected exactly ${expectedArtifactNames.size()} current release artifacts; missing=${missing}, stale=${stale}.")
+		}
+	}
+}
+
+tasks.register("verifyExistingArtifacts") {
+	group = "verification"
+	description = "Verifies the already-collected 17-artifact release set without rebuilding child projects."
+	doLast {
+		targets.each { target ->
+			platformBuilds.findAll { targetSupports(target, it) }.each { platform ->
+				verifyArtifact(target, platform, layout.buildDirectory.file("libs/${artifactName(target, platform)}").get().asFile)
+			}
+		}
+		def outputDirectory = layout.buildDirectory.dir("libs").get().asFile
+		def actualArtifactNames = fileTree(outputDirectory) {
+			include "packforge-*.jar"
+		}.files.collect { it.name }.sort()
+		if (actualArtifactNames != expectedArtifactNames) {
+			def missing = expectedArtifactNames - actualArtifactNames
+			def stale = actualArtifactNames - expectedArtifactNames
+			throw new GradleException("Expected exactly ${expectedArtifactNames.size()} current release artifacts; missing=${missing}, stale=${stale}.")
+		}
+	}
 }
 
 platformBuilds.findAll { targetSupports(selectedTarget, it) }.each { platform ->

@@ -18,6 +18,8 @@ def accessWidenerFile = new File(packforgeRepositoryRoot, loaderConfig.accessWid
 def mainMixinConfig = target.mixinConfigs.main.toString()
 def clientMixinConfig = target.mixinConfigs.client.toString()
 def artifactSmoke = providers.gradleProperty("packforge_artifact_smoke").map(Boolean::parseBoolean).orElse(false).get()
+def minecraftRuntimeVersionOverride = providers.gradleProperty("packforge_minecraft_version_override").orNull
+def minecraftDependencyVersion = minecraftRuntimeVersionOverride ?: target.minecraftVersion.toString()
 
 layout.buildDirectory.set(file("build/${target.key}"))
 
@@ -105,7 +107,7 @@ sourceSets {
 }
 
 dependencies {
-	minecraft "com.mojang:minecraft:${target.minecraftVersion}"
+	minecraft "com.mojang:minecraft:${minecraftDependencyVersion}"
 	if (loaderConfig.mappingMode == "named") {
 		mappings loom.officialMojangMappings()
 	}
@@ -123,7 +125,7 @@ dependencies {
 	}
 	// Loom/Fabric API can inject compile-time interfaces into Minecraft classes.
 	// Keep those types available to javac without making Fabric API a runtime dependency.
-	if (loaderConfig.fabricApiVersion != null) {
+	if (!artifactSmoke && loaderConfig.fabricApiVersion != null) {
 		compileOnly "net.fabricmc.fabric-api:fabric-api:${loaderConfig.fabricApiVersion}"
 	}
 	if (loaderConfig.modMenuEntrypoint) {
@@ -136,10 +138,12 @@ dependencies {
 			// Modern Loom resolves the current Mod Menu artifact in its native
 			// mapping namespace and does not expose the legacy modCompileOnly DSL.
 			compileOnly "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}"
-			// Keep optional integrations available to local client runs without
-			// exporting either dependency to PackForge consumers.
-			add("localRuntime", "net.fabricmc.fabric-api:fabric-api:${loaderConfig.fabricApiVersion}")
-			add("localRuntime", "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}")
+			if (!artifactSmoke) {
+				// Keep optional integrations available to local client runs without
+				// exporting either dependency to PackForge consumers.
+				add("localRuntime", "net.fabricmc.fabric-api:fabric-api:${loaderConfig.fabricApiVersion}")
+				add("localRuntime", "maven.modrinth:modmenu:${loaderConfig.modMenuVersion}")
+			}
 		}
 	}
 

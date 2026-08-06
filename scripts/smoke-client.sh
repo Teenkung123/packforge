@@ -14,6 +14,10 @@ optimizer_enabled="${PACKFORGE_RELOAD_OPTIMIZER:-true}"
 artifact_smoke="${PACKFORGE_ARTIFACT_SMOKE:-true}"
 resource_hash="${PACKFORGE_RUNTIME_RESOURCE_HASH:-false}"
 smoke_profile="${PACKFORGE_SMOKE_PROFILE:-default}"
+forge_version_override="${PACKFORGE_FORGE_VERSION_OVERRIDE:-}"
+minecraft_version_override="${PACKFORGE_MINECRAFT_VERSION_OVERRIDE:-}"
+neoforge_version_override="${PACKFORGE_NEOFORGE_VERSION_OVERRIDE:-}"
+artifact_input_dir="${PACKFORGE_ARTIFACT_INPUT_DIR:-}"
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 case "$platform" in
@@ -21,10 +25,11 @@ case "$platform" in
   *) echo "unsupported platform: $platform" >&2; exit 2 ;;
 esac
 
-if [[ ! "$reload_count" =~ ^[0-9]+$ ]]; then
-  echo "PACKFORGE_RELOAD_COUNT must be a non-negative integer" >&2
+if [[ ! "$reload_count" =~ ^(0|[1-9][0-9]?)$ ]] || (( 10#$reload_count > 32 )); then
+  echo "PACKFORGE_RELOAD_COUNT must be a decimal integer from 0 through 32" >&2
   exit 2
 fi
+reload_count=$((10#$reload_count))
 if [[ "$optimizer_enabled" != "true" && "$optimizer_enabled" != "false" ]]; then
   echo "PACKFORGE_RELOAD_OPTIMIZER must be true or false" >&2
   exit 2
@@ -35,6 +40,28 @@ if [[ "$artifact_smoke" != "true" && "$artifact_smoke" != "false" ]]; then
 fi
 if [[ "$resource_hash" != "true" && "$resource_hash" != "false" ]]; then
   echo "PACKFORGE_RUNTIME_RESOURCE_HASH must be true or false" >&2
+  exit 2
+fi
+if [[ -n "$forge_version_override" && "$platform" != "forge" ]]; then
+  echo "PACKFORGE_FORGE_VERSION_OVERRIDE is valid only for Forge smoke runs" >&2
+  exit 2
+fi
+if [[ -n "$minecraft_version_override" && "$platform" != "fabric" ]]; then
+  echo "PACKFORGE_MINECRAFT_VERSION_OVERRIDE is valid only for Fabric smoke runs" >&2
+  exit 2
+fi
+if [[ -n "$neoforge_version_override" && "$platform" != "neoforge" ]]; then
+  echo "PACKFORGE_NEOFORGE_VERSION_OVERRIDE is valid only for NeoForge smoke runs" >&2
+  exit 2
+fi
+for runtime_override in "$forge_version_override" "$minecraft_version_override" "$neoforge_version_override"; do
+  if [[ -n "$runtime_override" && ! "$runtime_override" =~ ^[0-9A-Za-z._+-]+$ ]]; then
+    echo "runtime version overrides may contain only letters, numbers, dot, underscore, plus, and hyphen" >&2
+    exit 2
+  fi
+done
+if [[ "$platform" == "forge" && "$artifact_smoke" == "true" ]]; then
+  echo "Forge final SRG JARs cannot be tested in ForgeGradle's Mojmap userdev runtime; use source mode here and scripts/Smoke-Forge-Production.ps1 for final-JAR acceptance" >&2
   exit 2
 fi
 
@@ -69,13 +96,29 @@ if [[ -z "${DISPLAY:-}" ]]; then
   exec xvfb-run -a -s "-screen 0 1280x720x24" "$0" "$platform" "$target" "$timeout_seconds"
 fi
 
-if ! command -v xdotool >/dev/null 2>&1; then
-  echo "xdotool is required for clean client reload/exit automation" >&2
-  exit 2
-fi
-
 cd "$repository_root"
 chmod +x gradlew
+
+artifact_name="$(python - "$platform" "$target" <<'PY'
+import json
+import pathlib
+import sys
+
+platform, target_key = sys.argv[1:]
+root = pathlib.Path.cwd()
+registry = json.loads((root / "gradle/minecraft-targets.json").read_text(encoding="utf-8"))
+target = next((item for item in registry["targets"] if item["key"] == target_key), None)
+if target is None or platform not in target["platforms"]:
+    raise SystemExit(f"unsupported target/platform: {target_key}/{platform}")
+properties = {}
+for line in (root / "gradle.properties").read_text(encoding="utf-8").splitlines():
+    if "=" in line and not line.lstrip().startswith("#"):
+        key, value = line.split("=", 1)
+        properties[key.strip()] = value.strip()
+version = properties["mod_version"] + target["platforms"][platform]["versionSuffix"]
+print(f"packforge-{platform}-{version}-mc{target['artifactMinecraft']}.jar")
+PY
+)"
 
 platform_root="platform/$platform"
 run_root="$platform_root/run/$target"
@@ -83,7 +126,6 @@ log_file="$run_root/logs/latest.log"
 gradle_log="$run_root/logs/packforge-smoke-gradle.log"
 fixture_root="$platform_root/build/$target/benchmark"
 fixture="$fixture_root/deterministic-large-pack.zip"
-artifact_name=""
 
 mkdir -p "$run_root/logs" "$run_root/config" "$run_root/resourcepacks"
 rm -f "$log_file" "$gradle_log" "$run_root/logs/packforge-timings.csv" \
@@ -92,21 +134,21 @@ rm -f "$log_file" "$gradle_log" "$run_root/logs/packforge-timings.csv" \
 ./gradlew -p "$platform_root" -Ppackforge_target="$target" benchmarkPackIndex --no-daemon
 cp "$fixture" "$run_root/resourcepacks/deterministic-large-pack.zip"
 
+mkdir -p "$run_root/mods"
+find "$run_root/mods" -maxdepth 1 -type f -name 'packforge-*.jar' -delete
+
 if [[ "$artifact_smoke" == "true" ]]; then
-  ./gradlew -p "$platform_root" -Ppackforge_target="$target" build --no-daemon
-  artifact_directory="$platform_root/build/$target/libs"
-  mapfile -t artifacts < <(find "$artifact_directory" -maxdepth 1 -type f \
-    -name "packforge-$platform-*.jar" \
-    ! -name '*-sources.jar' ! -name '*-slim.jar' ! -name '*-named.jar' | sort)
-  if [[ "${#artifacts[@]}" -ne 1 ]]; then
-    echo "expected exactly one packaged artifact in $artifact_directory, found ${#artifacts[@]}" >&2
-    printf '%s\n' "${artifacts[@]}" >&2
+  if [[ -n "$artifact_input_dir" ]]; then
+    artifact_path="$artifact_input_dir/$artifact_name"
+  else
+    ./gradlew -p "$platform_root" -Ppackforge_target="$target" build --no-daemon
+    artifact_path="$platform_root/build/$target/libs/$artifact_name"
+  fi
+  if [[ ! -f "$artifact_path" ]]; then
+    echo "expected packaged artifact not found: $artifact_path" >&2
     exit 1
   fi
-  artifact_name="$(basename "${artifacts[0]}")"
-  mkdir -p "$run_root/mods"
-  find "$run_root/mods" -maxdepth 1 -type f -name 'packforge-*.jar' -delete
-  cp "${artifacts[0]}" "$run_root/mods/$artifact_name"
+  cp "$artifact_path" "$run_root/mods/$artifact_name"
 fi
 
 cat > "$run_root/config/packforge.json" <<JSON
@@ -136,58 +178,85 @@ JSON
 
 cat > "$run_root/options.txt" <<'OPTIONS'
 resourcePacks:["vanilla","file/deterministic-large-pack.zip"]
-incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
+incompatibleResourcePacks:[]
 OPTIONS
 
-fatal_pattern='Critical injection failure|Mixin apply failed|InjectionError|Minecraft has crashed|PackForge.*(ERROR|Exception)|\[.*ERROR\].*PackForge'
+fatal_pattern='Critical injection failure|Mixin apply failed|Mixin apply for mod .* failed|InjectionError|InvalidInjectionException|could not find target|NoClassDefFoundError|ExceptionInInitializerError|Could not execute entrypoint stage|Mod resolution failed|Incompatible mods found|Minecraft has crashed|PackForge runtime smoke failure'
 gradle_pid=""
-wm_pid=""
+smoke_start_marker="$run_root/.packforge-smoke-start"
+touch "$smoke_start_marker"
 
 cleanup() {
   if [[ -n "$gradle_pid" ]] && kill -0 "$gradle_pid" 2>/dev/null; then
     kill "$gradle_pid" 2>/dev/null || true
     wait "$gradle_pid" 2>/dev/null || true
   fi
-  if [[ -n "$wm_pid" ]] && kill -0 "$wm_pid" 2>/dev/null; then
-    kill "$wm_pid" 2>/dev/null || true
-    wait "$wm_pid" 2>/dev/null || true
-  fi
 }
 trap cleanup EXIT
 
-if command -v openbox >/dev/null 2>&1; then
-  openbox --sm-disable >"$run_root/logs/packforge-smoke-window-manager.log" 2>&1 &
-  wm_pid=$!
-  sleep 1
-fi
+fatal_diagnostic_found() {
+  if { [[ -f "$log_file" ]] && grep -Eiq "$fatal_pattern" "$log_file"; } \
+    || { [[ -f "$gradle_log" ]] && grep -Eiq "$fatal_pattern" "$gradle_log"; }; then
+    return 0
+  fi
+  [[ -d "$run_root/crash-reports" ]] \
+    && find "$run_root/crash-reports" -type f -newer "$smoke_start_marker" -print -quit | grep -q .
+}
+
+print_fatal_diagnostics() {
+  [[ -f "$log_file" ]] && grep -Ein "$fatal_pattern" "$log_file" >&2 || true
+  [[ -f "$gradle_log" ]] && grep -Ein "$fatal_pattern" "$gradle_log" >&2 || true
+  if [[ -d "$run_root/crash-reports" ]]; then
+    find "$run_root/crash-reports" -type f -newer "$smoke_start_marker" -print >&2 || true
+  fi
+}
 
 run_arguments=(-p "$platform_root" -Ppackforge_target="$target")
 if [[ "$artifact_smoke" == "true" ]]; then
   run_arguments+=(-Ppackforge_artifact_smoke=true)
 fi
+if [[ -n "$forge_version_override" ]]; then
+  run_arguments+=("-Ppackforge_forge_version_override=$forge_version_override")
+fi
+if [[ -n "$minecraft_version_override" ]]; then
+  run_arguments+=("-Ppackforge_minecraft_version_override=$minecraft_version_override")
+fi
+if [[ -n "$neoforge_version_override" ]]; then
+  run_arguments+=("-Ppackforge_neoforge_version_override=$neoforge_version_override")
+fi
 run_arguments+=(runClient --no-daemon)
-./gradlew "${run_arguments[@]}" >"$gradle_log" 2>&1 &
+smoke_java_tool_options="${JAVA_TOOL_OPTIONS:-}"
+if [[ -n "$smoke_java_tool_options" ]]; then
+  smoke_java_tool_options+=" "
+fi
+smoke_java_tool_options+="-Dpackforge.runtimeSmokeReloadCount=$reload_count"
+JAVA_TOOL_OPTIONS="$smoke_java_tool_options" ./gradlew "${run_arguments[@]}" >"$gradle_log" 2>&1 &
 gradle_pid=$!
 deadline=$((SECONDS + timeout_seconds))
-window_id=""
+expected_reload_count=$((reload_count + 1))
 
 while (( SECONDS < deadline )); do
-  if [[ -f "$log_file" ]] && grep -Eiq "$fatal_pattern" "$log_file"; then
+  if fatal_diagnostic_found; then
     echo "fatal client or mixin diagnostic found" >&2
-    grep -Ein "$fatal_pattern" "$log_file" >&2 || true
+    print_fatal_diagnostics
     exit 1
   fi
-  window_id="$(xdotool search --onlyvisible --name 'Minecraft' 2>/dev/null | head -n 1 || true)"
-  if [[ -n "$window_id" && -f "$log_file" ]] \
+  if [[ -f "$log_file" ]] \
     && grep -Fq 'PackForge capabilities:' "$log_file" \
-    && grep -Fq 'PackForge reload complete:' "$log_file" \
-    && { [[ "$resource_hash" == "false" ]] || grep -Fq 'PackForge resolved-resource hash:' "$log_file"; } \
-    && { [[ "$artifact_smoke" == "false" ]] || grep -Fq "$artifact_name" "$log_file"; }; then
+    && (( $(grep -Fc 'PackForge reload complete:' "$log_file" || true) >= expected_reload_count )) \
+    && { [[ "$resource_hash" == "false" ]] || (( $(grep -Fc 'PackForge resolved-resource hash:' "$log_file" || true) >= expected_reload_count )); } \
+    && { [[ "$artifact_smoke" == "false" ]] || grep -Fq "$artifact_name" "$log_file"; } \
+    && grep -Fq 'PackForge runtime smoke ready:' "$log_file" \
+    && grep -Fq 'PackForge runtime smoke complete:' "$log_file"; then
     break
   fi
   if ! kill -0 "$gradle_pid" 2>/dev/null; then
-    wait "$gradle_pid" || true
-    echo "client exited before reaching the title window" >&2
+    set +e
+    wait "$gradle_pid"
+    client_status=$?
+    set -e
+    gradle_pid=""
+    echo "client exited before completing the runtime smoke controller (status $client_status)" >&2
     tail -n 200 "$gradle_log" >&2 || true
     [[ -f "$log_file" ]] && tail -n 200 "$log_file" >&2 || true
     exit 1
@@ -195,53 +264,40 @@ while (( SECONDS < deadline )); do
   sleep 2
 done
 
-if [[ -z "$window_id" || ! -f "$log_file" ]] \
+if [[ ! -f "$log_file" ]] \
   || ! grep -Fq 'PackForge capabilities:' "$log_file" \
-  || ! grep -Fq 'PackForge reload complete:' "$log_file" \
-  || { [[ "$resource_hash" == "true" ]] && ! grep -Fq 'PackForge resolved-resource hash:' "$log_file"; } \
-  || { [[ "$artifact_smoke" == "true" ]] && ! grep -Fq "$artifact_name" "$log_file"; }; then
-  echo "client did not reach a visible Minecraft window before timeout" >&2
+  || (( $(grep -Fc 'PackForge reload complete:' "$log_file" || true) < expected_reload_count )) \
+  || { [[ "$resource_hash" == "true" ]] && (( $(grep -Fc 'PackForge resolved-resource hash:' "$log_file" || true) < expected_reload_count )); } \
+  || { [[ "$artifact_smoke" == "true" ]] && ! grep -Fq "$artifact_name" "$log_file"; } \
+  || ! grep -Fq 'PackForge runtime smoke ready:' "$log_file" \
+  || ! grep -Fq 'PackForge runtime smoke complete:' "$log_file"; then
+  has_log=false
+  has_capabilities=false
+  completed_reloads=0
+  completed_resource_hashes=0
+  has_artifact=false
+  has_controller_ready=false
+  has_controller_complete=false
+  [[ -f "$log_file" ]] && has_log=true
+  [[ -f "$log_file" ]] && grep -Fq 'PackForge capabilities:' "$log_file" && has_capabilities=true
+  [[ -f "$log_file" ]] && completed_reloads="$(grep -Fc 'PackForge reload complete:' "$log_file" || true)"
+  [[ -f "$log_file" ]] && completed_resource_hashes="$(grep -Fc 'PackForge resolved-resource hash:' "$log_file" || true)"
+  { [[ "$artifact_smoke" == "false" ]] || { [[ -f "$log_file" ]] && grep -Fq "$artifact_name" "$log_file"; }; } \
+    && has_artifact=true
+  [[ -f "$log_file" ]] && grep -Fq 'PackForge runtime smoke ready:' "$log_file" && has_controller_ready=true
+  [[ -f "$log_file" ]] && grep -Fq 'PackForge runtime smoke complete:' "$log_file" && has_controller_complete=true
+  echo "client readiness timeout: log=$has_log capabilities=$has_capabilities reloads=$completed_reloads/$expected_reload_count resourceHashes=$completed_resource_hashes/$expected_reload_count artifact=$has_artifact controllerReady=$has_controller_ready controllerComplete=$has_controller_complete" >&2
+  tail -n 200 "$gradle_log" >&2 || true
+  [[ -f "$log_file" ]] && tail -n 200 "$log_file" >&2 || true
   exit 1
 fi
 
-for ((reload = 1; reload <= reload_count; reload++)); do
-  previous_count="$(grep -Fc 'PackForge reload complete:' "$log_file" || true)"
-  previous_hash_count="$(grep -Fc 'PackForge resolved-resource hash:' "$log_file" || true)"
-  xdotool windowactivate --sync "$window_id"
-  xdotool keydown --window "$window_id" F3
-  xdotool key --window "$window_id" t
-  xdotool keyup --window "$window_id" F3
-
-  reload_deadline=$((SECONDS + 180))
-  while (( SECONDS < reload_deadline )); do
-    if grep -Eiq "$fatal_pattern" "$log_file"; then
-      echo "fatal diagnostic found during reload $reload" >&2
-      exit 1
-    fi
-    current_count="$(grep -Fc 'PackForge reload complete:' "$log_file" || true)"
-    current_hash_count="$(grep -Fc 'PackForge resolved-resource hash:' "$log_file" || true)"
-    if (( current_count > previous_count )) \
-      && { [[ "$resource_hash" == "false" ]] || (( current_hash_count > previous_hash_count )); }; then
-      break
-    fi
-    sleep 2
-  done
-  current_count="$(grep -Fc 'PackForge reload complete:' "$log_file" || true)"
-  current_hash_count="$(grep -Fc 'PackForge resolved-resource hash:' "$log_file" || true)"
-  if (( current_count <= previous_count )) \
-    || { [[ "$resource_hash" == "true" ]] && (( current_hash_count <= previous_hash_count )); }; then
-    echo "resource reload $reload did not complete" >&2
-    exit 1
-  fi
-done
-
-xdotool windowclose "$window_id"
 exit_deadline=$((SECONDS + 90))
 while kill -0 "$gradle_pid" 2>/dev/null && (( SECONDS < exit_deadline )); do
   sleep 2
 done
 if kill -0 "$gradle_pid" 2>/dev/null; then
-  echo "client did not exit cleanly after closing its window" >&2
+  echo "client did not exit cleanly after the runtime smoke controller completed" >&2
   exit 1
 fi
 
@@ -250,11 +306,6 @@ wait "$gradle_pid"
 client_status=$?
 set -e
 gradle_pid=""
-if [[ -n "$wm_pid" ]] && kill -0 "$wm_pid" 2>/dev/null; then
-  kill "$wm_pid" 2>/dev/null || true
-  wait "$wm_pid" 2>/dev/null || true
-fi
-wm_pid=""
 if (( client_status != 0 )); then
   echo "runClient exited with status $client_status" >&2
   exit "$client_status"

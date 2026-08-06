@@ -27,7 +27,7 @@ public final class PackIndexBenchmark {
 		String packMetadata = arguments.length < 2
 			? DeterministicZipFixture.defaultPackMetadata()
 			: new String(Base64.getDecoder().decode(arguments[1]), StandardCharsets.UTF_8);
-		DeterministicZipFixture.create(archive, 20_000, packMetadata);
+		DeterministicZipFixture.createRuntimeCompatible(archive, 20_000, packMetadata);
 
 		try (ZipFile zipFile = new ZipFile(archive.toFile())) {
 			long buildStarted = System.nanoTime();
@@ -61,8 +61,13 @@ public final class PackIndexBenchmark {
 				: 100.0D * (baselineMedian - indexedMedian) / baselineMedian;
 
 			System.out.printf(
-				"{\"entries\":%d,\"indexBuildNs\":%d,\"baselineMedianNs\":%d,\"indexedMedianNs\":%d,\"improvementPercent\":%.2f,\"baselineHash\":\"%s\",\"indexedHash\":\"%s\",\"checksum\":%d}%n",
-				index.entryCount(), buildNanos, baselineMedian, indexedMedian, improvement, baselineHash, indexedHash, blackhole
+				"{\"representation\":\"IndexedEntry[]+int[]\",\"centralEntries\":%d,\"uniquePaths\":%d,\"duplicatePaths\":%d,\"indexBuildNs\":%d,\"baselineMedianNs\":%d,\"indexedMedianNs\":%d,\"improvementPercent\":%.2f,\"prefixCacheEntries\":%d,\"prefixCacheLimit\":%d,\"cachedPrefixOrdinals\":%d,\"prefixOrdinalLimit\":%d,\"namespaceCacheEntries\":%d,\"namespaceCacheLimit\":%d,\"cachesEnabled\":%s,\"baselineHash\":\"%s\",\"indexedHash\":\"%s\",\"checksum\":%d}%n",
+				index.entryCount(), index.size(), index.duplicatePathCount(), buildNanos,
+				baselineMedian, indexedMedian, improvement,
+				index.prefixCacheSize(), PackIndex.MAX_PREFIX_CACHE_ENTRIES,
+				index.cachedPrefixOrdinalCount(), PackIndex.MAX_PREFIX_CACHE_ORDINALS,
+				index.namespaceCacheSize(), PackIndex.MAX_NAMESPACE_CACHE_ENTRIES,
+				index.cachesEnabled(), baselineHash, indexedHash, blackhole
 			);
 		}
 	}

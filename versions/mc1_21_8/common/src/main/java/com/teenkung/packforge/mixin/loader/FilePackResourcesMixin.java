@@ -1,17 +1,19 @@
 package com.teenkung.packforge.mixin.loader;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.config.FeatureFlags;
+import com.teenkung.packforge.internal.loader.SharedZipFileAccessBridge;
 import com.teenkung.packforge.loader.InputStreamSupplier;
 import com.teenkung.packforge.loader.LoaderTimings;
+import com.teenkung.packforge.loader.PackArchiveState;
 import com.teenkung.packforge.loader.PackIndex;
-import com.teenkung.packforge.loader.ResourceNamePolicy;
-import com.teenkung.packforge.internal.loader.SharedZipFileAccessBridge;
+import com.teenkung.packforge.loader.ReloadExecutionContext;
 import com.teenkung.packforge.loader.ZipReadPool;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.FilePackResources;
 import net.minecraft.server.packs.PackLocationInfo;
-import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.IoSupplier;
 import org.spongepowered.asm.mixin.Final;
@@ -21,11 +23,9 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.io.InputStream;
-import java.util.Set;
+import java.util.Enumeration;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -36,6 +36,99 @@ public abstract class FilePackResourcesMixin {
 	@Unique
 	private SharedZipFileAccessBridge packforge$archive;
 
+	@WrapOperation(
+		method = "getResource(Ljava/lang/String;)Lnet/minecraft/server/packs/resources/IoSupplier;",
+		at = @At(
+			value = "INVOKE",
+			target = "Ljava/util/zip/ZipFile;getEntry(Ljava/lang/String;)Ljava/util/zip/ZipEntry;"
+		)
+	)
+	private ZipEntry packforge$indexedGetEntry(
+		ZipFile zipFile,
+		String path,
+		Operation<ZipEntry> original
+	) {
+		PackIndex index = this.packforge$index(zipFile);
+		if (index == null) {
+			return original.call(zipFile, path);
+		}
+		LoaderTimings.recordGetResource();
+		return index.entryFor(path);
+	}
+
+	@WrapOperation(
+		method = "getResource(Ljava/lang/String;)Lnet/minecraft/server/packs/resources/IoSupplier;",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/server/packs/resources/IoSupplier;create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)Lnet/minecraft/server/packs/resources/IoSupplier;"
+		)
+	)
+	private IoSupplier<InputStream> packforge$resourceSupplier(
+		ZipFile zipFile,
+		ZipEntry entry,
+		Operation<IoSupplier<InputStream>> original
+	) {
+		return this.packforge$maybePooledSupplier(zipFile, entry, original);
+	}
+
+	@WrapOperation(
+		method = "getNamespaces(Lnet/minecraft/server/packs/PackType;)Ljava/util/Set;",
+		at = @At(
+			value = "INVOKE",
+			target = "Ljava/util/zip/ZipFile;entries()Ljava/util/Enumeration;"
+		)
+	)
+	private Enumeration<? extends ZipEntry> packforge$indexedNamespaceEntries(
+		ZipFile zipFile,
+		Operation<Enumeration<? extends ZipEntry>> original,
+		@Local(argsOnly = true) PackType type
+	) {
+		PackIndex index = this.packforge$index(zipFile);
+		if (index == null) {
+			return original.call(zipFile);
+		}
+		LoaderTimings.recordGetNamespaces();
+		return index.entriesWithPrefix(this.packforge$addPrefix(type.getDirectory() + "/"));
+	}
+
+	@WrapOperation(
+		method = "listResources(Lnet/minecraft/server/packs/PackType;Ljava/lang/String;Ljava/lang/String;Lnet/minecraft/server/packs/PackResources$ResourceOutput;)V",
+		at = @At(
+			value = "INVOKE",
+			target = "Ljava/util/zip/ZipFile;entries()Ljava/util/Enumeration;"
+		)
+	)
+	private Enumeration<? extends ZipEntry> packforge$indexedResourceEntries(
+		ZipFile zipFile,
+		Operation<Enumeration<? extends ZipEntry>> original,
+		@Local(argsOnly = true) PackType type,
+		@Local(argsOnly = true, ordinal = 0) String namespace,
+		@Local(argsOnly = true, ordinal = 1) String directory
+	) {
+		PackIndex index = this.packforge$index(zipFile);
+		if (index == null) {
+			return original.call(zipFile);
+		}
+		String root = this.packforge$addPrefix(type.getDirectory() + "/" + namespace + "/");
+		LoaderTimings.recordListResources();
+		return index.entriesWithPrefix(root + directory + "/");
+	}
+
+	@WrapOperation(
+		method = "listResources(Lnet/minecraft/server/packs/PackType;Ljava/lang/String;Ljava/lang/String;Lnet/minecraft/server/packs/PackResources$ResourceOutput;)V",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/server/packs/resources/IoSupplier;create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)Lnet/minecraft/server/packs/resources/IoSupplier;"
+		)
+	)
+	private IoSupplier<InputStream> packforge$listedResourceSupplier(
+		ZipFile zipFile,
+		ZipEntry entry,
+		Operation<IoSupplier<InputStream>> original
+	) {
+		return this.packforge$maybePooledSupplier(zipFile, entry, original);
+	}
+
 	@Inject(
 		method = "<init>(Lnet/minecraft/server/packs/PackLocationInfo;Lnet/minecraft/server/packs/FilePackResources$SharedZipFileAccess;Ljava/lang/String;)V",
 		at = @At("RETURN")
@@ -44,9 +137,11 @@ public abstract class FilePackResourcesMixin {
 		PackLocationInfo location,
 		@Coerce Object zipFileAccess,
 		String prefix,
-		CallbackInfo ci
+		org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci
 	) {
-		this.packforge$archive = (SharedZipFileAccessBridge) zipFileAccess;
+		if (zipFileAccess instanceof SharedZipFileAccessBridge bridge) {
+			this.packforge$archive = bridge;
+		}
 	}
 
 	@Unique
@@ -55,16 +150,26 @@ public abstract class FilePackResourcesMixin {
 	}
 
 	@Unique
-	private PackIndex packforge$index() {
-		if (!FeatureFlags.loaderIndexEnabled()) {
+	private PackIndex packforge$index(ZipFile zipFile) {
+		if (!this.packforge$loaderIndexEnabled() || zipFile == null) {
 			return null;
 		}
 		SharedZipFileAccessBridge archive = this.packforge$archive;
-		ZipFile zipFile = archive.packforge$getOrCreateZipFile();
-		if (zipFile == null) {
+		if (archive == null) {
 			return null;
 		}
-		return archive.packforge$archiveState().index(
+		PackArchiveState archiveState = archive.packforge$archiveState();
+		if (archiveState == null || archiveState.isClosed()) {
+			return null;
+		}
+		try {
+			if (archive.packforge$getOrCreateZipFile() != zipFile) {
+				return null;
+			}
+		} catch (RuntimeException ignored) {
+			return null;
+		}
+		return archiveState.index(
 			zipFile,
 			archive.packforge$archiveFile().toString(),
 			failure -> PackForge.LOGGER.warn(
@@ -78,15 +183,13 @@ public abstract class FilePackResourcesMixin {
 	@Unique
 	private IoSupplier<InputStream> packforge$supplier(
 		String path,
-		ZipFile fallbackZip,
-		ZipEntry fallbackEntry,
+		IoSupplier<InputStream> fallbackSupplier,
 		boolean duplicatePath
 	) {
-		IoSupplier<InputStream> vanilla = IoSupplier.create(fallbackZip, fallbackEntry);
-		if (!FeatureFlags.loaderZipPoolEnabled() || duplicatePath) {
-			return vanilla;
+		if (!this.packforge$loaderZipPoolEnabled() || duplicatePath) {
+			return fallbackSupplier;
 		}
-		InputStreamSupplier fallback = vanilla::get;
+		InputStreamSupplier fallback = fallbackSupplier::get;
 		InputStreamSupplier pooled = this.packforge$archive.packforge$archiveState().pooledSupplier(
 			this.packforge$archive.packforge$archiveFile(),
 			ZipReadPool.DEFAULT_MAX_HANDLES,
@@ -101,84 +204,37 @@ public abstract class FilePackResourcesMixin {
 		return pooled::get;
 	}
 
-	@Inject(
-		method = "getResource(Lnet/minecraft/server/packs/PackType;Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/server/packs/resources/IoSupplier;",
-		at = @At("HEAD"),
-		cancellable = true
-	)
-	private void packforge$fastGetResource(
-		PackType type,
-		ResourceLocation location,
-		CallbackInfoReturnable<IoSupplier<InputStream>> cir
+	@Unique
+	private IoSupplier<InputStream> packforge$maybePooledSupplier(
+		ZipFile zipFile,
+		ZipEntry entry,
+		Operation<IoSupplier<InputStream>> original
 	) {
-		PackIndex index = this.packforge$index();
-		if (index == null) {
-			return;
+		IoSupplier<InputStream> vanilla = original.call(zipFile, entry);
+		if (!this.packforge$loaderZipPoolEnabled()) {
+			return vanilla;
 		}
-		String fullPath = this.packforge$addPrefix(
-			type.getDirectory() + "/" + location.getNamespace() + "/" + location.getPath()
-		);
-		ZipEntry entry = index.entryFor(fullPath);
-		LoaderTimings.recordGetResource();
-		cir.setReturnValue(entry == null ? null : this.packforge$supplier(
-			fullPath,
-			index.zipFile(),
-			entry,
-			index.hasDuplicatePath(fullPath)
-		));
+		PackIndex index = this.packforge$index(zipFile);
+		if (index == null) {
+			return vanilla;
+		}
+		String path = entry.getName();
+		return this.packforge$supplier(path, vanilla, index.hasDuplicatePath(path));
 	}
 
-	@Inject(method = "getNamespaces", at = @At("HEAD"), cancellable = true)
-	private void packforge$fastGetNamespaces(PackType type, CallbackInfoReturnable<Set<String>> cir) {
-		PackIndex index = this.packforge$index();
-		if (index == null) {
-			return;
-		}
-		String typePrefix = this.packforge$addPrefix(type.getDirectory() + "/");
-		PackIndex.NamespaceResult namespaces = index.namespacesFor(typePrefix, ResourceNamePolicy.current());
-		for (String invalid : namespaces.invalid()) {
-			PackForge.LOGGER.warn(
-				"Non [a-z0-9_.-] character in namespace {} in pack {}, ignoring",
-				invalid,
-				this.packforge$archive.packforge$archiveFile()
-			);
-		}
-		LoaderTimings.recordGetNamespaces();
-		cir.setReturnValue(namespaces.valid());
+	@Unique
+	private boolean packforge$loaderIndexEnabled() {
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context == null
+			? FeatureFlags.loaderIndexEnabled()
+			: context.features().loaderIndexEnabled();
 	}
 
-	@Inject(method = "listResources", at = @At("HEAD"), cancellable = true)
-	private void packforge$fastListResources(
-		PackType type,
-		String namespace,
-		String directory,
-		PackResources.ResourceOutput output,
-		CallbackInfo ci
-	) {
-		PackIndex index = this.packforge$index();
-		if (index == null) {
-			return;
-		}
-		String root = this.packforge$addPrefix(type.getDirectory() + "/" + namespace + "/");
-		String searchPrefix = root + directory + "/";
-		LoaderTimings.recordListResources();
-		index.forEachFileWithPrefix(searchPrefix, indexedEntry -> {
-			String path = indexedEntry.path().substring(root.length());
-			ResourceLocation location = ResourceLocation.tryBuild(namespace, path);
-			if (location == null) {
-				PackForge.LOGGER.warn("Invalid path in datapack: {}:{}, ignoring", namespace, path);
-				return;
-			}
-			output.accept(
-				location,
-				this.packforge$supplier(
-					indexedEntry.path(),
-					index.zipFile(),
-					indexedEntry.zipEntry(),
-					indexedEntry.duplicatePath()
-				)
-			);
-		});
-		ci.cancel();
+	@Unique
+	private boolean packforge$loaderZipPoolEnabled() {
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context == null
+			? FeatureFlags.loaderZipPoolEnabled()
+			: context.features().loaderZipPoolEnabled();
 	}
 }

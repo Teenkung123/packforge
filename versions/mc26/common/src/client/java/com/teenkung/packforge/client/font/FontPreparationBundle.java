@@ -5,14 +5,30 @@ import net.minecraft.resources.Identifier;
 import com.mojang.blaze3d.font.GlyphProvider;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
 public record FontPreparationBundle(
 	Set<FontOption> options,
 	Map<Identifier, FontPreparedSelection> selections,
+	Map<FontProviderStackKey, FontPreparedSelection> selectionsByStack,
 	FontReloadDiagnostics.Snapshot diagnostics
 ) {
+	public FontPreparationBundle(
+		Set<FontOption> options,
+		Map<Identifier, FontPreparedSelection> selections,
+		FontReloadDiagnostics.Snapshot diagnostics
+	) {
+		this(options, selections, stackIndex(selections), diagnostics);
+	}
+
+	public FontPreparationBundle {
+		options = Set.copyOf(options);
+		selections = Map.copyOf(selections);
+		selectionsByStack = Map.copyOf(selectionsByStack);
+	}
+
 	public FontPreparedSelection selectionFor(Identifier id, Set<FontOption> currentOptions) {
 		if (!this.options.equals(currentOptions)) {
 			return null;
@@ -21,14 +37,18 @@ public record FontPreparationBundle(
 	}
 
 	public FontPreparedSelection selectionFor(List<GlyphProvider.Conditional> providers, Set<FontOption> currentOptions) {
-		if (!this.options.equals(currentOptions)) {
-			return null;
+		return this.options.equals(currentOptions)
+			? this.selectionsByStack.get(FontProviderStackKey.of(providers))
+			: null;
+	}
+
+	private static Map<FontProviderStackKey, FontPreparedSelection> stackIndex(
+		Map<Identifier, FontPreparedSelection> selections
+	) {
+		Map<FontProviderStackKey, FontPreparedSelection> result = new LinkedHashMap<>();
+		for (FontPreparedSelection selection : selections.values()) {
+			result.putIfAbsent(FontProviderStackKey.of(selection.providers()), selection);
 		}
-		for (Map.Entry<Identifier, FontPreparedSelection> entry : this.selections.entrySet()) {
-			if (entry.getValue().providers().equals(providers)) {
-				return entry.getValue();
-			}
-		}
-		return null;
+		return result;
 	}
 }

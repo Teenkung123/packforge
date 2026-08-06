@@ -43,7 +43,7 @@ run_mode() {
   local resource_hash_output="$output_directory/$mode-resource-hash.txt"
   local resource_hash
 
-  PACKFORGE_RELOAD_COUNT=6 PACKFORGE_RELOAD_OPTIMIZER="$optimizer" PACKFORGE_RUNTIME_RESOURCE_HASH=true \
+  PACKFORGE_ARTIFACT_SMOKE=false PACKFORGE_RELOAD_COUNT=6 PACKFORGE_RELOAD_OPTIMIZER="$optimizer" PACKFORGE_RUNTIME_RESOURCE_HASH=true \
     "$repository_root/scripts/smoke-client.sh" "$platform" "$target" "$timeout_seconds"
   extract_warm_samples "$timings_file" "$warm_output"
   resource_hash="$(sed -n 's/.*PackForge resolved-resource hash:.*sha256=\([0-9a-f][0-9a-f]*\).*/\1/p' "$run_root/logs/latest.log" | tail -n 1)"
@@ -55,7 +55,7 @@ run_mode() {
 
   head -n 1 "$warm_output" > "$cold_output"
   for process_number in 1 2 3; do
-    PACKFORGE_RELOAD_COUNT=0 PACKFORGE_RELOAD_OPTIMIZER="$optimizer" \
+    PACKFORGE_ARTIFACT_SMOKE=false PACKFORGE_RELOAD_COUNT=0 PACKFORGE_RELOAD_OPTIMIZER="$optimizer" \
       "$repository_root/scripts/smoke-client.sh" "$platform" "$target" "$timeout_seconds"
     if [[ ! -f "$timings_file" ]]; then
       echo "cold process $process_number did not produce timing output" >&2
