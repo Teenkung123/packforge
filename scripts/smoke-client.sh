@@ -198,7 +198,7 @@ is_descendant_process() {
 }
 
 list_x11_client_windows() {
-  local managed_windows client_windows
+  local managed_windows client_windows tree_windows
   managed_windows="$(
     xprop -root _NET_CLIENT_LIST 2>/dev/null \
       | sed -n 's/.*# //p' \
@@ -219,6 +219,18 @@ list_x11_client_windows() {
     )"
     if [[ -n "$client_windows" ]]; then
       printf '%s\n' "$client_windows"
+      return
+    fi
+  fi
+  if command -v xwininfo >/dev/null 2>&1; then
+    tree_windows="$(
+      xwininfo -root -tree 2>/dev/null \
+        | sed -n 's/^[[:space:]]*\(0x[0-9A-Fa-f]\+\).*/\1/p' \
+        | sort -u \
+        || true
+    )"
+    if [[ -n "$tree_windows" ]]; then
+      printf '%s\n' "$tree_windows"
       return
     fi
   fi
