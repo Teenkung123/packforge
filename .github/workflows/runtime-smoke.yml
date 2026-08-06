@@ -72,7 +72,7 @@ jobs:
           if-no-files-found: error
 
   smoke:
-    name: ${{ matrix.target }} / ${{ matrix.platform }} / ${{ matrix.forge_version || 'registry' }}
+    name: ${{ matrix.target }} / ${{ matrix.platform }} / ${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -81,8 +81,17 @@ jobs:
       matrix:
         include:
           - { target: mc26_1_to_26_2, platform: fabric }
+          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.1" }
+          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.2" }
+          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.2" }
           - { target: mc26_1_to_26_2, platform: forge }
+          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.1-63.0.2" }
+          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.2-64.1.0" }
+          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.2-65.1.0" }
           - { target: mc26_1_to_26_2, platform: neoforge }
+          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.1.15-beta" }
+          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.2.94" }
+          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.2.0.48-beta" }
           - { target: mc1_21_1, platform: fabric }
           - { target: mc1_21_1, platform: forge }
           - { target: mc1_21_1, platform: neoforge }
@@ -130,8 +139,8 @@ jobs:
           distribution: temurin
           java-version: "25"
 
-      - name: Install virtual display controls
-        run: sudo apt-get update && sudo apt-get install -y xvfb xdotool openbox x11-utils
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: Restore target-scoped runtime cache
         uses: actions/cache@v4
@@ -140,13 +149,15 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             platform/forge/.gradle/mavenizer
-          key: packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.forge_version || 'registry' }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          key: packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
           restore-keys: |
-            packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.forge_version || 'registry' }}-
+            packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
 
       - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
         env:
           PACKFORGE_FORGE_VERSION_OVERRIDE: ${{ matrix.forge_version }}
+          PACKFORGE_MINECRAFT_VERSION_OVERRIDE: ${{ matrix.minecraft_version }}
+          PACKFORGE_NEOFORGE_VERSION_OVERRIDE: ${{ matrix.neoforge_version }}
           PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.platform == 'neoforge' || (matrix.platform == 'fabric' && matrix.target == 'mc26_1_to_26_2') }}
           PACKFORGE_ARTIFACT_INPUT_DIR: build/libs
         run: |
@@ -160,7 +171,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.forge_version || 'registry' }}
+          name: smoke-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
           path: |
             platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/latest.log
             platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/packforge-smoke-gradle.log
@@ -180,8 +191,8 @@ jobs:
           distribution: temurin
           java-version: "25"
 
-      - name: Install virtual display controls
-        run: sudo apt-get update && sudo apt-get install -y xvfb xdotool openbox x11-utils
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: Restore benchmark cache
         uses: actions/cache@v4
@@ -207,5 +218,4 @@ jobs:
             build/runtime-benchmark/mc1_21_1-fabric
             platform/fabric/run/mc1_21_1/logs/latest.log
             platform/fabric/run/mc1_21_1/logs/packforge-smoke-gradle.log
-            platform/fabric/run/mc1_21_1/logs/packforge-smoke-window-manager.log
           if-no-files-found: warn

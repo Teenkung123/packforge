@@ -16,6 +16,7 @@ public final class ReloadLifecycle {
 		}
 		LoaderTimings.onReloadEnd(context, error);
 		LoaderTimings.onReloadComplete(context, error);
+		ReloadHooks.fireCompletion(context, error);
 		ReloadStatus.finish(context, error);
 	}
 
