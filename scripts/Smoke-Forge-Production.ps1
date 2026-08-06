@@ -162,6 +162,8 @@ function Get-LibraryPath {
     param($Library, [string] $LibrariesRoot, [string] $FallbackRoot)
 
     if (-not (Test-RuleSet -Rules (Get-ObjectProperty -Object $Library -Name 'rules'))) { return $null }
+    $includeInClasspath = Get-ObjectProperty -Object $Library -Name 'include_in_classpath'
+    if ($null -ne $includeInClasspath -and -not [bool] $includeInClasspath) { return $null }
     $downloads = Get-ObjectProperty -Object $Library -Name 'downloads'
     $downloadArtifact = Get-ObjectProperty -Object $downloads -Name 'artifact'
     $downloadPath = Get-ObjectProperty -Object $downloadArtifact -Name 'path'
@@ -192,8 +194,25 @@ function Get-LogText {
 
 function Assert-NoFatalLog {
     param([string] $Text, [string] $Context)
-    $fatal = '(?im)(Critical injection failure|Mixin apply failed|InvalidInjectionException|InjectionError|Minecraft has crashed|A critical error occurred|PackForge.*(?:ERROR|Exception|FATAL))'
+    $fatal = '(?im)(Critical injection failure|Mixin apply failed|MixinTransformerError|InvalidInjection(?:Exception|PointException)?|InjectionError|IllegalClassLoadError|NoClassDefFoundError|ExceptionInInitializerError|(?:^|\s)LinkageError:|Minecraft has crashed|A critical error occurred|---- Minecraft Crash Report ----|Shutdown failure!|PackForge.*(?:ERROR|Exception|FATAL))'
     if ($Text -match $fatal) { throw "Fatal PackForge/Mixin signature found during ${Context}: $($Matches[0])" }
+}
+
+function Get-RunText {
+    param([string] $GameRoot, [string[]] $Paths)
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($path in $Paths) {
+        [string] $contents = Get-LogText -Path $path
+        if (-not [string]::IsNullOrEmpty($contents)) { [void] $parts.Add($contents) }
+    }
+    $crashRoot = Join-Path $GameRoot 'crash-reports'
+    if (Test-Path -LiteralPath $crashRoot -PathType Container) {
+        foreach ($report in @(Get-ChildItem -LiteralPath $crashRoot -Filter '*.txt' -File -ErrorAction SilentlyContinue)) {
+            [void] $parts.Add("---- Minecraft Crash Report ----`n$($report.FullName)`n$(Get-LogText -Path $report.FullName)")
+        }
+    }
+    return [string]::Join([Environment]::NewLine, $parts)
 }
 
 function Get-MarkerCount {
@@ -245,35 +264,51 @@ if ([string]::IsNullOrWhiteSpace($fallbackLibraries)) {
 if ([IO.Path]::GetPathRoot($clientRoot).TrimEnd('\') -eq $clientRoot.TrimEnd('\')) {
     throw 'ForgeClientRoot must not be a drive root.'
 }
-if ($VersionName -notmatch '^1\.20\.1-forge-[0-9A-Za-z.+_-]+$') {
+if ($VersionName -notmatch '^[0-9][0-9A-Za-z.+_-]*$') {
     throw "Unexpected Forge production version name: $VersionName"
 }
-if ([IO.Path]::GetFileName($artifact) -notmatch '^packforge-forge-.+-mc1\.20\.1\.jar$') {
-    throw "Artifact is not a Forge 1.20.1 production JAR: $artifact"
+$artifactMatch = [regex]::Match([IO.Path]::GetFileName($artifact), '^packforge-forge-.+-mc([0-9.]+(?:-[0-9.]+)?)\.jar$')
+if (-not $artifactMatch.Success) {
+    throw "Artifact is not a PackForge Forge production JAR: $artifact"
 }
+$artifactMinecraft = $artifactMatch.Groups[1].Value
+$targetMarker = 'mc' + $artifactMinecraft.Replace('.', '_').Replace('-', '_to_')
 
 $childJsonPath = Resolve-RequiredPath -Path (Join-Path $clientRoot "versions\$VersionName\$VersionName.json") -Description 'Forge version metadata'
 $child = Get-Content -LiteralPath $childJsonPath -Raw | ConvertFrom-Json
-if ([string] $child.id -ne $VersionName -or [string] $child.inheritsFrom -ne '1.20.1') {
+if ([string] $child.id -ne $VersionName) {
     throw "Forge metadata identity mismatch in $childJsonPath"
 }
 
-$parentName = [string] $child.inheritsFrom
-$parentVersionRoot = Join-Path $clientRoot "versions\$parentName"
-New-Item -ItemType Directory -Path $parentVersionRoot -Force | Out-Null
-$parentJsonPath = Join-Path $parentVersionRoot "$parentName.json"
-if (-not (Test-Path -LiteralPath $parentJsonPath -PathType Leaf)) {
-    $manifest = Invoke-RestMethod -Uri 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'
-    $version = @($manifest.versions | Where-Object { [string] $_.id -eq $parentName })
-    if ($version.Count -ne 1) { throw "Mojang manifest does not contain $parentName." }
-    Invoke-WebRequest -Uri ([string] $version[0].url) -OutFile $parentJsonPath
+$parentName = [string] (Get-ObjectProperty -Object $child -Name 'inheritsFrom')
+$parent = $null
+if ([string]::IsNullOrWhiteSpace($parentName)) {
+    $clientJar = Resolve-RequiredPath -Path (Join-Path $clientRoot "versions\$VersionName\$VersionName.jar") -Description 'Minecraft client JAR'
+    $assetMetadata = $child
+    $allLibraries = @($child.libraries)
+    $allJvmArguments = @($child.arguments.jvm)
+    $allGameArguments = @($child.arguments.game)
+} else {
+    $parentVersionRoot = Join-Path $clientRoot "versions\$parentName"
+    New-Item -ItemType Directory -Path $parentVersionRoot -Force | Out-Null
+    $parentJsonPath = Join-Path $parentVersionRoot "$parentName.json"
+    if (-not (Test-Path -LiteralPath $parentJsonPath -PathType Leaf)) {
+        $manifest = Invoke-RestMethod -Uri 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'
+        $version = @($manifest.versions | Where-Object { [string] $_.id -eq $parentName })
+        if ($version.Count -ne 1) { throw "Mojang manifest does not contain $parentName." }
+        Invoke-WebRequest -Uri ([string] $version[0].url) -OutFile $parentJsonPath
+    }
+    $parent = Get-Content -LiteralPath $parentJsonPath -Raw | ConvertFrom-Json
+    $clientJar = Resolve-RequiredPath -Path (Join-Path $parentVersionRoot "$parentName.jar") -Description 'Minecraft client JAR'
+    $assetMetadata = $parent
+    $allLibraries = @($child.libraries) + @($parent.libraries)
+    $allJvmArguments = @($parent.arguments.jvm) + @($child.arguments.jvm)
+    $allGameArguments = @($parent.arguments.game) + @($child.arguments.game)
 }
-$parent = Get-Content -LiteralPath $parentJsonPath -Raw | ConvertFrom-Json
-$clientJar = Resolve-RequiredPath -Path (Join-Path $parentVersionRoot "$parentName.jar") -Description 'Minecraft client JAR'
 
 $classpath = [Collections.Generic.List[string]]::new()
 $seenLibraries = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-foreach ($library in @($child.libraries) + @($parent.libraries)) {
+foreach ($library in $allLibraries) {
     $coordinateParts = ([string] $library.name).Split(':')
     $libraryKey = "$($coordinateParts[0]):$($coordinateParts[1])"
     if ($coordinateParts.Count -gt 3) { $libraryKey += ":$($coordinateParts[3])" }
@@ -302,7 +337,7 @@ $replacements = @{
     '${version_name}' = $VersionName
     '${game_directory}' = $gameRoot
     '${assets_root}' = $assets
-    '${assets_index_name}' = [string] $parent.assetIndex.id
+    '${assets_index_name}' = [string] $assetMetadata.assetIndex.id
     '${auth_uuid}' = '00000000000000000000000000000001'
     '${auth_access_token}' = '0'
     '${clientid}' = '0'
@@ -330,16 +365,16 @@ $javaArguments = [Collections.Generic.List[string]]::new()
 $javaArguments.Add('-Xms512m')
 $javaArguments.Add('-Xmx2048m')
 $javaArguments.Add("-Djava.library.path=$natives")
-foreach ($argument in (Expand-Arguments -Arguments (@($parent.arguments.jvm) + @($child.arguments.jvm)))) {
+foreach ($argument in (Expand-Arguments -Arguments $allJvmArguments)) {
     $expandedArgument = Expand-Token -Value $argument
     if ($expandedArgument.StartsWith('-DignoreList=', [StringComparison]::Ordinal) -and
-        $expandedArgument.IndexOf("$parentName.jar", [StringComparison]::OrdinalIgnoreCase) -lt 0) {
-        $expandedArgument += ",$parentName.jar"
+        $expandedArgument.IndexOf("$([IO.Path]::GetFileName($clientJar))", [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        $expandedArgument += ",$([IO.Path]::GetFileName($clientJar))"
     }
     $javaArguments.Add($expandedArgument)
 }
 $javaArguments.Add([string] $child.mainClass)
-foreach ($argument in (Expand-Arguments -Arguments (@($parent.arguments.game) + @($child.arguments.game)))) {
+foreach ($argument in (Expand-Arguments -Arguments $allGameArguments)) {
     $javaArguments.Add((Expand-Token -Value $argument))
 }
 $javaArguments.Add('--width')
@@ -367,7 +402,7 @@ $stderrTask = $null
 $window = [IntPtr]::Zero
 $cleanExit = $false
 $controlledTermination = $false
-$reloadMarker = 'minecraft:textures/atlas/mob_effects.png-atlas'
+$reloadMarkers = @('minecraft:textures/atlas/mob_effects.png-atlas', 'minecraft:textures/atlas/gui.png-atlas')
 $deadline = [datetime]::UtcNow.AddSeconds($TimeoutSeconds)
 try {
     $started = $process.Start()
@@ -381,20 +416,26 @@ try {
         Assert-NoFatalLog -Text $logText -Context 'production startup'
         $window = [PackForgeProductionSmokeNative]::FindWindow($process.Id)
         $hasArtifact = $logText.IndexOf([IO.Path]::GetFileName($artifact), [StringComparison]::OrdinalIgnoreCase) -ge 0
-        $hasCapabilities = $logText -match 'PackForge capabilities:.*target=mc1_20_1'
-        $hasReload = $logText.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasCapabilities = $logText -match "PackForge capabilities:.*target=$([regex]::Escape($targetMarker))"
+        $hasReload = $false
+        foreach ($reloadMarker in $reloadMarkers) {
+            if ($logText.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                $hasReload = $true
+                break
+            }
+        }
+        if ($process.HasExited) { throw "Production Forge exited before readiness with code $($process.ExitCode)." }
         if ($hasArtifact -and $hasCapabilities -and $hasReload -and ($ReloadCount -eq 0 -or $window -ne [IntPtr]::Zero)) {
             $ready = $true
             break
         }
-        if ($process.HasExited) { throw "Production Forge exited before readiness with code $($process.ExitCode)." }
         Start-Sleep -Seconds 2
     }
     if (-not $ready) { throw 'Production Forge did not reach its exact-artifact capability and final-atlas markers before timeout.' }
 
     for ($reload = 1; $reload -le $ReloadCount; $reload++) {
         [string] $before = Get-LogText -Path $latestLog
-        $beforeCount = Get-MarkerCount -Text $before -Marker $reloadMarker
+        $beforeCount = @($reloadMarkers | ForEach-Object { Get-MarkerCount -Text $before -Marker $_ } | Measure-Object -Sum).Sum
         if (-not [PackForgeProductionSmokeNative]::SendReload($window)) { throw "Could not send F3+T for reload $reload." }
         $reloadDeadline = [datetime]::UtcNow.AddSeconds(180)
         if ($reloadDeadline -gt $deadline) { $reloadDeadline = $deadline }
@@ -402,7 +443,8 @@ try {
         while ([datetime]::UtcNow -lt $reloadDeadline) {
             [string] $logText = Get-LogText -Path $latestLog
             Assert-NoFatalLog -Text $logText -Context "production reload $reload"
-            if ((Get-MarkerCount -Text $logText -Marker $reloadMarker) -gt $beforeCount) {
+            $currentCount = @($reloadMarkers | ForEach-Object { Get-MarkerCount -Text $logText -Marker $_ } | Measure-Object -Sum).Sum
+            if ($currentCount -gt $beforeCount) {
                 $reloaded = $true
                 break
             }
@@ -422,7 +464,6 @@ try {
         if ($process.ExitCode -ne 0) { throw "Production Forge clean-close exit code was $($process.ExitCode)." }
         $cleanExit = $true
     }
-    Assert-NoFatalLog -Text (Get-LogText -Path $latestLog) -Context 'production shutdown'
     $passed = $true
 } finally {
     if ($started) {
@@ -434,5 +475,7 @@ try {
 }
 
 if (-not $passed) { throw 'Production Forge smoke failed.' }
+$finalText = Get-RunText -GameRoot $gameRoot -Paths @($latestLog, $stdoutPath, $stderrPath)
+Assert-NoFatalLog -Text $finalText -Context 'production shutdown'
 $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash
 Write-Output "PASS Forge production smoke: version=$VersionName artifact=$([IO.Path]::GetFileName($artifact)) sha256=$hash reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot"

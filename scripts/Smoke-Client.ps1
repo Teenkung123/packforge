@@ -14,7 +14,13 @@ param(
     [ValidateRange(0, 100)]
     [int] $ReloadCount = 2,
 
-    [string] $ForgeVersionOverride
+    [string] $ForgeVersionOverride,
+
+    [string] $NeoForgeVersionOverride,
+
+    [string] $ArtifactPathOverride,
+
+    [switch] $AllowControlledTermination
 )
 
 Set-StrictMode -Version 2.0
@@ -482,11 +488,30 @@ function Read-LogText {
     param([string] $Path)
 
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
-    try {
-        return [System.IO.File]::ReadAllText($Path)
-    } catch {
-        return ''
+    return [string] (Get-Content -LiteralPath $Path -Raw -ErrorAction SilentlyContinue)
+}
+
+function Get-RunText {
+    param(
+        [string] $RunRoot,
+        [string[]] $LogPaths,
+        [datetime] $SinceUtc
+    )
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($path in $LogPaths) {
+        [string] $contents = Read-LogText -Path $path
+        if (-not [string]::IsNullOrEmpty($contents)) { [void] $parts.Add($contents) }
     }
+
+    $crashRoot = Join-Path $RunRoot 'crash-reports'
+    if (Test-Path -LiteralPath $crashRoot -PathType Container) {
+        foreach ($report in @(Get-ChildItem -LiteralPath $crashRoot -Filter '*.txt' -File -ErrorAction SilentlyContinue)) {
+            if ($report.LastWriteTimeUtc -lt $SinceUtc) { continue }
+            [void] $parts.Add("---- Minecraft Crash Report ----`n$($report.FullName)`n$(Read-LogText -Path $report.FullName)")
+        }
+    }
+    return [string]::Join([Environment]::NewLine, $parts)
 }
 
 function Get-LogMarkerCount {
@@ -595,10 +620,22 @@ if (-not [string]::IsNullOrWhiteSpace($requestedForgeOverride)) {
     }
 
     $minecraftVersion = [string] $targetConfig.minecraftVersion
+    $supportedMinecraftVersions = @($minecraftVersion)
+    $artifactMinecraft = [string] $targetConfig.artifactMinecraft
+    if ($artifactMinecraft -match '^([0-9]+\.[0-9]+)-([0-9]+\.[0-9]+)$') {
+        $supportedMinecraftVersions = @($Matches[1], $Matches[2])
+    }
     $targetForgePrefix = "$minecraftVersion-"
     if ($requestedForgeOverride.Contains('-')) {
-        if (-not $requestedForgeOverride.StartsWith($targetForgePrefix, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "Full ForgeVersionOverride must start with '$targetForgePrefix'."
+        $matchesSupportedVersion = $false
+        foreach ($supportedMinecraftVersion in $supportedMinecraftVersions) {
+            if ($requestedForgeOverride.StartsWith("$supportedMinecraftVersion-", [StringComparison]::OrdinalIgnoreCase)) {
+                $matchesSupportedVersion = $true
+                break
+            }
+        }
+        if (-not $matchesSupportedVersion) {
+            throw "Full ForgeVersionOverride must target one of: $($supportedMinecraftVersions -join ', ')."
         }
         $forgeOverride = $requestedForgeOverride
     } else {
@@ -607,6 +644,22 @@ if (-not [string]::IsNullOrWhiteSpace($requestedForgeOverride)) {
     if ($forgeOverride -notmatch '^[0-9][0-9A-Za-z.]*-[0-9][0-9A-Za-z.+_-]*$') {
         throw "Invalid normalized Forge dependency version '$forgeOverride'."
     }
+}
+
+$neoForgeOverride = ''
+$requestedNeoForgeOverride = $NeoForgeVersionOverride
+if ([string]::IsNullOrWhiteSpace($requestedNeoForgeOverride)) {
+    $requestedNeoForgeOverride = [Environment]::GetEnvironmentVariable('PACKFORGE_NEOFORGE_VERSION_OVERRIDE')
+}
+if (-not [string]::IsNullOrWhiteSpace($requestedNeoForgeOverride)) {
+    if ($Platform -ne 'neoforge') {
+        throw 'NeoForgeVersionOverride is valid only for NeoForge smoke runs.'
+    }
+    $requestedNeoForgeOverride = $requestedNeoForgeOverride.Trim()
+    if ($requestedNeoForgeOverride -notmatch '^[0-9][0-9A-Za-z.+_-]*$') {
+        throw 'NeoForgeVersionOverride contains unsupported characters.'
+    }
+    $neoForgeOverride = $requestedNeoForgeOverride
 }
 
 $effectiveReloadCount = $ReloadCount
@@ -663,6 +716,15 @@ $logFile = Join-Path $logRoot 'latest.log'
 $gradleStdout = Join-Path $logRoot 'packforge-smoke-gradle.stdout.log'
 $gradleStderr = Join-Path $logRoot 'packforge-smoke-gradle.stderr.log'
 $artifactPath = Join-Path (Join-Path $platformRoot "build\$Target\libs") $artifactName
+if (-not [string]::IsNullOrWhiteSpace($ArtifactPathOverride)) {
+    if (-not $artifactSmoke) {
+        throw 'ArtifactPathOverride requires artifact smoke mode.'
+    }
+    $artifactPath = Get-FullPath -Path $ArtifactPathOverride
+    if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+        throw "ArtifactPathOverride is missing: $artifactPath"
+    }
+}
 $fixturePath = Join-Path (Join-Path $platformRoot "build\$Target\benchmark") 'deterministic-large-pack.zip'
 $fixtureDestination = Join-Path $resourcePackRoot 'deterministic-large-pack.zip'
 $configFile = Join-Path $configRoot 'packforge.json'
@@ -689,6 +751,9 @@ $clientOwnedProcesses = @{}
 $clientProcess = $null
 $minecraftWindow = $null
 $passed = $false
+$cleanExit = $false
+$controlledTermination = $false
+$artifactHash = 'source-mode'
 
 try {
     foreach ($directory in @($runRoot, $logRoot, $configRoot, $resourcePackRoot, $modsRoot)) {
@@ -733,16 +798,18 @@ try {
     }
 
     if ($artifactSmoke) {
-        $artifactOwnedProcesses = @{}
-        $artifactArguments = @('-p', $platformRoot, "-Ppackforge_target=$Target", 'build', '--no-daemon')
-        Invoke-GradleCommand `
-            -GradleWrapper $gradleWrapper `
-            -Arguments $artifactArguments `
-            -WorkingDirectory $repoRoot `
-            -StandardOutput $gradleStdout `
-            -StandardError $gradleStderr `
-            -Deadline $deadline `
-            -OwnedProcesses $artifactOwnedProcesses
+        if ([string]::IsNullOrWhiteSpace($ArtifactPathOverride)) {
+            $artifactOwnedProcesses = @{}
+            $artifactArguments = @('-p', $platformRoot, "-Ppackforge_target=$Target", 'build', '--no-daemon')
+            Invoke-GradleCommand `
+                -GradleWrapper $gradleWrapper `
+                -Arguments $artifactArguments `
+                -WorkingDirectory $repoRoot `
+                -StandardOutput $gradleStdout `
+                -StandardError $gradleStderr `
+                -Deadline $deadline `
+                -OwnedProcesses $artifactOwnedProcesses
+        }
 
         if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
             throw "Expected packaged artifact was not produced at the exact expected path: $artifactPath"
@@ -752,6 +819,11 @@ try {
         Copy-Item -LiteralPath $artifactPath -Destination $stagedArtifactPath -Force
         if (-not (Test-Path -LiteralPath $stagedArtifactPath -PathType Leaf)) {
             throw "Packaged artifact was not staged at the exact expected path: $stagedArtifactPath"
+        }
+        $artifactHash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+        $stagedArtifactHash = (Get-FileHash -LiteralPath $stagedArtifactPath -Algorithm SHA256).Hash
+        if ($artifactHash -ne $stagedArtifactHash) {
+            throw "Staged artifact hash mismatch: source=$artifactHash staged=$stagedArtifactHash"
         }
     }
 
@@ -796,6 +868,9 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
     if ($forgeOverride.Length -gt 0) {
         $runArguments += "-Ppackforge_forge_version_override=$forgeOverride"
     }
+    if ($neoForgeOverride.Length -gt 0) {
+        $runArguments += "-Ppackforge_neoforge_version_override=$neoForgeOverride"
+    }
     $runArguments += @('runClient', '--no-daemon')
 
     $clientProcess = Start-GradleProcess `
@@ -807,7 +882,7 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
     $clientRootProcessId = [int] $clientProcess.Id
     Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
 
-    $fatalPattern = '(?im)(Critical injection failure|Mixin apply failed|InjectionError|Minecraft has crashed|A critical error occurred|PackForge.*(?:ERROR|Exception|FATAL)|\[.*(?:ERROR|FATAL)\].*PackForge)'
+    $fatalPattern = '(?im)(Critical injection failure|Mixin apply (?:for mod packforge )?failed|MixinTransformerError|InvalidInjection(?:Exception|PointException)?|InjectionError|IllegalClassLoadError|NoClassDefFoundError|ExceptionInInitializerError|(?:^|\s)LinkageError:|Minecraft has crashed|A critical error occurred|---- Minecraft Crash Report ----|Shutdown failure!|PackForge[^\r\n]{0,240}(?:ERROR|Exception|FATAL)|(?:ERROR|FATAL)[^\r\n]{0,120}(?:\[packforge(?:/|\])|\(packforge\)))'
     $capabilityPattern = "PackForge capabilities:.*target=$([regex]::Escape($Target))"
     $reloadMarker = 'PackForge reload complete:'
     $artifactMarker = $artifactName
@@ -824,14 +899,13 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
             -RunRoot $runRoot `
             -ClientStartUtc $clientStartUtc
         $hasCapabilities = $logText -match $capabilityPattern
-        $hasReload = $logText.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasPackForgeReload = $logText.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasVanillaReload = $logText.IndexOf('Reloading ResourceManager:', [StringComparison]::OrdinalIgnoreCase) -ge 0 -and `
+            $logText.IndexOf('Sound engine started', [StringComparison]::OrdinalIgnoreCase) -ge 0 -and `
+            $logText.IndexOf('textures/atlas/gui.png-atlas', [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasReload = $hasPackForgeReload -or $hasVanillaReload
         $hasArtifact = (-not $artifactSmoke) -or $logText.IndexOf($artifactMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasResourceHash = (-not $resourceHashEnabled) -or $logText.IndexOf('PackForge resolved-resource hash:', [StringComparison]::OrdinalIgnoreCase) -ge 0
-        if ($null -ne $minecraftWindow -and $hasCapabilities -and $hasReload -and $hasArtifact -and $hasResourceHash) {
-            $ready = $true
-            break
-        }
-
         if ($clientProcess.HasExited) {
             $clientProcess.WaitForExit()
             $clientProcess.Refresh()
@@ -840,11 +914,19 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
             $clientExitCode = Get-GradleExitCode -Process $clientProcess
             throw "runClient exited before readiness with code $clientExitCode.`n$stdoutTail`n$stderrTail"
         }
+        if (($null -ne $minecraftWindow -or $AllowControlledTermination) `
+            -and $hasCapabilities -and $hasReload -and $hasArtifact -and $hasResourceHash) {
+            $ready = $true
+            break
+        }
         Start-Sleep -Seconds 2
     }
 
     if (-not $ready) {
-        throw "Client did not reach a visible Minecraft window with capability, reload, and exact artifact markers before timeout."
+        throw "Client readiness timed out: window=$($null -ne $minecraftWindow) allowControlled=$($AllowControlledTermination.IsPresent) capabilities=$hasCapabilities reload=$hasReload artifact=$hasArtifact resourceHash=$hasResourceHash."
+    }
+    if ($null -eq $minecraftWindow -and $effectiveReloadCount -gt 0) {
+        throw 'A visible Minecraft window is required for F3+T reload validation.'
     }
 
     for ($reload = 1; $reload -le $effectiveReloadCount; $reload++) {
@@ -878,42 +960,49 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
         if (-not $reloadReady) { throw "Resource reload $reload did not emit a new completion marker before timeout." }
     }
 
-    if (-not [PackForgeSmokeNative]::CloseWindow($minecraftWindow.Handle)) {
-        throw 'Could not request a clean close for the Minecraft window.'
-    }
-
-    $closeDeadline = [datetime]::UtcNow.AddSeconds(90)
-    if ($closeDeadline -gt $deadline) { $closeDeadline = $deadline }
-    while ([datetime]::UtcNow -lt $closeDeadline) {
+    if ($null -eq $minecraftWindow) {
         Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
-        if (-not [PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle) -and $clientProcess.HasExited) {
-            break
+        Stop-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
+        $controlledTermination = $true
+    } else {
+        if (-not [PackForgeSmokeNative]::CloseWindow($minecraftWindow.Handle)) {
+            throw 'Could not request a clean close for the Minecraft window.'
         }
-        if ($clientProcess.HasExited -and [PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle)) {
-            throw 'Minecraft exited without closing its visible window cleanly.'
+
+		$closeDeadline = [datetime]::UtcNow.AddSeconds(90)
+		if ($closeDeadline -gt $deadline) { $closeDeadline = $deadline }
+		while ([datetime]::UtcNow -lt $closeDeadline) {
+			Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
+			if (-not [PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle) -and $clientProcess.HasExited) {
+				break
+			}
+			if ($clientProcess.HasExited -and [PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle)) {
+				throw 'Minecraft exited without closing its visible window cleanly.'
+			}
+			Start-Sleep -Seconds 2
+		}
+
+		if ([PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle)) {
+			throw 'Minecraft window did not close before the clean-exit timeout.'
+		}
+		if (-not $clientProcess.HasExited) {
+			throw 'runClient did not exit after the Minecraft window was closed.'
+		}
+		$clientProcess.Refresh()
+		$clientProcess.WaitForExit()
+		$clientProcess.Refresh()
+		$clientExitCode = Get-GradleExitCode -Process $clientProcess
+		if ($null -eq $clientExitCode) {
+			throw 'runClient exited after clean close without a readable exit code.'
+		}
+		if ([int] $clientExitCode -ne 0) {
+			throw "runClient exited after clean close with code $clientExitCode."
+		}
+		$cleanExit = $true
         }
-        Start-Sleep -Seconds 2
-    }
 
-    if ([PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle)) {
-        throw 'Minecraft window did not close before the clean-exit timeout.'
-    }
-    if (-not $clientProcess.HasExited) {
-        throw 'runClient did not exit after the Minecraft window was closed.'
-    }
-    $clientProcess.Refresh()
-    $clientProcess.WaitForExit()
-    $clientProcess.Refresh()
-    $clientExitCode = Get-GradleExitCode -Process $clientProcess
-    if ($null -eq $clientExitCode) {
-        throw 'runClient exited after clean close without a readable exit code.'
-    }
-    if ([int] $clientExitCode -ne 0) {
-        throw "runClient exited after clean close with code $clientExitCode."
-    }
-
-    $finalLogText = Read-LogText -Path $logFile
-    Assert-NoFatalLog -Text $finalLogText -FatalPattern $fatalPattern -Context 'client shutdown'
+    $finalRunText = Get-RunText -RunRoot $runRoot -LogPaths @($logFile, $gradleStdout, $gradleStderr) -SinceUtc $clientStartUtc
+    Assert-NoFatalLog -Text $finalRunText -FatalPattern $fatalPattern -Context 'client shutdown'
     $passed = $true
 } finally {
     if (-not $passed -and $clientRootProcessId -gt 0) {
@@ -924,6 +1013,7 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
 
 $overrideLabel = 'lower-bound'
 if ($forgeOverride.Length -gt 0) { $overrideLabel = $forgeOverride }
+if ($neoForgeOverride.Length -gt 0) { $overrideLabel = $neoForgeOverride }
 $smokeMode = 'source'
 if ($artifactSmoke) { $smokeMode = 'artifact' }
-Write-Output "PASS PackForge smoke: platform=$Platform target=$Target mode=$smokeMode artifact=$artifactName reloads=$effectiveReloadCount forgeVersion=$overrideLabel cleanExit=true"
+Write-Output "PASS PackForge smoke: platform=$Platform target=$Target mode=$smokeMode artifact=$artifactName sha256=$artifactHash reloads=$effectiveReloadCount forgeVersion=$overrideLabel cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant())"

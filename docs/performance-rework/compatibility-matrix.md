@@ -5,6 +5,7 @@ Outcome meanings:
 - `FULL_OPTIMIZED_PATH`: optimized path and required runtime checks passed.
 - `HOOK_PRESERVING_COALESCED_PATH`: original extension hooks remain authoritative while PackForge bounds scheduling.
 - `SAFE_ORIGINAL_PATH`: optimization deliberately bypassed for compatibility.
+- `STARTUP_VERIFIED`: exact artifact reached vanilla startup readiness; repeated reload and third-party profile acceptance remain separate.
 - `UNTESTED`: no live acceptance evidence in this worktree.
 - `FAILED`: a required check ran and failed.
 
@@ -15,9 +16,9 @@ Outcome meanings:
 | Forge 1.20.1 `47.0.0`, final integrated beta.2 JAR | `SAFE_ORIGINAL_PATH` | exact JAR SHA-256 `d8fe15c7...adbd` reached readiness; controlled termination; no F3+T series |
 | Forge 1.20.1 `47.4.20`, crash-hotfix beta.2 JAR | `SAFE_ORIGINAL_PATH` | earlier Modrinth production startup reached atlas creation; final integrated JAR not rerun; no F3+T series |
 | Forge 1.20.1 `47.4.22`, final integrated beta.2 JAR | `SAFE_ORIGINAL_PATH` | exact JAR SHA-256 `d8fe15c7...adbd` reached readiness after runtime-discovered Mixin fixes; controlled termination; no F3+T series |
-| Primary Fabric vanilla | `UNTESTED` | clean build/tests/package verification passed for every supported Fabric target; live runtime/manifest series pending |
-| Primary Forge vanilla | `UNTESTED` | clean build/tests/package verification passed for every supported Forge target; only Forge 1.20.1 endpoint startups were run live |
-| Primary NeoForge vanilla | `UNTESTED` | clean build/tests/package verification passed for every supported NeoForge target; live runtime/manifest series pending |
+| Primary Fabric vanilla | `STARTUP_VERIFIED` | local exact-final-artifact runs reported `cleanExit=true` on every supported target; shared artifact checked on actual 26.1 and 26.2 |
+| Primary Forge vanilla | `STARTUP_VERIFIED` | exact final artifacts reached startup readiness on every supported target; shared artifact checked on actual 26.1 and 26.2; controlled termination |
+| Primary NeoForge vanilla | `STARTUP_VERIFIED` | local exact-final-artifact runs reported `cleanExit=true` on every supported target; shared artifact checked on actual 26.1 and 26.2 |
 | Fabric + Sodium | `UNTESTED` | exact profile unavailable |
 | Fabric + Sodium + Iris | `UNTESTED` | exact profile unavailable |
 | Fabric + ImmediatelyFast | `UNTESTED` | exact profile unavailable |
@@ -44,7 +45,7 @@ The model path is intentionally `HOOK_PRESERVING_COALESCED_PATH` only when model
 | 1.21.11 | Fabric + Forge + NeoForge |
 | 26.1-26.2 | Fabric + Forge + NeoForge |
 
-`gradlew.bat clean buildAllSupported verifyAllArtifacts --no-daemon` passed in 3m21s with 32/32 root tasks executed after commit `bef22bc`. The verifier accepted exactly 17 artifacts and checked metadata, configured mixin classes, refmap/selector safety, structural operation anchors, duplicate-free packaging, and target/platform cardinality. `verifyExistingArtifacts` also passed independently. This is build/test/package proof, not live client proof for the unexecuted cells.
+`gradlew.bat clean buildAllSupported verifyAllArtifacts --no-daemon --console=plain` passed in 5m26s with 32/32 root tasks executed after the final startup fixes. The verifier accepted exactly 17 artifacts and checked metadata, configured mixin classes, refmap/selector safety, structural operation anchors, duplicate-free packaging, and target/platform cardinality. Startup acceptance then used those exact `build/libs` artifacts across every supported target/platform cell. This does not substitute for the still-unexecuted third-party compatibility profiles or repeated F3+T series.
 
 ## Required target-wide checks
 
