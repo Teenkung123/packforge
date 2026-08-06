@@ -178,7 +178,7 @@ JSON
 
 cat > "$run_root/options.txt" <<'OPTIONS'
 resourcePacks:["vanilla","file/deterministic-large-pack.zip"]
-incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
+incompatibleResourcePacks:[]
 OPTIONS
 
 fatal_pattern='Critical injection failure|Mixin apply failed|Mixin apply for mod .* failed|InjectionError|InvalidInjectionException|could not find target|NoClassDefFoundError|ExceptionInInitializerError|Could not execute entrypoint stage|Mod resolution failed|Incompatible mods found|Minecraft has crashed|PackForge runtime smoke failure|PackForge.*(ERROR|Exception)|\[.*ERROR\].*PackForge'
