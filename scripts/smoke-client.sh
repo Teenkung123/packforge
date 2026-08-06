@@ -172,6 +172,7 @@ OPTIONS
 fatal_pattern='Critical injection failure|Mixin apply failed|InjectionError|Minecraft has crashed|PackForge.*(ERROR|Exception)|\[.*ERROR\].*PackForge'
 gradle_pid=""
 wm_pid=""
+preexisting_minecraft_windows=""
 
 cleanup() {
   if [[ -n "$gradle_pid" ]] && kill -0 "$gradle_pid" 2>/dev/null; then
@@ -201,6 +202,10 @@ find_owned_minecraft_window() {
   expected_cwd="$(readlink -f "$run_root" 2>/dev/null || true)"
   while read -r candidate; do
     [[ -n "$candidate" ]] || continue
+    if ! grep -Fxq "$candidate" <<<"$preexisting_minecraft_windows"; then
+      echo "$candidate"
+      return 0
+    fi
     window_pid="$(xdotool getwindowpid "$candidate" 2>/dev/null || true)"
     [[ -n "$window_pid" ]] || continue
     window_cwd="$(readlink -f "/proc/$window_pid/cwd" 2>/dev/null || true)"
@@ -218,6 +223,8 @@ if command -v openbox >/dev/null 2>&1; then
   wm_pid=$!
   sleep 1
 fi
+# Xvfb windows may omit _NET_WM_PID, so ownership also uses a pre-launch snapshot.
+preexisting_minecraft_windows="$(xdotool search --onlyvisible --name 'Minecraft' 2>/dev/null || true)"
 
 run_arguments=(-p "$platform_root" -Ppackforge_target="$target")
 if [[ "$artifact_smoke" == "true" ]]; then
