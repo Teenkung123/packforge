@@ -71,17 +71,21 @@ public abstract class SpriteLoaderMixin {
 	@WrapMethod(method = "loadAndStitch")
 	private CompletableFuture<SpriteLoader.Preparations> packforge$associateAtlasState(
 		ResourceManager resourceManager,
-		Set<MetadataSectionType<?>> additional,
+		Identifier atlasId,
 		int mipLevel,
 		Executor executor,
+		Set<MetadataSectionType<?>> additional,
 		Operation<CompletableFuture<SpriteLoader.Preparations>> original
 	) {
-		PackforgeAtlasLoad invocation = new PackforgeAtlasLoad();
+		Identifier atlas = this.location;
+		PackforgeAtlasLoad invocation = new PackforgeAtlasLoad(
+			atlas,
+			ResourcePackUnboundedBridge.configuredOwner(atlas)
+		);
 		Deque<PackforgeAtlasLoad> invocations = PACKFORGE_ATLAS_LOADS.get();
 		invocations.push(invocation);
-		Identifier atlas = this.location;
 		try {
-			CompletableFuture<SpriteLoader.Preparations> future = original.call(resourceManager, additional, mipLevel, executor);
+			CompletableFuture<SpriteLoader.Preparations> future = original.call(resourceManager, atlasId, mipLevel, executor, additional);
 			SpriteMetadataCache.AtlasState state = invocation.state;
 			if (state == null) {
 				return future;
@@ -134,13 +138,14 @@ public abstract class SpriteLoaderMixin {
 	}
 
 	@WrapMethod(method = "runSpriteSuppliers")
-	private CompletableFuture<List<SpriteContents>> packforge$decodeBounded(
+	private static CompletableFuture<List<SpriteContents>> packforge$decodeBounded(
 		SpriteResourceLoader resourceLoader,
 		List<SpriteSource.Loader> loaders,
 		Executor executor,
 		Operation<CompletableFuture<List<SpriteContents>>> original
 	) {
-		if (packforge$resourcePackUnboundedOwnsAtlas()) {
+		PackforgeAtlasLoad invocation = PACKFORGE_ATLAS_LOADS.get().peek();
+		if (invocation != null && invocation.resourcePackUnboundedOwner) {
 			return original.call(resourceLoader, loaders, executor);
 		}
 
@@ -150,11 +155,12 @@ public abstract class SpriteLoaderMixin {
 		}
 
 		long startNs = AtlasTimings.start();
+		String atlas = invocation == null ? "unknown" : invocation.atlas.toString();
 		CompletableFuture<List<SpriteContents>> future = plan.decodeEnabled()
 			? BoundedSpriteDecode.decode(loaders, executor, plan, loader -> loader.get(resourceLoader))
 			: original.call(resourceLoader, loaders, executor);
 		return plan.phaseTimingsEnabled()
-			? future.whenComplete((ignored, error) -> AtlasTimings.recordDecode(this.location, startNs))
+			? future.whenComplete((ignored, error) -> AtlasTimings.recordDecode(atlas, startNs))
 			: future;
 	}
 
@@ -164,6 +170,13 @@ public abstract class SpriteLoaderMixin {
 
 	@Unique
 	private static final class PackforgeAtlasLoad {
+		private final Identifier atlas;
+		private final boolean resourcePackUnboundedOwner;
 		private SpriteMetadataCache.AtlasState state;
+
+		private PackforgeAtlasLoad(Identifier atlas, boolean resourcePackUnboundedOwner) {
+			this.atlas = atlas;
+			this.resourcePackUnboundedOwner = resourcePackUnboundedOwner;
+		}
 	}
 }

@@ -688,6 +688,34 @@ tasks.register("validateTargetRegistry") {
 				}
 			}
 		}
+		def reloadManagerSources = []
+		targets.each { target ->
+			def adapterSources = fileTree("versions/${target.apiAdapter}") {
+				include "**/ReloadableResourceManagerMixin.java"
+			}.files
+			if (adapterSources.size() != 1) {
+				throw new GradleException("Target ${target.key} must own exactly one ReloadableResourceManager mixin; found ${adapterSources.size()}.")
+			}
+			reloadManagerSources.addAll(adapterSources)
+		}
+		reloadManagerSources.each { source ->
+			def sourceText = source.getText("UTF-8")
+			def expectedWrapper = ~'(?s)private\\s+ReloadInstance\\s+packforge\\$createReload\\(\\s*Executor\\s+preparationExecutor,\\s*Executor\\s+reloadExecutor,\\s*CompletableFuture<Unit>\\s+initialStage,\\s*List<PackResources>\\s+packs,\\s*Operation<ReloadInstance>\\s+original\\s*\\)'
+			if (!(sourceText =~ expectedWrapper).find()
+				|| !sourceText.contains("original.call(preparationExecutor, reloadExecutor, initialStage, packs)")) {
+				throw new GradleException("${source} must mirror the four createReload arguments before Operation and forward them in order.")
+			}
+		}
+		def modernSpriteLoader = file("versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java")
+		def modernSpriteLoaderText = modernSpriteLoader.getText("UTF-8")
+		def expectedLoadAndStitchWrapper = ~'(?s)packforge\\$associateAtlasState\\(\\s*ResourceManager\\s+resourceManager,\\s*Identifier\\s+atlasId,\\s*int\\s+mipLevel,\\s*Executor\\s+executor,\\s*Set<MetadataSectionType<\\?>>\\s+additional,\\s*Operation<CompletableFuture<SpriteLoader\\.Preparations>>\\s+original\\s*\\)'
+		if (!(modernSpriteLoaderText =~ expectedLoadAndStitchWrapper).find()
+			|| !modernSpriteLoaderText.contains("original.call(resourceManager, atlasId, mipLevel, executor, additional)")) {
+			throw new GradleException("${modernSpriteLoader} must mirror the mc26 loadAndStitch arguments before Operation and forward them in order.")
+		}
+		if (!modernSpriteLoaderText.contains("private static CompletableFuture<List<SpriteContents>> packforge\$decodeBounded(")) {
+			throw new GradleException("${modernSpriteLoader} must keep the runSpriteSuppliers @WrapMethod handler static.")
+		}
 		fileTree("versions") { include "**/packforge.fabric.mixins.json" }.files.each { descriptor ->
 			if (descriptor.getText("UTF-8").contains("CompositePackResourcesMixin")) {
 				throw new GradleException("${descriptor} still registers the removed CompositePackResources mixin.")

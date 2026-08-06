@@ -7,14 +7,26 @@ import com.teenkung.packforge.loader.ReloadLifecycle;
 import com.teenkung.packforge.loader.RuntimeResourceHash;
 import com.teenkung.packforge.startup.StartupStatus;
 import com.teenkung.packforge.startup.StartupTimings;
+import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
+import net.minecraft.util.Unit;
 import org.spongepowered.asm.mixin.Mixin;
+
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 @Mixin(ReloadableResourceManager.class)
 public abstract class ReloadableResourceManagerMixin {
 	@WrapMethod(method = "createReload")
-	private ReloadInstance packforge$createReload(Operation<ReloadInstance> original) {
+	private ReloadInstance packforge$createReload(
+		Executor preparationExecutor,
+		Executor reloadExecutor,
+		CompletableFuture<Unit> initialStage,
+		List<PackResources> packs,
+		Operation<ReloadInstance> original
+	) {
 		ReloadExecutionContext context = ReloadLifecycle.startReload();
 		long startupStartNs = System.nanoTime();
 		if (context.features().startupStatusOverlayEnabled() && context.features().startupTimingActiveAtStart()) {
@@ -27,7 +39,7 @@ public abstract class ReloadableResourceManagerMixin {
 		try {
 			ReloadInstance instance;
 			try (ReloadExecutionContext.Scope ignored = ReloadExecutionContext.bind(context)) {
-				instance = original.call();
+				instance = original.call(preparationExecutor, reloadExecutor, initialStage, packs);
 			}
 			instance.done().whenComplete((result, error) -> {
 				if (error == null && ReloadExecutionContext.isCurrent(context)) {
