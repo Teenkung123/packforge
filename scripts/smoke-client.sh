@@ -214,7 +214,7 @@ find_owned_minecraft_window() {
       echo "$candidate"
       return 0
     fi
-  done < <(xdotool search --onlyvisible --name 'Minecraft' 2>/dev/null || true)
+  done < <(xdotool search --name 'Minecraft' 2>/dev/null || true)
   return 1
 }
 
@@ -223,8 +223,9 @@ if command -v openbox >/dev/null 2>&1; then
   wm_pid=$!
   sleep 1
 fi
-# Xvfb windows may omit _NET_WM_PID, so ownership also uses a pre-launch snapshot.
-preexisting_minecraft_windows="$(xdotool search --onlyvisible --name 'Minecraft' 2>/dev/null || true)"
+# Xvfb windows may be unmapped or omit _NET_WM_PID, so ownership also uses a
+# pre-launch snapshot and windowactivate maps the newly created client window.
+preexisting_minecraft_windows="$(xdotool search --name 'Minecraft' 2>/dev/null || true)"
 
 run_arguments=(-p "$platform_root" -Ppackforge_target="$target")
 if [[ "$artifact_smoke" == "true" ]]; then
