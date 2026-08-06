@@ -203,5 +203,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-mc1_21_1-fabric
-          path: build/runtime-benchmark/mc1_21_1-fabric
+          path: |
+            build/runtime-benchmark/mc1_21_1-fabric
+            platform/fabric/run/mc1_21_1/logs/latest.log
+            platform/fabric/run/mc1_21_1/logs/packforge-smoke-gradle.log
+            platform/fabric/run/mc1_21_1/logs/packforge-smoke-window-manager.log
           if-no-files-found: warn

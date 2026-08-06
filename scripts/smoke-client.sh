@@ -197,11 +197,15 @@ is_descendant_process() {
 }
 
 find_owned_minecraft_window() {
-  local candidate window_pid
+  local candidate window_pid window_cwd expected_cwd
+  expected_cwd="$(readlink -f "$run_root" 2>/dev/null || true)"
   while read -r candidate; do
     [[ -n "$candidate" ]] || continue
     window_pid="$(xdotool getwindowpid "$candidate" 2>/dev/null || true)"
-    if [[ -n "$window_pid" ]] && is_descendant_process "$window_pid"; then
+    [[ -n "$window_pid" ]] || continue
+    window_cwd="$(readlink -f "/proc/$window_pid/cwd" 2>/dev/null || true)"
+    if is_descendant_process "$window_pid" \
+      || { [[ -n "$expected_cwd" ]] && [[ "$window_cwd" == "$expected_cwd" ]]; }; then
       echo "$candidate"
       return 0
     fi
@@ -257,7 +261,21 @@ if [[ -z "$window_id" || ! -f "$log_file" ]] \
   || ! grep -Fq 'PackForge reload complete:' "$log_file" \
   || { [[ "$resource_hash" == "true" ]] && ! grep -Fq 'PackForge resolved-resource hash:' "$log_file"; } \
   || { [[ "$artifact_smoke" == "true" ]] && ! grep -Fq "$artifact_name" "$log_file"; }; then
-  echo "client did not reach a visible Minecraft window before timeout" >&2
+  has_log=false
+  has_capabilities=false
+  has_reload=false
+  has_resource_hash=false
+  has_artifact=false
+  [[ -f "$log_file" ]] && has_log=true
+  [[ -f "$log_file" ]] && grep -Fq 'PackForge capabilities:' "$log_file" && has_capabilities=true
+  [[ -f "$log_file" ]] && grep -Fq 'PackForge reload complete:' "$log_file" && has_reload=true
+  { [[ "$resource_hash" == "false" ]] || { [[ -f "$log_file" ]] && grep -Fq 'PackForge resolved-resource hash:' "$log_file"; }; } \
+    && has_resource_hash=true
+  { [[ "$artifact_smoke" == "false" ]] || { [[ -f "$log_file" ]] && grep -Fq "$artifact_name" "$log_file"; }; } \
+    && has_artifact=true
+  echo "client readiness timeout: window=$([[ -n "$window_id" ]] && echo true || echo false) log=$has_log capabilities=$has_capabilities reload=$has_reload resourceHash=$has_resource_hash artifact=$has_artifact" >&2
+  tail -n 200 "$gradle_log" >&2 || true
+  [[ -f "$log_file" ]] && tail -n 200 "$log_file" >&2 || true
   exit 1
 fi
 
