@@ -144,12 +144,15 @@ jobs:
           restore-keys: |
             packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.forge_version || 'registry' }}-
 
-      - name: Run loader smoke (packaged Fabric/NeoForge; source Forge)
+      - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
         env:
           PACKFORGE_FORGE_VERSION_OVERRIDE: ${{ matrix.forge_version }}
-          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.platform == 'fabric' || matrix.platform == 'neoforge' }}
+          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.platform == 'neoforge' || (matrix.platform == 'fabric' && matrix.target == 'mc26_1_to_26_2') }}
           PACKFORGE_ARTIFACT_INPUT_DIR: build/libs
         run: |
+          # Packaged smoke is limited to official-mapped NeoForge and mc26 Fabric.
+          # Legacy Fabric and all Forge use source mode here; exact legacy Fabric
+          # final-JAR acceptance uses the production harness.
           chmod +x gradlew scripts/smoke-client.sh
           ./scripts/smoke-client.sh "${{ matrix.platform }}" "${{ matrix.target }}" 900
 

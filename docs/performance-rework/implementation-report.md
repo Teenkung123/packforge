@@ -38,7 +38,7 @@ The hotfix replaces both selectors with structural hooks:
 
 The replacement Forge artifact is `packforge-forge-1.3.3-beta.2-mc1.20.1.jar`. The crash-only rollback artifact SHA-256 was `0505099080d0e64b5fa468f2fc0447987eac3951e8fae6d957218d852ae1e85e`. The final integrated artifact SHA-256 is `d8fe15c791282cf1acd893003246662a4daa97d1ba72e39510360b940d29adbd`. That exact final artifact reached readiness without a fatal mixin signature on Forge `47.0.0` and `47.4.22`; the earlier crash-only artifact also reached atlas creation on `47.4.20`. These runs do not prove F3+T completion or clean UI exit.
 
-Issue attachment URLs, retrieval hashes, causal logs, broken/fixed refmap details, and the beta.2 artifact audit are in `docs/forge-1.20.1-issue-5/`. Runtime-smoke workflows now define the 17 supported target/platform cells plus the extra reporter Forge row. Fabric/NeoForge use checksum-verified packaged artifacts; Forge CI is source-mode, with final SRG-JAR acceptance handled by `scripts/Smoke-Forge-Production.ps1`.
+Issue attachment URLs, retrieval hashes, causal logs, broken/fixed refmap details, and the beta.2 artifact audit are in `docs/forge-1.20.1-issue-5/`. Runtime-smoke workflows now define the 17 supported target/platform cells plus the extra reporter Forge row. NeoForge and official-mapped mc26 Fabric use checksum-verified packaged artifacts in CI. Legacy Fabric and Forge use source mode because their production namespaces cannot be loaded directly into the named development runtime; exact final-JAR acceptance is handled by the production smoke harnesses.
 
 ## Architecture before and after
 
