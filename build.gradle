@@ -464,6 +464,16 @@ def verifyArtifact = { target, platform, File artifact ->
 				}
 			}
 		}
+		if (target.apiAdapter == "mc26") {
+			def atlasInvocationClass = "com/teenkung/packforge/client/atlas/AtlasLoadInvocation.class"
+			if (!names.contains(atlasInvocationClass)) {
+				throw new GradleException("${artifact.name} is missing the external mc26 atlas invocation state class.")
+			}
+			def nestedSpriteMixinPrefix = 'com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin$'
+			if (names.any { it.startsWith(nestedSpriteMixinPrefix) && it.endsWith('.class') }) {
+				throw new GradleException("${artifact.name} packages a directly loadable nested class under the mc26 SpriteLoader mixin package.")
+			}
+		}
 		capabilityContract.each { capability, contract ->
 			if (target.capabilities.contains(capability)) {
 				(contract.classes ?: []).each { requiredClass ->

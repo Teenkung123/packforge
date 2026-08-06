@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.teenkung.packforge.client.atlas.AtlasReport;
+import com.teenkung.packforge.client.atlas.AtlasLoadInvocation;
 import com.teenkung.packforge.client.atlas.AtlasRetry;
 import com.teenkung.packforge.client.atlas.AtlasTimings;
 import com.teenkung.packforge.client.atlas.BoundedSpriteDecode;
@@ -34,7 +35,7 @@ import java.util.concurrent.Executor;
 @Mixin(SpriteLoader.class)
 public abstract class SpriteLoaderMixin {
 	@Shadow @Final private Identifier location;
-	@Unique private static final ThreadLocal<Deque<PackforgeAtlasLoad>> PACKFORGE_ATLAS_LOADS = ThreadLocal.withInitial(ArrayDeque::new);
+	@Unique private static final ThreadLocal<Deque<AtlasLoadInvocation>> PACKFORGE_ATLAS_LOADS = ThreadLocal.withInitial(ArrayDeque::new);
 
 	@WrapOperation(
 		method = "loadAndStitch",
@@ -58,13 +59,13 @@ public abstract class SpriteLoaderMixin {
 		if (!plan.atlasRetryApplies(this.location.toString())) {
 			return vanilla;
 		}
-		PackforgeAtlasLoad invocation = PACKFORGE_ATLAS_LOADS.get().peek();
-		if (invocation == null || invocation.state != null) {
+		AtlasLoadInvocation invocation = PACKFORGE_ATLAS_LOADS.get().peek();
+		if (invocation == null || invocation.state() != null) {
 			AtlasRetry.logRetryUnavailable(this.location);
 			return vanilla;
 		}
 		SpriteMetadataCache.AtlasState state = SpriteMetadataCache.bind(this.location, plan);
-		invocation.state = state;
+		invocation.bindState(state);
 		return CappedSpriteResourceLoader.wrap(vanilla, state);
 	}
 
@@ -78,15 +79,15 @@ public abstract class SpriteLoaderMixin {
 		Operation<CompletableFuture<SpriteLoader.Preparations>> original
 	) {
 		Identifier atlas = this.location;
-		PackforgeAtlasLoad invocation = new PackforgeAtlasLoad(
+		AtlasLoadInvocation invocation = new AtlasLoadInvocation(
 			atlas,
 			ResourcePackUnboundedBridge.configuredOwner(atlas)
 		);
-		Deque<PackforgeAtlasLoad> invocations = PACKFORGE_ATLAS_LOADS.get();
+		Deque<AtlasLoadInvocation> invocations = PACKFORGE_ATLAS_LOADS.get();
 		invocations.push(invocation);
 		try {
 			CompletableFuture<SpriteLoader.Preparations> future = original.call(resourceManager, atlasId, mipLevel, executor, additional);
-			SpriteMetadataCache.AtlasState state = invocation.state;
+			SpriteMetadataCache.AtlasState state = invocation.state();
 			if (state == null) {
 				return future;
 			}
@@ -105,7 +106,7 @@ public abstract class SpriteLoaderMixin {
 			});
 			return future;
 		} catch (RuntimeException | Error failure) {
-			SpriteMetadataCache.fail(invocation.state, null);
+			SpriteMetadataCache.fail(invocation.state(), null);
 			throw failure;
 		} finally {
 			invocations.removeFirstOccurrence(invocation);
@@ -144,8 +145,8 @@ public abstract class SpriteLoaderMixin {
 		Executor executor,
 		Operation<CompletableFuture<List<SpriteContents>>> original
 	) {
-		PackforgeAtlasLoad invocation = PACKFORGE_ATLAS_LOADS.get().peek();
-		if (invocation != null && invocation.resourcePackUnboundedOwner) {
+		AtlasLoadInvocation invocation = PACKFORGE_ATLAS_LOADS.get().peek();
+		if (invocation != null && invocation.resourcePackUnboundedOwner()) {
 			return original.call(resourceLoader, loaders, executor);
 		}
 
@@ -155,7 +156,7 @@ public abstract class SpriteLoaderMixin {
 		}
 
 		long startNs = AtlasTimings.start();
-		String atlas = invocation == null ? "unknown" : invocation.atlas.toString();
+		String atlas = invocation == null ? "unknown" : invocation.atlas().toString();
 		CompletableFuture<List<SpriteContents>> future = plan.decodeEnabled()
 			? BoundedSpriteDecode.decode(loaders, executor, plan, loader -> loader.get(resourceLoader))
 			: original.call(resourceLoader, loaders, executor);
@@ -166,17 +167,5 @@ public abstract class SpriteLoaderMixin {
 
 	private boolean packforge$resourcePackUnboundedOwnsAtlas() {
 		return ResourcePackUnboundedBridge.configuredOwner(this.location);
-	}
-
-	@Unique
-	private static final class PackforgeAtlasLoad {
-		private final Identifier atlas;
-		private final boolean resourcePackUnboundedOwner;
-		private SpriteMetadataCache.AtlasState state;
-
-		private PackforgeAtlasLoad(Identifier atlas, boolean resourcePackUnboundedOwner) {
-			this.atlas = atlas;
-			this.resourcePackUnboundedOwner = resourcePackUnboundedOwner;
-		}
 	}
 }
