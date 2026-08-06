@@ -25,7 +25,7 @@ public abstract class SpriteLoaderMixin {
 	@Shadow @Final private ResourceLocation location;
 
 	@WrapOperation(
-		method = "loadAndStitch",
+		method = "loadAndStitch(Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/resources/ResourceLocation;ILjava/util/concurrent/Executor;Ljava/util/Collection;)Ljava/util/concurrent/CompletableFuture;",
 		at = @At(
 			value = "INVOKE",
 			target = "Ljava/util/concurrent/CompletableFuture;supplyAsync(Ljava/util/function/Supplier;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;"

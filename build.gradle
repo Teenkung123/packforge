@@ -734,6 +734,12 @@ tasks.register("validateTargetRegistry") {
 		if (!modernSpriteLoaderText.contains("private static CompletableFuture<List<SpriteContents>> packforge\$decodeBounded(")) {
 			throw new GradleException("${modernSpriteLoader} must keep the runSpriteSuppliers @WrapMethod handler static.")
 		}
+		def legacy121SpriteLoader = file("versions/mc1_21_shared/common/src/client/java/com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java")
+		def legacy121SpriteLoaderText = legacy121SpriteLoader.getText("UTF-8")
+		def legacy121LoadAndStitchDescriptor = "loadAndStitch(Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/resources/ResourceLocation;ILjava/util/concurrent/Executor;Ljava/util/Collection;)Ljava/util/concurrent/CompletableFuture;"
+		if (!legacy121SpriteLoaderText.contains("method = \"${legacy121LoadAndStitchDescriptor}\"")) {
+			throw new GradleException("${legacy121SpriteLoader} must target the five-argument loadAndStitch overload explicitly.")
+		}
 		fileTree("versions") { include "**/packforge.fabric.mixins.json" }.files.each { descriptor ->
 			if (descriptor.getText("UTF-8").contains("CompositePackResourcesMixin")) {
 				throw new GradleException("${descriptor} still registers the removed CompositePackResources mixin.")
