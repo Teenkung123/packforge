@@ -10,6 +10,20 @@ if (registry.schemaVersion != 1) {
 	throw new GradleException("Unsupported PackForge target registry schema: ${registry.schemaVersion}")
 }
 
+def compareNumericVersions = { left, right ->
+	def leftParts = left.toString().tokenize('.').collect { it as int }
+	def rightParts = right.toString().tokenize('.').collect { it as int }
+	int length = Math.max(leftParts.size(), rightParts.size())
+	for (int index = 0; index < length; index++) {
+		int leftPart = index < leftParts.size() ? leftParts[index] : 0
+		int rightPart = index < rightParts.size() ? rightParts[index] : 0
+		if (leftPart != rightPart) {
+			return leftPart <=> rightPart
+		}
+	}
+	return 0
+}
+
 def targets = registry.targets
 def targetKeys = targets.collect { it.key }
 if (targetKeys.size() != targetKeys.toSet().size()) {
@@ -580,7 +594,7 @@ tasks.register("validateTargetRegistry") {
 	if (!undeclaredContracts.isEmpty()) {
 		throw new GradleException("PackForge target registry contains capabilities without artifact contracts: ${undeclaredContracts.sort().join(', ')}")
 	}
-		["mixinExtrasVersion", "fabricAsmVersion", "fabricMixinVersion"].each { field ->
+		["mixinExtrasVersion", "mixinExtrasFabricLoaderMinimum", "fabricAsmVersion", "fabricMixinVersion"].each { field ->
 			if (registry[field] == null) {
 				throw new GradleException("PackForge target registry is missing '${field}'.")
 			}
@@ -625,6 +639,10 @@ tasks.register("validateTargetRegistry") {
 				}
 				if (platformId == "fabric" && loader.loaderDependency != ">=${loader.loaderVersion}") {
 					throw new GradleException("Fabric target '${target.key}' must compile against its declared minimum Loader version.")
+				}
+				if (platformId == "fabric"
+					&& compareNumericVersions(loader.loaderVersion, registry.mixinExtrasFabricLoaderMinimum) < 0) {
+					throw new GradleException("Fabric target '${target.key}' Loader ${loader.loaderVersion} is below MixinExtras ${registry.mixinExtrasVersion} minimum ${registry.mixinExtrasFabricLoaderMinimum}.")
 				}
 				if (platformId == "forge") {
 					def forgeBuildVersion = loader.version.toString().substring(loader.version.toString().lastIndexOf("-") + 1)

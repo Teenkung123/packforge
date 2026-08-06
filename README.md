@@ -89,7 +89,7 @@ PackForge is compiled and tested against the lower bound shown here. Newer loade
 | 1.21.4 | 0.16.9 | 54.0.0 | 21.4.0-beta |
 | 1.21.8 | 0.16.14 | 58.0.0 | 21.8.0-beta |
 | 1.21.11 | 0.18.1 | 61.0.1 | 21.11.0-beta |
-| 1.20.1 | 0.14.19 | 47.0.0 | Not available |
+| 1.20.1 | 0.14.25 | 47.0.0 | Not available |
 
 PackForge is client-side only and does not need to be installed on the server.
 
