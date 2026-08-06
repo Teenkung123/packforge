@@ -172,7 +172,7 @@ OPTIONS
 fatal_pattern='Critical injection failure|Mixin apply failed|InjectionError|Minecraft has crashed|PackForge.*(ERROR|Exception)|\[.*ERROR\].*PackForge'
 gradle_pid=""
 wm_pid=""
-preexisting_minecraft_windows=""
+preexisting_client_windows=""
 
 cleanup() {
   if [[ -n "$gradle_pid" ]] && kill -0 "$gradle_pid" 2>/dev/null; then
@@ -197,12 +197,32 @@ is_descendant_process() {
   return 1
 }
 
+list_x11_client_windows() {
+  local managed_windows
+  managed_windows="$(
+    xprop -root _NET_CLIENT_LIST 2>/dev/null \
+      | sed -n 's/.*# //p' \
+      | tr ',' '\n' \
+      | tr -d ' \t\r' \
+      | sed '/^$/d' \
+      || true
+  )"
+  if [[ -n "$managed_windows" ]]; then
+    printf '%s\n' "$managed_windows"
+    return
+  fi
+  {
+    xdotool search --maxdepth 1 --name '.*' 2>/dev/null || true
+    xdotool search --maxdepth 1 --class '.*' 2>/dev/null || true
+  } | sed '/^$/d' | sort -u
+}
+
 find_owned_minecraft_window() {
   local candidate window_pid window_cwd expected_cwd
   expected_cwd="$(readlink -f "$run_root" 2>/dev/null || true)"
   while read -r candidate; do
     [[ -n "$candidate" ]] || continue
-    if ! grep -Fxq "$candidate" <<<"$preexisting_minecraft_windows"; then
+    if ! grep -Fxq "$candidate" <<<"$preexisting_client_windows"; then
       echo "$candidate"
       return 0
     fi
@@ -214,7 +234,7 @@ find_owned_minecraft_window() {
       echo "$candidate"
       return 0
     fi
-  done < <(xdotool search --name 'Minecraft' 2>/dev/null || true)
+  done < <(list_x11_client_windows)
   return 1
 }
 
@@ -223,9 +243,9 @@ if command -v openbox >/dev/null 2>&1; then
   wm_pid=$!
   sleep 1
 fi
-# Xvfb windows may be unmapped or omit _NET_WM_PID, so ownership also uses a
-# pre-launch snapshot and windowactivate maps the newly created client window.
-preexisting_minecraft_windows="$(xdotool search --name 'Minecraft' 2>/dev/null || true)"
+# Openbox's managed-client list works even when Xvfb windows are unmapped or
+# omit _NET_WM_PID. The snapshot excludes pre-existing clients on shared displays.
+preexisting_client_windows="$(list_x11_client_windows)"
 
 run_arguments=(-p "$platform_root" -Ppackforge_target="$target")
 if [[ "$artifact_smoke" == "true" ]]; then
@@ -282,6 +302,8 @@ if [[ -z "$window_id" || ! -f "$log_file" ]] \
   { [[ "$artifact_smoke" == "false" ]] || { [[ -f "$log_file" ]] && grep -Fq "$artifact_name" "$log_file"; }; } \
     && has_artifact=true
   echo "client readiness timeout: window=$([[ -n "$window_id" ]] && echo true || echo false) log=$has_log capabilities=$has_capabilities reload=$has_reload resourceHash=$has_resource_hash artifact=$has_artifact" >&2
+  echo "X11 client windows after launch:" >&2
+  list_x11_client_windows >&2 || true
   tail -n 200 "$gradle_log" >&2 || true
   [[ -f "$log_file" ]] && tail -n 200 "$log_file" >&2 || true
   exit 1
