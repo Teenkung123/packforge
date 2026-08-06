@@ -212,8 +212,8 @@ list_x11_client_windows() {
     return
   fi
   {
-    xdotool search --maxdepth 1 --name '.*' 2>/dev/null || true
-    xdotool search --maxdepth 1 --class '.*' 2>/dev/null || true
+    xdotool search --name '.*' 2>/dev/null || true
+    xdotool search --class '.*' 2>/dev/null || true
   } | sed '/^$/d' | sort -u
 }
 
@@ -302,6 +302,8 @@ if [[ -z "$window_id" || ! -f "$log_file" ]] \
   { [[ "$artifact_smoke" == "false" ]] || { [[ -f "$log_file" ]] && grep -Fq "$artifact_name" "$log_file"; }; } \
     && has_artifact=true
   echo "client readiness timeout: window=$([[ -n "$window_id" ]] && echo true || echo false) log=$has_log capabilities=$has_capabilities reload=$has_reload resourceHash=$has_resource_hash artifact=$has_artifact" >&2
+  echo "X11 client windows before launch:" >&2
+  printf '%s\n' "$preexisting_client_windows" >&2
   echo "X11 client windows after launch:" >&2
   list_x11_client_windows >&2 || true
   tail -n 200 "$gradle_log" >&2 || true
