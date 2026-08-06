@@ -12,9 +12,13 @@ import net.minecraft.resources.ResourceLocation;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
@@ -23,6 +27,9 @@ import java.util.function.Supplier;
 @Mixin(SpriteLoader.class)
 public abstract class SpriteLoaderMixin {
 	@Shadow @Final private ResourceLocation location;
+
+	@Unique private static final Map<List<?>, String> PACKFORGE_ATLAS_BY_SOURCES =
+		Collections.synchronizedMap(new WeakHashMap<>());
 
 	@WrapOperation(
 		method = "loadAndStitch(Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/resources/ResourceLocation;ILjava/util/concurrent/Executor;Ljava/util/Collection;)Ljava/util/concurrent/CompletableFuture;",
@@ -43,7 +50,9 @@ public abstract class SpriteLoaderMixin {
 		Supplier<List<Function<SpriteResourceLoader, SpriteContents>>> timedSupplier = () -> {
 			long startNs = AtlasTimings.start();
 			List<Function<SpriteResourceLoader, SpriteContents>> suppliers = sourceSupplier.get();
-			AtlasTimings.recordSource(this.location, startNs);
+			String atlas = this.location.toString();
+			PACKFORGE_ATLAS_BY_SOURCES.put(suppliers, atlas);
+			AtlasTimings.recordSource(atlas, startNs);
 			return suppliers;
 		};
 		return original.call(timedSupplier, executor);
@@ -60,7 +69,10 @@ public abstract class SpriteLoaderMixin {
 		if (!plan.decodeEnabled() && !plan.phaseTimingsEnabled()) {
 			return original.call(loader, suppliers, executor);
 		}
-		String atlas = "unknown";
+		String atlas = PACKFORGE_ATLAS_BY_SOURCES.remove(suppliers);
+		if (atlas == null) {
+			atlas = "unknown";
+		}
 		long startNs = AtlasTimings.start();
 		CompletableFuture<List<SpriteContents>> future = plan.decodeEnabled()
 			? BoundedSpriteDecode.decode(suppliers, executor, plan, supplier -> supplier.apply(loader))

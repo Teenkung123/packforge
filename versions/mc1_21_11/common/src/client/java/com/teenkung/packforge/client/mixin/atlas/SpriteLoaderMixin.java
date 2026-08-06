@@ -13,9 +13,13 @@ import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
@@ -23,6 +27,9 @@ import java.util.function.Supplier;
 @Mixin(SpriteLoader.class)
 public abstract class SpriteLoaderMixin {
 	@Shadow @Final private Identifier location;
+
+	@Unique private static final Map<List<?>, String> PACKFORGE_ATLAS_BY_SOURCES =
+		Collections.synchronizedMap(new WeakHashMap<>());
 
 	@WrapOperation(
 		method = "loadAndStitch",
@@ -43,7 +50,9 @@ public abstract class SpriteLoaderMixin {
 		Supplier<List<SpriteSource.Loader>> timedSupplier = () -> {
 			long startNs = AtlasTimings.start();
 			List<SpriteSource.Loader> loaders = sourceSupplier.get();
-			AtlasTimings.recordSource(this.location, startNs);
+			String atlas = this.location.toString();
+			PACKFORGE_ATLAS_BY_SOURCES.put(loaders, atlas);
+			AtlasTimings.recordSource(atlas, startNs);
 			return loaders;
 		};
 		return original.call(timedSupplier, executor);
@@ -60,7 +69,10 @@ public abstract class SpriteLoaderMixin {
 		if (!plan.decodeEnabled() && !plan.phaseTimingsEnabled()) {
 			return original.call(resourceLoader, loaders, executor);
 		}
-		String atlas = "unknown";
+		String atlas = PACKFORGE_ATLAS_BY_SOURCES.remove(loaders);
+		if (atlas == null) {
+			atlas = "unknown";
+		}
 		long startNs = AtlasTimings.start();
 		CompletableFuture<List<SpriteContents>> future = plan.decodeEnabled()
 			? BoundedSpriteDecode.decode(loaders, executor, plan, loader -> loader.get(resourceLoader))
