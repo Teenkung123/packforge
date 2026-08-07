@@ -4,59 +4,108 @@ import com.google.common.collect.Lists;
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.teenkung.packforge.client.mixin.font.FontManagerPreparationAccessor;
 import com.teenkung.packforge.config.FeatureFlags;
+import com.teenkung.packforge.config.ReloadFeatureSnapshot;
+import com.teenkung.packforge.concurrent.OrderedAsync;
+import com.teenkung.packforge.loader.ReloadExecutionContext;
 import net.minecraft.client.gui.font.FontOption;
 import net.minecraft.resources.ResourceLocation;
 
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.LongAdder;
 
+/** Reload-scoped, unique-stack font selection registry. */
 public final class FontSelectionRegistry {
 	private static final ThreadLocal<FontPreparationBundle> APPLYING = new ThreadLocal<>();
+	private static final ThreadLocal<ResourceLocation> CURRENT_FONT_ID = new ThreadLocal<>();
 	private static final Map<Object, FontPreparationBundle> PREPARED = new IdentityHashMap<>();
 
-	public static CompletableFuture<Object> prepareAsync(Object preparation, Set<FontOption> options, Executor executor) {
-		if (!FeatureFlags.fontPrepareProviderSelectionEnabled() && !FeatureFlags.fontReloadDiagnosticsEnabled()) {
+	public static boolean preparationHooksEnabled() {
+		ReloadFeatureSnapshot features = reloadFeatures();
+		return features == null
+			? FeatureFlags.fontPrepareProviderSelectionEnabled() || FeatureFlags.fontReloadDiagnosticsEnabled()
+			: features.fontPrepareProviderSelectionEnabled() || features.fontReloadDiagnosticsEnabled();
+	}
+
+	public static CompletableFuture<Object> prepareAsync(
+		Object preparation,
+		Set<FontOption> options,
+		Executor executor
+	) {
+		ReloadFeatureSnapshot features = reloadFeatures();
+		boolean selectionEnabled = features == null
+			? FeatureFlags.fontPrepareProviderSelectionEnabled()
+			: features.fontPrepareProviderSelectionEnabled();
+		boolean diagnosticsEnabled = features == null
+			? FeatureFlags.fontReloadDiagnosticsEnabled()
+			: features.fontReloadDiagnosticsEnabled();
+		if (!selectionEnabled && !diagnosticsEnabled) {
 			return CompletableFuture.completedFuture(preparation);
 		}
+
 		Map<ResourceLocation, List<GlyphProvider.Conditional>> fontSets =
 			((FontManagerPreparationAccessor) preparation).packforge$fontSets();
-		ConcurrentHashMap<ResourceLocation, FontPreparedSelection> selections = new ConcurrentHashMap<>();
-		ConcurrentHashMap<List<GlyphProvider.Conditional>, FontPreparedSelection> memoized = new ConcurrentHashMap<>();
-		LongAdder selectionNs = new LongAdder();
-		LongAdder memoHits = new LongAdder();
-		LongAdder memoMisses = new LongAdder();
-		CompletableFuture<?>[] tasks = FeatureFlags.fontPrepareProviderSelectionEnabled()
-			? fontSets.entrySet().stream().map(entry -> CompletableFuture.runAsync(() -> {
-				List<GlyphProvider.Conditional> providers = List.copyOf(Lists.reverse(entry.getValue()));
-				FontPreparedSelection selection = memoized.get(providers);
+		List<StackGroup> groups = groupFontSets(fontSets);
+		int workerBudget = features == null
+			? fallbackWorkerBudget()
+			: features.workerBudget();
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		CompletableFuture<List<FontPreparedSelection>> selectionsFuture = selectionEnabled
+			? OrderedAsync.map(
+				groups,
+				executor,
+				workerBudget,
+				1,
+				group -> FontPreparedSelection.compute(group.providers(), options),
+				selection -> { }
+			)
+			: CompletableFuture.completedFuture(List.of());
+
+		CompletableFuture<Object> result = selectionsFuture.thenApply(selections -> {
+			if (context != null && !ReloadExecutionContext.isCurrent(context)) {
+				return preparation;
+			}
+			Map<ResourceLocation, FontPreparedSelection> byId = new LinkedHashMap<>();
+			Map<FontProviderStackKey, FontPreparedSelection> byStack = new LinkedHashMap<>();
+			long selectionNs = 0L;
+			for (int i = 0; i < groups.size(); i++) {
+				StackGroup group = groups.get(i);
+				FontPreparedSelection selection = selectionEnabled ? selections.get(i) : null;
 				if (selection == null) {
-					FontPreparedSelection computed = FontPreparedSelection.compute(providers, options);
-					FontPreparedSelection existing = memoized.putIfAbsent(providers, computed);
-					selection = existing == null ? computed : existing;
-					if (existing == null) memoMisses.increment(); else memoHits.increment();
-				} else {
-					memoHits.increment();
+					continue;
 				}
-				selectionNs.add(selection.elapsedNs());
-				selections.put(entry.getKey(), selection);
-			}, executor)).toArray(CompletableFuture[]::new)
-			: new CompletableFuture<?>[0];
-		return CompletableFuture.allOf(tasks).thenApply(ignored -> {
+				selectionNs += selection.elapsedNs();
+				byStack.put(group.key(), selection);
+				for (ResourceLocation id : group.ids()) {
+					byId.put(id, selection);
+				}
+			}
 			FontReloadDiagnostics.Snapshot diagnostics = FontReloadDiagnostics.snapshot(
-				fontSets, selectionNs.sum(), memoHits.intValue(), memoMisses.intValue(), memoized.size()
+				fontSets,
+				selectionNs,
+				selectionEnabled ? Math.max(0, fontSets.size() - groups.size()) : 0,
+				selectionEnabled ? groups.size() : 0,
+				selectionEnabled ? groups.size() : 0,
+				diagnosticsEnabled
 			);
+			FontPreparationBundle bundle = new FontPreparationBundle(options, byId, byStack, diagnostics);
 			synchronized (PREPARED) {
-				PREPARED.put(preparation, new FontPreparationBundle(Set.copyOf(options), new HashMap<>(selections), diagnostics));
+				PREPARED.put(preparation, bundle);
 			}
 			return preparation;
 		});
+		result.whenComplete((ignored, error) -> {
+			if (error != null) {
+				discard(preparation);
+			}
+		});
+		return result;
 	}
 
 	public static void beginApply(Object preparation) {
@@ -65,9 +114,36 @@ public final class FontSelectionRegistry {
 		}
 	}
 
-	public static FontPreparedSelection currentSelection(List<GlyphProvider.Conditional> providers, Set<FontOption> options) {
+	public static FontPreparedSelection currentSelection(
+		Set<FontOption> currentOptions
+	) {
 		FontPreparationBundle bundle = APPLYING.get();
-		return bundle == null ? null : bundle.selectionFor(providers, options);
+		ResourceLocation id = CURRENT_FONT_ID.get();
+		return bundle == null || id == null ? null : bundle.selectionFor(id, currentOptions);
+	}
+
+	public static void beginFontSet(ResourceLocation id) {
+		CURRENT_FONT_ID.set(id);
+	}
+
+	public static void endFontSet() {
+		CURRENT_FONT_ID.remove();
+	}
+
+	public static FontPreparedSelection currentSelection(
+		ResourceLocation id,
+		Set<FontOption> currentOptions
+	) {
+		FontPreparationBundle bundle = APPLYING.get();
+		return bundle == null ? null : bundle.selectionFor(id, currentOptions);
+	}
+
+	public static FontPreparedSelection currentSelection(
+		List<GlyphProvider.Conditional> providers,
+		Set<FontOption> currentOptions
+	) {
+		FontPreparationBundle bundle = APPLYING.get();
+		return bundle == null ? null : bundle.selectionFor(providers, currentOptions);
 	}
 
 	public static FontPreparationBundle currentBundle() {
@@ -76,12 +152,61 @@ public final class FontSelectionRegistry {
 
 	public static void clear() {
 		APPLYING.remove();
+		CURRENT_FONT_ID.remove();
 	}
 
 	public static void resetForReload() {
 		clear();
 		synchronized (PREPARED) {
 			PREPARED.clear();
+		}
+	}
+
+	static List<StackGroup> groupFontSets(
+		Map<ResourceLocation, List<GlyphProvider.Conditional>> fontSets
+	) {
+		Map<FontProviderStackKey, GroupBuilder> grouped = new LinkedHashMap<>();
+		for (Map.Entry<ResourceLocation, List<GlyphProvider.Conditional>> entry : fontSets.entrySet()) {
+			List<GlyphProvider.Conditional> providers = List.copyOf(Lists.reverse(entry.getValue()));
+			FontProviderStackKey key = FontProviderStackKey.of(providers);
+			grouped.computeIfAbsent(key, ignored -> new GroupBuilder(key, providers)).ids.add(entry.getKey());
+		}
+		List<StackGroup> result = new ArrayList<>(grouped.size());
+		for (GroupBuilder group : grouped.values()) {
+			result.add(new StackGroup(group.key, group.providers, List.copyOf(group.ids)));
+		}
+		return List.copyOf(result);
+	}
+
+	static int fallbackWorkerBudget() {
+		return Math.max(1, Math.min(32, Runtime.getRuntime().availableProcessors()));
+	}
+
+	private static ReloadFeatureSnapshot reloadFeatures() {
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context == null ? null : context.features();
+	}
+
+	private static void discard(Object preparation) {
+		synchronized (PREPARED) {
+			PREPARED.remove(preparation);
+		}
+	}
+
+	static record StackGroup(
+		FontProviderStackKey key,
+		List<GlyphProvider.Conditional> providers,
+		List<ResourceLocation> ids
+	) {}
+
+	private static final class GroupBuilder {
+		private final FontProviderStackKey key;
+		private final List<GlyphProvider.Conditional> providers;
+		private final List<ResourceLocation> ids = new ArrayList<>();
+
+		private GroupBuilder(FontProviderStackKey key, List<GlyphProvider.Conditional> providers) {
+			this.key = key;
+			this.providers = providers;
 		}
 	}
 

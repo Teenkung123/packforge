@@ -4,6 +4,7 @@ import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.PackForgeCore;
 import com.teenkung.packforge.client.PackForgeClient;
 import com.teenkung.packforge.client.config.PackForgeConfigScreen;
+import com.teenkung.packforge.client.RuntimeSmokeController;
 import com.teenkung.packforge.platform.PackForgeServices;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -15,6 +16,7 @@ public final class PackForgeNeoForge {
 		PackForgeServices.init(new NeoForgePackForgePlatform());
 		PackForgeCore.init();
 		PackForgeClient.initClient();
+		RuntimeSmokeController.init();
 		IConfigScreenFactory configScreenFactory =
 			(ignored, parent) -> new PackForgeConfigScreen(parent);
 		container.registerExtensionPoint(IConfigScreenFactory.class, configScreenFactory);

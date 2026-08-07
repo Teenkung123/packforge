@@ -3,6 +3,7 @@ package com.teenkung.packforge.client.font;
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.config.FeatureFlags;
+import com.teenkung.packforge.loader.ReloadExecutionContext;
 import net.minecraft.resources.Identifier;
 
 import java.io.IOException;
@@ -20,7 +21,18 @@ public final class FontReloadDiagnostics {
 	}
 
 	public static Snapshot snapshot(Map<Identifier, List<GlyphProvider.Conditional>> fontSets, long selectionNs, int memoHits, int memoMisses, int uniqueStacks) {
-		if (!FeatureFlags.fontReloadDiagnosticsEnabled()) {
+		return snapshot(fontSets, selectionNs, memoHits, memoMisses, uniqueStacks, enabled());
+	}
+
+	public static Snapshot snapshot(
+		Map<Identifier, List<GlyphProvider.Conditional>> fontSets,
+		long selectionNs,
+		int memoHits,
+		int memoMisses,
+		int uniqueStacks,
+		boolean enabled
+	) {
+		if (!enabled) {
 			return Snapshot.EMPTY;
 		}
 		int providerCount = 0;
@@ -36,7 +48,7 @@ public final class FontReloadDiagnostics {
 	}
 
 	public static void startApply() {
-		if (FeatureFlags.fontReloadDiagnosticsEnabled()) {
+		if (enabled()) {
 			APPLY_STATS.set(new ApplyStats(System.nanoTime()));
 		}
 	}
@@ -52,7 +64,7 @@ public final class FontReloadDiagnostics {
 	public static void finishApply(Object preparation, FontPreparationBundle bundle) {
 		ApplyStats stats = APPLY_STATS.get();
 		APPLY_STATS.remove();
-		if (!FeatureFlags.fontReloadDiagnosticsEnabled() || stats == null) {
+		if (!enabled() || stats == null) {
 			return;
 		}
 		long totalNs = System.nanoTime() - stats.startNs;
@@ -91,6 +103,13 @@ public final class FontReloadDiagnostics {
 			return value;
 		}
 		return "\"" + value.replace("\"", "\"\"") + "\"";
+	}
+
+	private static boolean enabled() {
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context == null
+			? FeatureFlags.fontReloadDiagnosticsEnabled()
+			: context.features().fontReloadDiagnosticsEnabled();
 	}
 
 	private FontReloadDiagnostics() {}

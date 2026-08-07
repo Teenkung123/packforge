@@ -4,6 +4,7 @@ import com.mojang.blaze3d.font.GlyphProvider;
 import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.client.diagnostics.AsyncDiagnosticCsv;
 import com.teenkung.packforge.config.FeatureFlags;
+import com.teenkung.packforge.loader.ReloadExecutionContext;
 import net.minecraft.resources.ResourceLocation;
 
 import java.nio.file.Path;
@@ -14,7 +15,7 @@ public final class FontReloadDiagnostics {
 	private static final ThreadLocal<ApplyStats> APPLY_STATS = new ThreadLocal<>();
 
 	public static void startApply(Map<ResourceLocation, List<GlyphProvider>> providers) {
-		if (!FeatureFlags.fontReloadDiagnosticsEnabled()) {
+		if (!enabled()) {
 			return;
 		}
 		int providerCount = providers.values().stream().mapToInt(List::size).sum();
@@ -32,7 +33,7 @@ public final class FontReloadDiagnostics {
 	public static void finishApply() {
 		ApplyStats stats = APPLY_STATS.get();
 		APPLY_STATS.remove();
-		if (!FeatureFlags.fontReloadDiagnosticsEnabled() || stats == null) {
+		if (!enabled() || stats == null) {
 			return;
 		}
 		long applyNs = System.nanoTime() - stats.startNs;
@@ -55,6 +56,13 @@ public final class FontReloadDiagnostics {
 
 	private static long ms(long ns) {
 		return ns / 1_000_000L;
+	}
+
+	private static boolean enabled() {
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context == null
+			? FeatureFlags.fontReloadDiagnosticsEnabled()
+			: context.features().fontReloadDiagnosticsEnabled();
 	}
 
 	private static final class ApplyStats {

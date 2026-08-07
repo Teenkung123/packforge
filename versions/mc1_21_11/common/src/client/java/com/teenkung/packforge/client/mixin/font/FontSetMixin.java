@@ -36,7 +36,10 @@ public abstract class FontSetMixin {
 		long startNs = System.nanoTime();
 		boolean optimized = false;
 		try {
-			FontOptimizationState.Selection selection = FontOptimizationState.currentSelection(providers, options);
+			FontOptimizationState.Selection selection = FontOptimizationState.currentSelection(options);
+			if (selection == null) {
+				selection = FontOptimizationState.currentSelection(providers, options);
+			}
 			if (selection == null) return;
 			this.allProviders = providers;
 			this.activeProviders = List.of();

@@ -14,25 +14,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Minecraft.class)
 public abstract class MinecraftStartupMixin {
-	@Unique private static volatile long packforge$constructorStartNs;
 	@Unique private long packforge$tickStartNs;
 	@Unique private long packforge$renderStartNs;
 	@Unique private int packforge$sampledTicks;
 	@Unique private int packforge$sampledFrames;
 
-	@Inject(method = "<init>", at = @At("HEAD"))
-	private static void packforge$constructorStart(GameConfig config, CallbackInfo ci) {
-		packforge$constructorStartNs = System.nanoTime();
-		StartupStatus.update("Constructing", "Minecraft client");
-		StartupTimings.markBoundary("minecraft_constructor_start", "pre_ui_bootstrap");
-	}
-
 	@Inject(method = "<init>", at = @At("TAIL"))
 	private void packforge$constructorEnd(GameConfig config, CallbackInfo ci) {
-		if (packforge$constructorStartNs != 0L) {
-			StartupTimings.recordDuration("minecraft_constructor", System.nanoTime() - packforge$constructorStartNs);
-		}
-		StartupTimings.event("minecraft_constructor_complete");
+		// Constructor HEAD injections execute before the mandatory super call and are
+		// rejected by production Mixin runtimes. TAIL is the first portable boundary.
+		StartupTimings.markBoundary("minecraft_constructor_complete", "pre_ui_bootstrap");
 		StartupStatus.update("Waiting for", "loading overlay");
 	}
 

@@ -3,46 +3,97 @@ package com.teenkung.packforge.client.font;
 import com.mojang.blaze3d.font.GlyphInfo;
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.teenkung.packforge.PackForge;
+import com.teenkung.packforge.config.FeatureFlags;
+import com.teenkung.packforge.loader.ReloadExecutionContext;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import net.minecraft.client.gui.font.providers.BitmapProvider;
 import net.minecraft.server.packs.resources.ResourceManager;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Reload-generation scoped bitmap cache. Cache retirement never closes a
  * delegate still referenced by a FontManager owner.
  */
 public final class FontBitmapProviderCache {
-	private static final AtomicLong GENERATION = new AtomicLong();
-	private static final Map<Key, SharedState> CACHE = new ConcurrentHashMap<>();
+	private static final Object CACHE_LOCK = new Object();
+	private static final Map<Key, SharedState> CACHE = new HashMap<>();
+	private static long generation;
+
+	public static boolean enabled() {
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context == null
+			? FeatureFlags.fontBitmapProviderCacheEnabled()
+			: context.features().fontBitmapProviderCacheEnabled();
+	}
 
 	public static GlyphProvider get(ResourceManager manager, BitmapProvider.Definition definition) {
-		SharedState state = CACHE.get(Key.from(GENERATION.get(), manager, definition));
-		return state == null ? null : state.retain();
+		return get(captureEpoch(), manager, definition);
+	}
+
+	public static long captureEpoch() {
+		synchronized (CACHE_LOCK) {
+			return generation;
+		}
+	}
+
+	public static GlyphProvider get(long epoch, ResourceManager manager, BitmapProvider.Definition definition) {
+		synchronized (CACHE_LOCK) {
+			if (epoch != generation) {
+				return null;
+			}
+			SharedState state = CACHE.get(Key.from(epoch, manager, definition));
+			return state == null ? null : state.retain();
+		}
 	}
 
 	public static GlyphProvider cache(ResourceManager manager, BitmapProvider.Definition definition, GlyphProvider loaded) {
-		Key key = Key.from(GENERATION.get(), manager, definition);
-		SharedState candidate = new SharedState(loaded);
-		SharedState existing = CACHE.putIfAbsent(key, candidate);
-		if (existing != null) {
-			close(loaded, "duplicate");
-			return existing.retain();
+		return cache(captureEpoch(), manager, definition, loaded);
+	}
+
+	public static GlyphProvider cache(
+		long epoch,
+		ResourceManager manager,
+		BitmapProvider.Definition definition,
+		GlyphProvider loaded
+	) {
+		boolean duplicate = false;
+		GlyphProvider result;
+		synchronized (CACHE_LOCK) {
+			if (epoch != generation) {
+				return loaded;
+			}
+			Key key = Key.from(epoch, manager, definition);
+			SharedState candidate = new SharedState(loaded);
+			SharedState existing = CACHE.putIfAbsent(key, candidate);
+			if (existing == null) {
+				result = candidate.retain();
+			} else {
+				result = existing.retain();
+				if (result == null) {
+					return loaded;
+				}
+				duplicate = true;
+			}
 		}
-		return candidate.retain();
+		if (duplicate) {
+			close(loaded, "duplicate");
+		}
+		return result;
 	}
 
 	public static void resetForReload() {
-		GENERATION.incrementAndGet();
-		for (SharedState state : CACHE.values()) {
-			state.retire();
+		synchronized (CACHE_LOCK) {
+			generation++;
+			for (SharedState state : CACHE.values()) {
+				state.retire();
+			}
+			CACHE.clear();
 		}
-		CACHE.clear();
 	}
 
 	private static void close(GlyphProvider provider, String reason) {
@@ -92,20 +143,29 @@ public final class FontBitmapProviderCache {
 		}
 	}
 
-	private record SharedProvider(SharedState state) implements GlyphProvider {
+	private static final class SharedProvider implements GlyphProvider {
+		private final SharedState state;
+		private final AtomicBoolean released = new AtomicBoolean();
+
+		private SharedProvider(SharedState state) {
+			this.state = state;
+		}
+
 		@Override
 		public GlyphInfo getGlyph(int codepoint) {
-			return state.delegate.getGlyph(codepoint);
+			return this.state.delegate.getGlyph(codepoint);
 		}
 
 		@Override
 		public IntSet getSupportedGlyphs() {
-			return state.delegate.getSupportedGlyphs();
+			return this.state.delegate.getSupportedGlyphs();
 		}
 
 		@Override
 		public void close() {
-			state.release();
+			if (this.released.compareAndSet(false, true)) {
+				this.state.release();
+			}
 		}
 	}
 

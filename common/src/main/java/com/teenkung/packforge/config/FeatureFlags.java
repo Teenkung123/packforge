@@ -30,6 +30,8 @@ import static com.teenkung.packforge.config.PackForgeCapability.STARTUP_STATUS_O
 import static com.teenkung.packforge.config.PackForgeCapability.STARTUP_TIMINGS;
 import static com.teenkung.packforge.config.PackForgeCapability.ZIP_READ_POOL;
 
+import java.util.List;
+
 public final class FeatureFlags {
 	public static boolean reloadOptimizerEnabled() { return PackForgeConfig.get().reloadOptimizerEnabled; }
 	public static boolean largeAtlasFixerEnabled() { return PackForgeConfig.get().largeAtlasFixerEnabled; }
@@ -63,6 +65,10 @@ public final class FeatureFlags {
 	public static boolean atlasRetryEnabled() { return supports(ATLAS_RETRY) && largeAtlasFixerEnabled() && PackForgeConfig.get().atlasRetryEnabled; }
 	public static int atlasRetryMaxAttempts() { return PackForgeConfig.get().atlasRetryMaxAttempts; }
 	public static boolean atlasExcludes(String atlasId) { return PackForgeConfig.get().atlasExcludeIds.contains(atlasId); }
+	public static List<String> atlasExclusionIds() {
+		List<String> exclusions = PackForgeConfig.get().atlasExcludeIds;
+		return exclusions == null ? List.of() : List.copyOf(exclusions);
+	}
 
 	// Reserved settings remain serialized in config v12 but are not a delivered capability.
 	public static boolean experimentalAtlasSplitConfigured() { return false; }

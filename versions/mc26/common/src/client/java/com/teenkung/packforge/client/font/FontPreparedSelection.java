@@ -2,17 +2,20 @@ package com.teenkung.packforge.client.font;
 
 import com.mojang.blaze3d.font.GlyphProvider;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntCollection;
 import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.ints.IntLists;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import net.minecraft.client.gui.font.FontOption;
 import net.minecraft.client.gui.font.glyphs.SpecialGlyphs;
 import net.minecraft.util.Mth;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -22,6 +25,16 @@ public record FontPreparedSelection(
 	Int2ObjectMap<IntList> glyphsByWidth,
 	long elapsedNs
 ) {
+	public FontPreparedSelection {
+		providers = List.copyOf(providers);
+		activeProviders = List.copyOf(activeProviders);
+		Int2ObjectOpenHashMap<IntList> copiedWidths = new Int2ObjectOpenHashMap<>();
+		for (Int2ObjectMap.Entry<IntList> entry : glyphsByWidth.int2ObjectEntrySet()) {
+			copiedWidths.put(entry.getIntKey(), IntLists.unmodifiable(new IntArrayList(entry.getValue())));
+		}
+		glyphsByWidth = Int2ObjectMaps.unmodifiable(copiedWidths);
+	}
+
 	public static FontPreparedSelection compute(List<GlyphProvider.Conditional> providers, Set<FontOption> options) {
 		long startNs = System.nanoTime();
 		ArrayList<GlyphProvider> selectedProviders = new ArrayList<>();
@@ -32,7 +45,7 @@ public record FontPreparedSelection(
 		}
 
 		IntOpenHashSet seenGlyphs = new IntOpenHashSet();
-		HashSet<GlyphProvider> usedProviders = new HashSet<>();
+		Set<GlyphProvider> usedProviders = Collections.newSetFromMap(new IdentityHashMap<>());
 		Int2ObjectOpenHashMap<IntList> glyphsByWidth = new Int2ObjectOpenHashMap<>();
 		for (GlyphProvider provider : selectedProviders) {
 			IntCollection supportedGlyphs = (IntCollection)provider.getSupportedGlyphs();

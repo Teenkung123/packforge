@@ -46,6 +46,7 @@ public final class PackArchiveState implements AutoCloseable {
 
 		IndexFailure report = null;
 		PackIndex result;
+		PackIndex staleIndex = null;
 		synchronized (lock) {
 			if (closed) {
 				return null;
@@ -54,6 +55,7 @@ public final class PackArchiveState implements AutoCloseable {
 			if (snapshot.zipFile == zipFile) {
 				return snapshot.index;
 			}
+			staleIndex = snapshot.index;
 			try {
 				result = indexBuilder.build(zipFile);
 				indexSnapshot = IndexSnapshot.ready(zipFile, result);
@@ -64,6 +66,9 @@ public final class PackArchiveState implements AutoCloseable {
 			}
 		}
 
+		if (staleIndex != null) {
+			staleIndex.invalidateCaches();
+		}
 		if (report != null) {
 			onFirstFailure.accept(report);
 		}
@@ -123,13 +128,18 @@ public final class PackArchiveState implements AutoCloseable {
 	/** Clears cached failure/success and closes pooled handles, allowing reuse. */
 	public void invalidate() throws IOException {
 		ZipReadPool pool;
+		PackIndex index;
 		synchronized (lock) {
 			if (closed) {
 				return;
 			}
+			index = indexSnapshot.index;
 			indexSnapshot = IndexSnapshot.uninitialized();
 			pool = readPool;
 			readPool = null;
+		}
+		if (index != null) {
+			index.invalidateCaches();
 		}
 		if (pool != null) {
 			pool.close();
@@ -140,14 +150,19 @@ public final class PackArchiveState implements AutoCloseable {
 	@Override
 	public void close() throws IOException {
 		ZipReadPool pool;
+		PackIndex index;
 		synchronized (lock) {
 			if (closed) {
 				return;
 			}
 			closed = true;
+			index = indexSnapshot.index;
 			indexSnapshot = IndexSnapshot.uninitialized();
 			pool = readPool;
 			readPool = null;
+		}
+		if (index != null) {
+			index.invalidateCaches();
 		}
 		if (pool != null) {
 			pool.close();

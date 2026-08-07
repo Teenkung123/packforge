@@ -15,6 +15,8 @@ def javaTarget = target.javaVersion as int
 def mainMixinConfig = target.mixinConfigs.main.toString()
 def clientMixinConfig = target.mixinConfigs.client.toString()
 def artifactSmoke = providers.gradleProperty("packforge_artifact_smoke").map(Boolean::parseBoolean).orElse(false).get()
+def neoForgeRuntimeVersionOverride = providers.gradleProperty("packforge_neoforge_version_override").orNull
+def neoForgeDependencyVersion = neoForgeRuntimeVersionOverride ?: loaderConfig.version.toString()
 
 layout.buildDirectory.set(file("build/${target.key}"))
 
@@ -106,7 +108,7 @@ tasks.named("compileJava", JavaCompile) {
 }
 
 neoForge {
-	version = loaderConfig.version
+	version = neoForgeDependencyVersion
 	validateAccessTransformers = false
 
 	runs {

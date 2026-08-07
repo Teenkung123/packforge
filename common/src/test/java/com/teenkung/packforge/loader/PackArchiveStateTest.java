@@ -15,9 +15,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PackArchiveStateTest {
@@ -84,11 +86,47 @@ class PackArchiveStateTest {
 	}
 
 	@Test
-	void closeIsPermanentAndIdempotent() throws Exception {
+	void invalidationDisablesOldCachesWithoutBreakingExistingReaders() throws Exception {
+		Path archive = DeterministicZipFixture.create(temporaryDirectory.resolve("invalidate.zip"), 100);
+		PackArchiveState state = new PackArchiveState();
+		try (ZipFile zipFile = new ZipFile(archive.toFile())) {
+			PackIndex oldIndex = state.index(zipFile, "invalidate.zip", failure -> {});
+			assertNotNull(oldIndex);
+			oldIndex.forEachFileWithPrefix("assets/minecraft/", ignored -> {});
+			oldIndex.namespacesFor("assets/", ResourceNamePolicy.current());
+			assertTrue(oldIndex.prefixCacheSize() > 0);
+			assertTrue(oldIndex.namespaceCacheSize() > 0);
+
+			state.invalidate();
+			assertFalse(oldIndex.cachesEnabled());
+			assertEquals(0, oldIndex.prefixCacheSize());
+			assertEquals(0, oldIndex.namespaceCacheSize());
+			List<String> names = new ArrayList<>();
+			oldIndex.forEachFileWithPrefix("assets/minecraft/", entry -> names.add(entry.path()));
+			assertTrue(names.contains("assets/minecraft/font/default.json"));
+
+			PackIndex newIndex = state.index(zipFile, "invalidate.zip", failure -> {});
+			assertNotNull(newIndex);
+			assertTrue(newIndex.cachesEnabled());
+			assertTrue(newIndex != oldIndex);
+		}
+	}
+
+	@Test
+	void closeDisablesExistingCachesAndIsPermanentAndIdempotent() throws Exception {
 		Path archive = DeterministicZipFixture.create(temporaryDirectory.resolve("closed.zip"), 1);
 		PackArchiveState state = new PackArchiveState();
+		PackIndex oldIndex;
+		try (ZipFile zipFile = new ZipFile(archive.toFile())) {
+			oldIndex = state.index(zipFile, "closed.zip", failure -> {});
+			assertNotNull(oldIndex);
+			oldIndex.forEachFileWithPrefix("assets/", ignored -> {});
+			assertTrue(oldIndex.prefixCacheSize() > 0);
+		}
 		state.close();
 		state.close();
+		assertFalse(oldIndex.cachesEnabled());
+		assertEquals(0, oldIndex.prefixCacheSize());
 		try (ZipFile zipFile = new ZipFile(archive.toFile())) {
 			assertNull(state.index(zipFile, "closed.zip", failure -> {}));
 		}

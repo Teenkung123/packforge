@@ -2,11 +2,8 @@ package com.teenkung.packforge.mixin.observe;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.teenkung.packforge.config.FeatureFlags;
-import com.teenkung.packforge.loader.LoaderTimings;
-import com.teenkung.packforge.loader.ReloadStatus;
-import com.teenkung.packforge.startup.StartupStatus;
-import com.teenkung.packforge.startup.StartupTimings;
+import com.teenkung.packforge.loader.ReloadExecutionContext;
+import com.teenkung.packforge.loader.ReloadListenerTelemetry;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,7 +22,7 @@ public abstract class SimpleReloadInstanceMixin {
 			target = "Lnet/minecraft/server/packs/resources/SimpleReloadInstance$StateFactory;create(Lnet/minecraft/server/packs/resources/PreparableReloadListener$SharedState;Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/PreparableReloadListener;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;"
 		)
 	)
-	private CompletableFuture<?> packforge$trackReloadStep(
+	private CompletableFuture<?> packforge$telemetry(
 		@Coerce Object stateFactory,
 		PreparableReloadListener.SharedState sharedState,
 		PreparableReloadListener.PreparationBarrier barrier,
@@ -34,104 +31,22 @@ public abstract class SimpleReloadInstanceMixin {
 		Executor reloadExecutor,
 		Operation<CompletableFuture<?>> original
 	) {
-		String name = listener.getName();
-		boolean trackStartup = StartupTimings.isActive();
-		boolean trackUiReadiness = !ReloadStatus.isStatusTextReady()
-			&& (FeatureFlags.loadingStatusOverlayEnabled()
-				|| FeatureFlags.startupStatusOverlayEnabled()
-				|| FeatureFlags.reloadSummaryToastEnabled());
-		if (!FeatureFlags.reloadListenerTimingsEnabled() && !FeatureFlags.loadingStatusOverlayEnabled() && !trackStartup && !trackUiReadiness) {
-			return packforge$invokeCreate(original, stateFactory, sharedState, barrier, listener, taskExecutor, reloadExecutor, name, false);
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		if (context == null) {
+			return original.call(stateFactory, sharedState, barrier, listener, taskExecutor, reloadExecutor);
 		}
-		Executor trackedTaskExecutor = command -> taskExecutor.execute(() -> {
-			boolean startupActive = trackStartup && StartupTimings.isActive();
-			if (FeatureFlags.loadingStatusOverlayEnabled()) {
-				ReloadStatus.prepareStarted(name);
-			}
-			if (FeatureFlags.startupStatusOverlayEnabled() && startupActive) {
-				StartupStatus.update("Preparing", readableStartupName(name));
-			}
-			long startNs = (FeatureFlags.reloadListenerTimingsEnabled() || startupActive) ? System.nanoTime() : 0L;
-			try {
-				command.run();
-			} finally {
-				if (FeatureFlags.reloadListenerTimingsEnabled()) {
-					LoaderTimings.recordListenerPrepare(name, System.nanoTime() - startNs);
-				}
-				if (startupActive) {
-					StartupTimings.recordDuration("prepare " + readableStartupName(name), System.nanoTime() - startNs);
-				}
-				if (FeatureFlags.loadingStatusOverlayEnabled()) {
-					ReloadStatus.prepareFinished();
-				}
-			}
-		});
-		Executor trackedReloadExecutor = command -> reloadExecutor.execute(() -> {
-			boolean startupActive = trackStartup && StartupTimings.isActive();
-			if (FeatureFlags.loadingStatusOverlayEnabled()) {
-				ReloadStatus.applyStarted(name);
-			}
-			if (FeatureFlags.startupStatusOverlayEnabled() && startupActive) {
-				StartupStatus.update("Applying", readableStartupName(name));
-			}
-			long startNs = (FeatureFlags.reloadListenerTimingsEnabled() || startupActive) ? System.nanoTime() : 0L;
-			try {
-				command.run();
-				ReloadStatus.resourceApplied(name);
-			} finally {
-				if (FeatureFlags.reloadListenerTimingsEnabled()) {
-					LoaderTimings.recordListenerApply(name, System.nanoTime() - startNs);
-				}
-				if (startupActive) {
-					StartupTimings.recordDuration("apply " + readableStartupName(name), System.nanoTime() - startNs);
-				}
-				if (FeatureFlags.loadingStatusOverlayEnabled()) {
-					ReloadStatus.applyFinished();
-				}
-			}
-		});
-		return packforge$invokeCreate(original, stateFactory, sharedState, barrier, listener, trackedTaskExecutor, trackedReloadExecutor, name, FeatureFlags.reloadListenerTimingsEnabled());
-	}
-
-	private CompletableFuture<?> packforge$invokeCreate(
-		Operation<CompletableFuture<?>> original,
-		Object stateFactory,
-		PreparableReloadListener.SharedState sharedState,
-		PreparableReloadListener.PreparationBarrier barrier,
-		PreparableReloadListener listener,
-		Executor taskExecutor,
-		Executor reloadExecutor,
-		String name,
-		boolean recordWall
-	) {
-		long startNs = recordWall ? System.nanoTime() : 0L;
+		String name = ReloadListenerTelemetry.canonicalName(listener.getName());
+		long startedNs = context.features().reloadListenerTimingsEnabled() ? System.nanoTime() : 0L;
+		Executor trackedTaskExecutor = ReloadListenerTelemetry.prepareExecutor(context, name, taskExecutor);
+		Executor trackedReloadExecutor = ReloadListenerTelemetry.applyExecutor(context, name, reloadExecutor);
 		CompletableFuture<?> future = original.call(
 			stateFactory,
 			sharedState,
 			barrier,
 			listener,
-			taskExecutor,
-			reloadExecutor
+			trackedTaskExecutor,
+			trackedReloadExecutor
 		);
-		return recordWall
-			? future.whenComplete((result, error) -> LoaderTimings.recordListenerWall(name, System.nanoTime() - startNs))
-			: future;
-	}
-
-	private static String readableStartupName(String listenerName) {
-		if (listenerName == null || listenerName.isBlank()) {
-			return "resources";
-		}
-		return switch (listenerName) {
-			case "AtlasManager" -> "texture atlases";
-			case "ModelManager" -> "models";
-			case "TextureManager" -> "textures";
-			case "SoundManager" -> "sounds";
-			case "LanguageManager" -> "languages";
-			case "FontManager" -> "fonts";
-			case "BlockColors" -> "block colors";
-			case "ItemColors" -> "item colors";
-			default -> listenerName;
-		};
+		return ReloadListenerTelemetry.observeListenerFuture(context, name, future, startedNs);
 	}
 }
