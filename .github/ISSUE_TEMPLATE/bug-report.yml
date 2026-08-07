@@ -1,0 +1,110 @@
+name: Bug report
+description: Report a reproducible problem with PackForge
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide the requested details so the problem can be reproduced and diagnosed.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for a duplicate.
+          required: true
+
+  - type: input
+    id: packforge_version
+    attributes:
+      label: PackForge version
+      placeholder: "Example: 1.3.3"
+    validations:
+      required: true
+
+  - type: input
+    id: minecraft_version
+    attributes:
+      label: Minecraft version
+      placeholder: "Example: 1.21.11"
+    validations:
+      required: true
+
+  - type: input
+    id: loader_version
+    attributes:
+      label: Loader and version
+      description: Include Fabric, Forge, or NeoForge and its version.
+      placeholder: "Example: Fabric Loader 0.18.1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Briefly describe the problem.
+      placeholder: Tell us what went wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest set of steps that reliably reproduces the problem.
+      placeholder: |
+        1. Start Minecraft with ...
+        2. Load ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed_behavior
+    attributes:
+      label: Observed behavior
+      description: What happened instead? Include exact error text when possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: client_logs
+    attributes:
+      label: Client logs
+      description: Required. Paste the relevant client log or attach latest.log. Remove personal paths and tokens.
+      render: shell
+      placeholder: Paste client logs here.
+    validations:
+      required: true
+
+  - type: textarea
+    id: crash_report
+    attributes:
+      label: Crash report (optional)
+      description: If Minecraft crashed, paste or attach the crash report here.
+      render: text
+
+  - type: textarea
+    id: related_content
+    attributes:
+      label: Other mods or resource packs (optional)
+      description: List anything else that may affect the problem.
+      placeholder: One item per line.
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or video (optional)
+      description: Drag and drop images or a video here if they help demonstrate the problem.
