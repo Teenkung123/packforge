@@ -65,10 +65,10 @@ def mainJavaDirs = [
 if (target.key in ["mc1_20_5", "mc1_20_6"]) {
 	mainJavaDirs.add(2, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/client/java"))
 }
-if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21_1", "mc1_21_4", "mc1_21_8"]) {
+if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_8"]) {
 	mainJavaDirs.add(2, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/client/java"))
 }
-if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21_1", "mc1_21_4", "mc1_21_8"]) {
+if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_8"]) {
 	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/main/java"))
 }
 def mainJavaSources = mainJavaDirs.collect { root ->
