@@ -1,3 +1,23 @@
+pluginManagement {
+	 repositories {
+		 gradlePluginPortal()
+		 maven { url = 'https://maven.kikugie.dev/releases' }
+	 }
+}
+
+plugins {
+	 id 'dev.kikugie.stonecutter' version '0.9.7'
+}
+
+stonecutter {
+	kotlinController = false
+	centralScript = 'stonecutter-build.gradle'
+	 create(rootProject) {
+		 version 'mc1_21_1', '1.21.1'
+		 vcsVersion = 'mc1_21_1'
+	 }
+}
+
 rootProject.name = 'packforge'
 
 // Loader projects are standalone builds invoked by the root aggregation tasks

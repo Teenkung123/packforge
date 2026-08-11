@@ -1,0 +1,3 @@
+plugins.apply 'dev.kikugie.stonecutter'
+
+stonecutter.active 'mc1_21_1' /* [SC] DO NOT EDIT */

@@ -1,0 +1,73 @@
+import groovy.json.JsonSlurper
+
+def packforgeRoot = file('../..').canonicalFile
+def registry = new JsonSlurper().parse(new File(packforgeRoot, 'gradle/minecraft-targets.json'))
+def currentMinecraft = stonecutter.current.version.toString()
+def currentTarget = registry.targets.find { it.minecraftVersion.toString() == currentMinecraft }
+if (currentTarget == null) {
+	throw new GradleException("Stonecutter target '${currentMinecraft}' is not registered in PackForge's target registry.")
+}
+
+def rootWrapper = new File(packforgeRoot, 'gradlew.bat').canonicalFile
+def platformBuilds = [
+	[name: 'Fabric', id: 'fabric', path: 'platform/fabric'],
+	[name: 'NeoForge', id: 'neoforge', path: 'platform/neoforge'],
+	[name: 'Forge', id: 'forge', path: 'platform/forge']
+]
+
+def versionProperties = new Properties()
+new File(packforgeRoot, 'gradle.properties').withInputStream { versionProperties.load(it) }
+def modVersion = versionProperties.getProperty('mod_version')
+if (modVersion == null || modVersion.isBlank()) {
+	throw new GradleException("PackForge gradle.properties must define mod_version for Stonecutter artifact checks.")
+}
+
+def targetPlatforms = platformBuilds.findAll { currentTarget.platforms[it.id] != null }
+def artifactNames = targetPlatforms.collect { platform ->
+	def loader = currentTarget.platforms[platform.id]
+	"packforge-${platform.id}-${modVersion}${loader.versionSuffix}-mc${currentTarget.artifactMinecraft}.jar"
+}
+
+def platformBuildTasks = targetPlatforms.collect { platform ->
+	tasks.register("buildStonecutter${platform.name}Target", Exec) {
+		group = 'build'
+		description = "Builds the ${platform.name} artifact for Stonecutter target ${currentTarget.key}."
+		workingDir(packforgeRoot)
+		commandLine('cmd', '/c', rootWrapper.absolutePath, '-p', platform.path,
+			"-Ppackforge_target=${currentTarget.key}", 'build', '--no-daemon', '--stacktrace')
+	}
+}
+
+def outputDirectory = layout.buildDirectory.dir("stonecutter/${currentTarget.key}/libs")
+
+tasks.register('buildStonecutterCurrentTarget') {
+	group = 'build'
+	description = "Builds the registry target selected by Stonecutter (${currentTarget.key}) without re-entering the root aggregator."
+	dependsOn(platformBuildTasks)
+}
+
+tasks.register('verifyStonecutterCurrentTarget') {
+	group = 'verification'
+	description = "Builds and verifies the registry target selected by Stonecutter (${currentTarget.key})."
+	dependsOn('buildStonecutterCurrentTarget')
+	doLast {
+		def output = outputDirectory.get().asFile
+		output.mkdirs()
+		targetPlatforms.each { platform ->
+			def expected = artifactNames[targetPlatforms.indexOf(platform)]
+			def source = new File(packforgeRoot, "${platform.path}/build/${currentTarget.key}/libs/${expected}")
+			if (!source.isFile()) {
+				throw new GradleException("Stonecutter target ${currentTarget.key} did not produce ${source}.")
+			}
+			copy {
+				from(source)
+				into(output)
+			}
+		}
+		def actual = output.listFiles()?.findAll { it.name.endsWith('.jar') }*.name?.sort() ?: []
+		if (actual != artifactNames.sort()) {
+			throw new GradleException("Stonecutter target ${currentTarget.key} artifact set mismatch: expected=${artifactNames.sort()}, actual=${actual}.")
+		}
+		logger.lifecycle("Stonecutter current-target artifacts verified: ${actual.join(', ')}")
+	}
+}

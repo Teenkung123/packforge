@@ -34,3 +34,19 @@
 - Deviations: Stonecutter not yet authoritative; this unit intentionally stops at registry authority and current-build compatibility.
 - Rollback point: parent `bfd63ce2549f81731f5ba05a4e7cfeeeeb627c20`.
 - Next mandatory phase: Stonecutter current-target scaffold/pilot.
+
+## Phase 2 — Stonecutter current-target pilot
+
+- Date: 2026-08-11
+- Commit SHA: `PENDING_CHECKPOINT_SHA`
+- Parent stable checkpoint: `8d53b8abd996b6d03a0cf135325144db5748c985`
+- Status: `FOCUSED_VERIFIED`
+- Files changed: `settings.gradle`, `stonecutter.gradle`, `stonecutter-build.gradle`, checkpoint documentation
+- Architecture decision: apply Stonecutter 0.9.7 only to the registered `mc1_21_1` pilot and keep the existing root aggregator as the fallback authority. The pilot invokes standalone loader builds directly, avoiding recursive root task re-entry and preserving Forge/NeoForge packaging.
+- Commands: `./gradlew.bat :mc1_21_1:tasks --no-daemon --stacktrace`; `./gradlew.bat :mc1_21_1:verifyStonecutterCurrentTarget --no-daemon --stacktrace`.
+- Results: Stonecutter target project task discovery PASS; Fabric, Forge, and NeoForge 1.21.1 standalone builds PASS; exact three-artifact pilot set PASS.
+- Generated artifacts: `build/stonecutter/mc1_21_1/libs` contains the three verified pilot JARs; public artifact names are unchanged.
+- Repair evidence: the first pilot delegation recursively re-entered the root Stonecutter task. The process tree was stopped and the task was repaired to invoke each standalone platform build directly before checkpointing.
+- Compatibility: no runtime hook or artifact packaging behavior changed; this is a parallel build path only.
+- Rollback point: parent `8d53b8abd996b6d03a0cf135325144db5748c985`.
+- Next mandatory phase: central effective ownership policy and capability deduplication.

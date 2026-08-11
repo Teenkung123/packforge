@@ -19,3 +19,12 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Verification: `./gradlew.bat validateTargetRegistry printResolvedMatrix buildTarget -Ppackforge_target=mc1_21_1 --no-daemon --stacktrace`; final focused build and all three child artifact verifiers passed
 - Status: `FOCUSED_VERIFIED`
 - Rollback: revert the registry checkpoint; schema v1 baseline is parent commit plus the documentation checkpoint
+
+## Stonecutter current-target pilot
+
+- Commit SHA: `PENDING_CHECKPOINT_SHA`
+- Parent SHA: `8d53b8abd996b6d03a0cf135325144db5748c985`
+- Scope: Stonecutter 0.9.7 settings integration and a parallel `mc1_21_1` current-target build path
+- Verification: `:mc1_21_1:tasks`; `:mc1_21_1:verifyStonecutterCurrentTarget`; Fabric, Forge, and NeoForge child builds plus exact three-artifact check
+- Status: `FOCUSED_VERIFIED`
+- Rollback: revert this checkpoint to return to the registry-only build; the legacy root aggregator remains available in the parent
