@@ -953,9 +953,14 @@ incompatibleResourcePacks:[]
         $hasArtifact = (-not $artifactSmoke) -or $logText.IndexOf($artifactMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasResourceHash = (-not $resourceHashEnabled) -or $logText.IndexOf('PackForge resolved-resource hash:', [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasRuntimeReady = (-not $AllowControlledTermination.IsPresent) -or $logText.IndexOf('PackForge runtime smoke ready:', [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasRuntimeComplete = (-not $AllowControlledTermination.IsPresent) -or $logText.IndexOf('PackForge runtime smoke complete:', [StringComparison]::OrdinalIgnoreCase) -ge 0
         if ($clientProcess.HasExited) {
             $clientProcess.WaitForExit()
             $clientProcess.Refresh()
+            if ($AllowControlledTermination.IsPresent -and $hasRuntimeComplete) {
+                $ready = $true
+                break
+            }
             $stdoutTail = Get-FileTail -Path $gradleStdout
             $stderrTail = Get-FileTail -Path $gradleStderr
             $clientExitCode = Get-GradleExitCode -Process $clientProcess

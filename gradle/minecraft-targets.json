@@ -1124,8 +1124,8 @@
         ]
       },
       "mixinConfigs": {
-        "main": "packforge.fabric.mixins.json",
-        "client": "packforge.fabric.client.mixins.json"
+        "main": "packforge.mc1_21_9_10.mixins.json",
+        "client": "packforge.mc1_21_9_10.client.mixins.json"
       },
       "capabilities": [
         "RESOURCE_PACK_INDEX",
@@ -1243,8 +1243,8 @@
         ]
       },
       "mixinConfigs": {
-        "main": "packforge.fabric.mixins.json",
-        "client": "packforge.fabric.client.mixins.json"
+        "main": "packforge.mc1_21_9_10.mixins.json",
+        "client": "packforge.mc1_21_9_10.client.mixins.json"
       },
       "capabilities": [
         "RESOURCE_PACK_INDEX",

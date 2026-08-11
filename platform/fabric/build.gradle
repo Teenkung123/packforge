@@ -57,12 +57,18 @@ def mainJavaDirs = [
 	file("src/main/java"),
 	new File(packforgeAdapterPlatformRoot, "src/main/java")
 ]
+if (target.key in ["mc1_21_9", "mc1_21_10"]) {
+	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/main/java"))
+}
 def mainResourceDirs = [
 	new File(packforgeCommonRoot, "src/main/resources"),
 	new File(packforgeAdapterCommonRoot, "src/main/resources"),
 	file("src/main/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/main/resources")
 ]
+if (target.key in ["mc1_21_9", "mc1_21_10"]) {
+	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/main/resources"))
+}
 if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
 	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/main/resources"))
 }
@@ -107,6 +113,12 @@ def mainJavaSources = mainJavaDirs.collect { root ->
 			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCache.java"
 			exclude "com/teenkung/packforge/client/font/FontPreparedSelection.java"
 			exclude "com/teenkung/packforge/client/mixin/font/FontManagerMixin.java"
+			exclude "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
+		}
+	}
+	if (target.key in ["mc1_21_9", "mc1_21_10"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
+		return fileTree(root) {
+			exclude "com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java"
 		}
 	}
 	return fileTree(root)
@@ -129,6 +141,9 @@ def clientResourceDirs = [
 	file("src/client/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/client/resources")
 ]
+if (target.key in ["mc1_21_9", "mc1_21_10"]) {
+	clientResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/client/resources"))
+}
 def testJavaDirs = [
 	new File(packforgeCommonRoot, "src/test/java"),
 	new File(packforgeAdapterCommonRoot, "src/test/java"),
@@ -175,6 +190,12 @@ def clientJavaSources = clientJavaDirs.collect { root ->
 			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCache.java"
 			exclude "com/teenkung/packforge/client/font/FontPreparedSelection.java"
 			exclude "com/teenkung/packforge/client/mixin/font/FontManagerMixin.java"
+			exclude "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
+		}
+	}
+	if (target.key in ["mc1_21_9", "mc1_21_10"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
+		return fileTree(root) {
+			exclude "com/teenkung/packforge/client/mixin/ui/LoadingOverlayMixin.java"
 		}
 	}
 	return fileTree(root)
