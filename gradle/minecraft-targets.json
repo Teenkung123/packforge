@@ -23,8 +23,8 @@
     {"id":"1.21.6","minecraftAnchor":"1.21.6","sourceFamily":"mc1_21_6","artifactFamily":"mc1_21_6","targetKey":"mc1_21_6","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned"},
     {"id":"1.21.7","minecraftAnchor":"1.21.8","sourceFamily":"mc1_21_7_8","artifactFamily":"mc1_21_7_8","targetKey":"mc1_21_7","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned"},
     {"id":"1.21.8","minecraftAnchor":"1.21.8","sourceFamily":"mc1_21_7_8","artifactFamily":"mc1_21_7_8","targetKey":"mc1_21_8","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
-    {"id":"1.21.9","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11","targetKey":"mc1_21_9_11","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned"},
-    {"id":"1.21.10","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11","targetKey":"mc1_21_9_11","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned"},
+    {"id":"1.21.9","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11","targetKey":"mc1_21_9","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned"},
+    {"id":"1.21.10","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11","targetKey":"mc1_21_10","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned"},
     {"id":"1.21.11","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11","targetKey":"mc1_21_11","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
     {"id":"26.1","minecraftAnchor":"26.1","sourceFamily":"mc26","artifactFamily":"mc26-stable","targetKey":"mc26_1_to_26_2","javaVersion":25,"maturity":"stable","supportGuarantee":"stable-primary","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
     {"id":"26.1.1","minecraftAnchor":"26.1","sourceFamily":"mc26","artifactFamily":"mc26-stable","targetKey":"mc26_1_to_26_2","javaVersion":25,"maturity":"stable","supportGuarantee":"stable-primary","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing-range-unverified-exact"},
@@ -42,7 +42,7 @@
     {"id":"mc1_21_5","minecraftAnchor":"1.21.5","mandatoryExactReleases":["1.21.5"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_5"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"planned"},
     {"id":"mc1_21_6","minecraftAnchor":"1.21.6","mandatoryExactReleases":["1.21.6"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_6"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"planned"},
     {"id":"mc1_21_7_8","minecraftAnchor":"1.21.8","mandatoryExactReleases":["1.21.7","1.21.8"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_7","mc1_21_8"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"anchor-existing"},
-    {"id":"mc1_21_9_11","minecraftAnchor":"1.21.11","mandatoryExactReleases":["1.21.9","1.21.10","1.21.11"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_11"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"anchor-existing"},
+    {"id":"mc1_21_9_11","minecraftAnchor":"1.21.11","mandatoryExactReleases":["1.21.9","1.21.10","1.21.11"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_9","mc1_21_10","mc1_21_11"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"anchor-existing"},
     {"id":"mc26","minecraftAnchor":"26.1","mandatoryExactReleases":["26.1","26.1.1","26.1.2","26.2"],"maturity":"stable","supportGuarantee":"stable-primary","javaVersion":25,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc26_1_to_26_2"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"range-unverified-exact"}
   ],
   "registryPolicy": {
@@ -1058,6 +1058,244 @@
         }
       }
     },
+    {
+      "key": "mc1_21_9",
+      "id": "mc1_21_9",
+      "minecraftAnchor": "1.21.9",
+      "minecraftRange": "=1.21.9",
+      "sourceFamily": "mc1_21_9_11",
+      "artifactFamily": "mc1_21_9_11-beta",
+      "mappingMode": {
+        "fabric": "named",
+        "forge": "official",
+        "neoforge": "official"
+      },
+      "packFormatRange": {
+        "min": [
+          69,
+          0
+        ],
+        "max": [
+          69,
+          0
+        ]
+      },
+      "loaderAvailability": [
+        "fabric",
+        "forge",
+        "neoforge"
+      ],
+      "loaderBuildVersions": {
+        "fabric": "0.19.3",
+        "forge": "1.21.9-59.0.5",
+        "neoforge": "21.9.16-beta"
+      },
+      "maturity": "beta",
+      "supportGuarantee": "beta",
+      "requiredExactSmokeVersions": [
+        "1.21.9"
+      ],
+      "artifactMetadataRange": "=1.21.9",
+      "quickPack": {
+        "profile": "strict-ownership",
+        "availability": "unverified"
+      },
+      "compatibilityProfiles": [
+        "base",
+        "quick-pack",
+        "renderer"
+      ],
+      "taskSuffix": "Mc1_21_9",
+      "minecraftVersion": "1.21.9",
+      "artifactMinecraft": "1.21.9",
+      "apiAdapter": "mc1_21_8",
+      "javaVersion": 21,
+      "mixinCompatibility": "JAVA_21",
+      "legacyApi": true,
+      "packMetadata": {
+        "schema": "range",
+        "minFormat": [
+          69,
+          0
+        ],
+        "maxFormat": [
+          69,
+          0
+        ]
+      },
+      "mixinConfigs": {
+        "main": "packforge.fabric.mixins.json",
+        "client": "packforge.fabric.client.mixins.json"
+      },
+      "capabilities": [
+        "RESOURCE_PACK_INDEX",
+        "ZIP_READ_POOL",
+        "LOADER_TIMINGS",
+        "RELOAD_LISTENER_TIMINGS",
+        "SHADER_STALL_DIAGNOSTICS",
+        "IMMEDIATELY_FAST_FONT_ATLAS_COMPAT",
+        "LOADING_STATUS_OVERLAY",
+        "LOADING_FADE_CONTROL",
+        "RELOAD_SUMMARY_TOAST",
+        "FONT_RELOAD_DIAGNOSTICS",
+        "FONT_PROVIDER_PRESELECTION",
+        "FONT_BITMAP_CACHE",
+        "ATLAS_PHASE_TIMINGS",
+        "ATLAS_DECODE_BATCHING",
+        "MODEL_PARSE_BATCHING",
+        "MODEL_PARSE_TIMINGS",
+        "MODEL_ADAPTIVE_BATCHING",
+        "MODEL_DUPLICATE_CACHE"
+      ],
+      "platforms": {
+        "fabric": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.8",
+          "loomVersion": "1.17.16",
+          "loaderVersion": "0.19.3",
+          "loaderDependency": ">=0.19.3",
+          "fabricApiVersion": "0.134.1+1.21.9",
+          "minecraftDependency": "=1.21.9",
+          "mappingMode": "named",
+          "accessWidener": "versions/mc1_21_8/fabric/src/main/resources/packforge.accesswidener",
+          "modMenuVersion": "16.0.1",
+          "modMenuEntrypoint": true
+        },
+        "forge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.8",
+          "version": "1.21.9-59.0.5",
+          "versionRange": "[59.0.5,60)",
+          "minecraftVersionRange": "[1.21.9]"
+        },
+        "neoforge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.8",
+          "version": "21.9.16-beta",
+          "versionRange": "[21.9.16-beta,21.10)",
+          "minecraftVersionRange": "[1.21.9]"
+        }
+      }
+},
+    {
+      "key": "mc1_21_10",
+      "id": "mc1_21_10",
+      "minecraftAnchor": "1.21.10",
+      "minecraftRange": "=1.21.10",
+      "sourceFamily": "mc1_21_9_11",
+      "artifactFamily": "mc1_21_9_11-beta",
+      "mappingMode": {
+        "fabric": "named",
+        "forge": "official",
+        "neoforge": "official"
+      },
+      "packFormatRange": {
+        "min": [
+          69,
+          0
+        ],
+        "max": [
+          69,
+          0
+        ]
+      },
+      "loaderAvailability": [
+        "fabric",
+        "forge",
+        "neoforge"
+      ],
+      "loaderBuildVersions": {
+        "fabric": "0.19.3",
+        "forge": "1.21.10-60.1.13",
+        "neoforge": "21.10.64"
+      },
+      "maturity": "beta",
+      "supportGuarantee": "beta",
+      "requiredExactSmokeVersions": [
+        "1.21.10"
+      ],
+      "artifactMetadataRange": "=1.21.10",
+      "quickPack": {
+        "profile": "strict-ownership",
+        "availability": "unverified"
+      },
+      "compatibilityProfiles": [
+        "base",
+        "quick-pack",
+        "renderer"
+      ],
+      "taskSuffix": "Mc1_21_10",
+      "minecraftVersion": "1.21.10",
+      "artifactMinecraft": "1.21.10",
+      "apiAdapter": "mc1_21_8",
+      "javaVersion": 21,
+      "mixinCompatibility": "JAVA_21",
+      "legacyApi": true,
+      "packMetadata": {
+        "schema": "range",
+        "minFormat": [
+          69,
+          0
+        ],
+        "maxFormat": [
+          69,
+          0
+        ]
+      },
+      "mixinConfigs": {
+        "main": "packforge.fabric.mixins.json",
+        "client": "packforge.fabric.client.mixins.json"
+      },
+      "capabilities": [
+        "RESOURCE_PACK_INDEX",
+        "ZIP_READ_POOL",
+        "LOADER_TIMINGS",
+        "RELOAD_LISTENER_TIMINGS",
+        "SHADER_STALL_DIAGNOSTICS",
+        "IMMEDIATELY_FAST_FONT_ATLAS_COMPAT",
+        "LOADING_STATUS_OVERLAY",
+        "LOADING_FADE_CONTROL",
+        "RELOAD_SUMMARY_TOAST",
+        "FONT_RELOAD_DIAGNOSTICS",
+        "FONT_PROVIDER_PRESELECTION",
+        "FONT_BITMAP_CACHE",
+        "ATLAS_PHASE_TIMINGS",
+        "ATLAS_DECODE_BATCHING",
+        "MODEL_PARSE_BATCHING",
+        "MODEL_PARSE_TIMINGS",
+        "MODEL_ADAPTIVE_BATCHING",
+        "MODEL_DUPLICATE_CACHE"
+      ],
+      "platforms": {
+        "fabric": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.8",
+          "loomVersion": "1.17.16",
+          "loaderVersion": "0.19.3",
+          "loaderDependency": ">=0.19.3",
+          "fabricApiVersion": "0.138.4+1.21.10",
+          "minecraftDependency": "=1.21.10",
+          "mappingMode": "named",
+          "accessWidener": "versions/mc1_21_8/fabric/src/main/resources/packforge.accesswidener",
+          "modMenuVersion": "16.0.1",
+          "modMenuEntrypoint": true
+        },
+        "forge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.8",
+          "version": "1.21.10-60.1.13",
+          "versionRange": "[60.1.13,61)",
+          "minecraftVersionRange": "[1.21.10]"
+        },
+        "neoforge": {
+          "maturity": "beta",
+          "versionSuffix": "-beta.8",
+          "version": "21.10.64",
+          "versionRange": "[21.10.64,21.11)",
+          "minecraftVersionRange": "[1.21.10]"
+        }
+      }
+},
     {
       "key": "mc1_21_11",
       "id": "mc1_21_11",

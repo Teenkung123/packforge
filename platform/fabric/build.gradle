@@ -78,10 +78,16 @@ def clientJavaDirs = [
 if (target.key in ["mc1_20_5", "mc1_20_6"]) {
 	clientJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/client/java"))
 }
-if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8"]) {
+if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]) {
 	clientJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/client/java"))
 }
+if (target.key in ["mc1_21_9", "mc1_21_10"]) {
+	clientJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/client/java"))
+}
 if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8"]) {
+	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/main/java"))
+}
+if (target.key in ["mc1_21_9", "mc1_21_10"]) {
 	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/main/java"))
 }
 def mainJavaSources = mainJavaDirs.collect { root ->
@@ -94,6 +100,13 @@ def mainJavaSources = mainJavaDirs.collect { root ->
 	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java"
+		}
+	}
+	if (target.key in ["mc1_21_9", "mc1_21_10"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
+		return fileTree(root) {
+			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCache.java"
+			exclude "com/teenkung/packforge/client/font/FontPreparedSelection.java"
+			exclude "com/teenkung/packforge/client/mixin/font/FontManagerMixin.java"
 		}
 	}
 	return fileTree(root)
@@ -155,6 +168,13 @@ def clientJavaSources = clientJavaDirs.collect { root ->
 	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java"
+		}
+	}
+	if (target.key in ["mc1_21_9", "mc1_21_10"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
+		return fileTree(root) {
+			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCache.java"
+			exclude "com/teenkung/packforge/client/font/FontPreparedSelection.java"
+			exclude "com/teenkung/packforge/client/mixin/font/FontManagerMixin.java"
 		}
 	}
 	return fileTree(root)
@@ -376,7 +396,11 @@ jar {
 }
 
 tasks.named("sourcesJar") {
-	duplicatesStrategy = DuplicatesStrategy.FAIL
+	if (target.key in ["mc1_21_9", "mc1_21_10"]) {
+		duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	} else {
+		duplicatesStrategy = DuplicatesStrategy.FAIL
+	}
 	archiveFileName = "packforge-fabric-${project.version}-mc${target.artifactMinecraft}-sources.jar"
 }
 
