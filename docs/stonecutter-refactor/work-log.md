@@ -38,7 +38,7 @@
 ## Phase 2 — Stonecutter current-target pilot
 
 - Date: 2026-08-11
-- Commit SHA: `PENDING_CHECKPOINT_SHA`
+- Commit SHA: `e078d00e1b4ffcbb32afc8667f81b99f0ae8fa3b`
 - Parent stable checkpoint: `8d53b8abd996b6d03a0cf135325144db5748c985`
 - Status: `FOCUSED_VERIFIED`
 - Files changed: `settings.gradle`, `stonecutter.gradle`, `stonecutter-build.gradle`, checkpoint documentation

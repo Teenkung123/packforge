@@ -22,7 +22,7 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 
 ## Stonecutter current-target pilot
 
-- Commit SHA: `PENDING_CHECKPOINT_SHA`
+- Commit SHA: `e078d00e1b4ffcbb32afc8667f81b99f0ae8fa3b`
 - Parent SHA: `8d53b8abd996b6d03a0cf135325144db5748c985`
 - Scope: Stonecutter 0.9.7 settings integration and a parallel `mc1_21_1` current-target build path
 - Verification: `:mc1_21_1:tasks`; `:mc1_21_1:verifyStonecutterCurrentTarget`; Fabric, Forge, and NeoForge child builds plus exact three-artifact check
