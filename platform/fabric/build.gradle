@@ -66,16 +66,22 @@ def mainResourceDirs = [
 if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
 	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/main/resources"))
 }
+if (target.key in ["mc1_20_5", "mc1_20_6"]) {
+	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/main/resources"))
+}
 def clientJavaDirs = [
 	new File(packforgeCommonRoot, "src/client/java"),
 	new File(packforgeAdapterCommonRoot, "src/client/java"),
 	file("src/client/java"),
 	new File(packforgeAdapterPlatformRoot, "src/client/java")
 ]
-if (target.key in ["mc1_21_1", "mc1_21_4", "mc1_21_8"]) {
+if (target.key in ["mc1_20_5", "mc1_20_6"]) {
+	clientJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/client/java"))
+}
+if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21_1", "mc1_21_4", "mc1_21_8"]) {
 	clientJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/client/java"))
 }
-if (target.key in ["mc1_21_1", "mc1_21_4", "mc1_21_8"]) {
+if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21_1", "mc1_21_4", "mc1_21_8"]) {
 	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/main/java"))
 }
 def mainJavaSources = mainJavaDirs.collect { root ->
@@ -83,6 +89,11 @@ def mainJavaSources = mainJavaDirs.collect { root ->
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.java"
 			exclude "com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java"
+		}
+	}
+	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
+		return fileTree(root) {
+			exclude "com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java"
 		}
 	}
 	return fileTree(root)
@@ -111,17 +122,39 @@ def testJavaDirs = [
 	file("src/test/java"),
 	new File(packforgeAdapterPlatformRoot, "src/test/java")
 ]
+if (target.key in ["mc1_20_5", "mc1_20_6"]) {
+	testJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/fabric/src/test/java"))
+}
 def testResourceDirs = [
 	new File(packforgeCommonRoot, "src/test/resources"),
 	new File(packforgeAdapterCommonRoot, "src/test/resources"),
 	file("src/test/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/test/resources")
 ]
+def testJavaSources = testJavaDirs.collect { root ->
+	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(packforgeAdapterPlatformRoot.canonicalFile.toPath())) {
+		return fileTree(root) {
+			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCacheTest.java"
+			exclude "com/teenkung/packforge/client/font/FontSelectionRegistryTest.java"
+		}
+	}
+	return fileTree(root)
+}
 def clientJavaSources = clientJavaDirs.collect { root ->
 	if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/client/atlas/BoundedSpriteDecode.java"
 			exclude "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
+		}
+	}
+	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
+		return fileTree(root) {
+			exclude "com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java"
+		}
+	}
+	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
+		return fileTree(root) {
+			exclude "com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java"
 		}
 	}
 	return fileTree(root)
@@ -140,7 +173,7 @@ sourceSets {
 		resources.setSrcDirs(mainResourceDirs)
 	}
 	client {
-		java.setSrcDirs(target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] ? [] : clientJavaDirs)
+		java.setSrcDirs(target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6"] ? [] : clientJavaDirs)
 		resources.setSrcDirs(clientResourceDirs)
 	}
 	test {
@@ -155,6 +188,10 @@ tasks.named("compileJava", JavaCompile) {
 
 tasks.named("compileClientJava", JavaCompile) {
 	setSource(files(clientJavaSources))
+}
+
+tasks.named("compileTestJava", JavaCompile) {
+	setSource(files(testJavaSources))
 }
 
 dependencies {

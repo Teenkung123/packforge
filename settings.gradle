@@ -17,6 +17,8 @@ stonecutter {
 		 version 'mc1_20_2', '1.20.2'
 		 version 'mc1_20_3', '1.20.3'
 		 version 'mc1_20_4', '1.20.4'
+		 version 'mc1_20_5', '1.20.5'
+		 version 'mc1_20_6', '1.20.6'
 		 version 'mc1_21_1', '1.21.1'
 		 version 'mc1_21_4', '1.21.4'
 		 version 'mc1_21_8', '1.21.8'
