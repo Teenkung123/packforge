@@ -18,6 +18,10 @@ Outcome labels follow the assignment: `FULL_OPTIMIZED_PATH`, `HOOK_PRESERVING_CO
 | Fabric 1.20.2 focused production build | `UNTESTED` runtime | `platform/fabric ... clean build` PASS; no startup/reload harness |
 | Forge 1.20.2 focused production build | `UNTESTED` runtime | `platform/forge ... clean build` PASS; no final-JAR startup/reload harness |
 | NeoForge 1.20.2 focused build | `FAILED` toolchain | ModDev 2.0.141 lacks the 20.2 capability; NeoGradle 7.0.116 fails under Gradle 9.5.1 before compile |
+| Fabric 1.20.3 focused production build | `UNTESTED` runtime | exact `buildMc1_20_3` Fabric build PASS; final JAR structural evidence captured, no startup/reload harness |
+| Forge 1.20.3 focused production build | `UNTESTED` runtime | exact `buildMc1_20_3` Forge build PASS; final JAR structural evidence captured, no final-JAR startup/reload harness |
+| NeoForge 1.20.3 focused build | `FAILED` toolchain | NeoForge 20.3.8-beta has no `neoforge-moddev-bundle` capability for ModDev 2.0.141; failure occurs before source compilation |
+| Fabric/Forge/NeoForge 1.20.4 final artifacts | `UNTESTED` runtime | exact `verifyMc1_20_4Artifacts` PASS; all three JARs package the archive bridge, SpriteLoader hook, descriptor, and beta metadata; no startup/reload harness |
 | Exact 22-release × official-loader matrix | `UNTESTED` | registry has all 22 rows; only current anchors are published, and 1.20.2 remains planned |
 
 Build and package success is not treated as runtime acceptance.

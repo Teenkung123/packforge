@@ -135,3 +135,18 @@
 - Commands: `./gradlew.bat buildAllSupported --rerun-tasks --no-daemon --stacktrace` PASS in 5m31s; `./gradlew.bat verifyAllArtifacts --no-daemon --stacktrace` PASS in 5m18s
 - Results: all six published targets, all 17 published loader artifacts, and final structural artifact checks passed. The 22-row registry remains honest about planned/unexecuted cells.
 - Next mandatory phase: exact 1.20.3 onward cells, production startup/reload evidence, final-JAR smoke, CI/publication generation, candidate gates, and final full-matrix checkpoint.
+
+## Phase 9 — exact 1.20.3 and 1.20.4 source-family cells
+
+- Date: 2026-08-11
+- Commit SHA: `948e437`
+- Parent stable checkpoint: `42838f2`
+- Status: `FOCUSED_VERIFIED`; exact release support not promoted
+- Files changed: registry exact target cells, Stonecutter nodes, Fabric/Forge/NeoForge source selection, the shared-family constructor descriptor/access widener, and the NeoForge 20.4 config-screen bridge
+- Architecture decision: keep one `mc1_20_3_4` operation-level source family, but split 1.20.3 and 1.20.4 into exact target metadata because the legacy Fabric production namespace requires exact compatibility. The family bridge is shared by source root; only loader/API wiring is target-specific.
+- Commands: `./gradlew.bat validateTargetRegistry --no-daemon --stacktrace`; `./gradlew.bat buildMc1_20_4 --rerun-tasks --no-daemon --stacktrace`; `./gradlew.bat verifyMc1_20_4Artifacts --no-daemon --stacktrace`; `./gradlew.bat buildMc1_20_3 --rerun-tasks --no-daemon --stacktrace`.
+- Results: registry validation PASS; 1.20.4 Fabric, Forge, and NeoForge production builds PASS and `verifyMc1_20_4Artifacts` PASS. 1.20.3 Fabric and Forge production builds PASS. NeoForge 1.20.3 fails before compile because official `20.3.8-beta` does not expose the `neoforge-moddev-bundle` capability required by ModDev 2.0.141.
+- Generated artifacts and SHA-256: `packforge-fabric-1.3.4-beta.4-mc1.20.3.jar` `4BC0004A1DE3168952019A72AB2F43093162E00E8BA95DA289A4F04C0F29B9CB`; `packforge-forge-1.3.4-beta.4-mc1.20.3.jar` `B2DE9FC92EF2C7A72C5093DABFC66C93A8B13C566ABD03781DD2B45B3BF224D8`; `packforge-fabric-1.3.4-beta.4-mc1.20.4.jar` `23BDC3DBDC2578F060DAE6C2FA68194B9426BDB48F064E2CBA954D561FED78BE`; `packforge-forge-1.3.4-beta.4-mc1.20.4.jar` `2DF33FFEDE575A9A2C088F6B5DD7D3EDB7FBECA86012395C3EF3C59AC92128F8`; `packforge-neoforge-1.3.4-beta.4-mc1.20.4.jar` `6467CE01A4E3D8D5E0DFDB8FE8580764895EAC69B1923EFA9B656089F16B3E54`.
+- Compatibility: final JAR inspection confirms the archive constructor bridge, operation-level archive hook, SpriteLoader hook, exact family descriptor, and beta metadata are packaged where available. All 1.20.3/1.20.4 startup, deterministic reload, semantic-hash, Quick Pack, and clean-exit cells remain `UNTESTED`; no cell enters published aggregation.
+- Rollback point: `948e437`.
+- Next mandatory phase: exact 1.20.5 and 1.20.6 Java-21 source-family cells, then exact 1.21 gaps.

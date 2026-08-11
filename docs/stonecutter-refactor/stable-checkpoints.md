@@ -127,3 +127,12 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Verification: Fabric 1.21.11 `clean build` passed
 - Status: `FOCUSED_VERIFIED`
 - Rollback: revert this descriptor-only repair
+
+## Exact 1.20.3 and 1.20.4 source-family cells
+
+- Commit SHA: `948e437`
+- Parent SHA: `42838f2`
+- Scope: exact 1.20.3/1.20.4 registry cells, Stonecutter nodes, shared-family bridge, loader source selection, and NeoForge 20.4 config-screen API bridge
+- Verification: `validateTargetRegistry` PASS; 1.20.4 all-loader production builds plus `verifyMc1_20_4Artifacts` PASS; 1.20.3 Fabric/Forge production builds PASS; NeoForge 1.20.3 blocked before compile by the official 20.3 artifact’s missing ModDev bundle capability
+- Status: `FOCUSED_VERIFIED` for the declared build/package scope; both exact releases remain planned pending every required loader and runtime evidence
+- Rollback: revert `948e437` to remove the two exact cells and family wiring while retaining the prior 1.20.2 feasibility checkpoint
