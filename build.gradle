@@ -749,6 +749,23 @@ tasks.register("validateTargetRegistry") {
 				fileTree(root) { include "**/${fileName}" }.files
 			}.unique { it.canonicalPath }
 		}
+		def sharedClientTargets = ["mc1_21_1", "mc1_21_4", "mc1_21_8"]
+		def effectiveTargetClientSources = { target, fileName ->
+			def roots = [file("versions/${target.apiAdapter}")]
+			if (target.key in sharedClientTargets) {
+				roots << file("versions/mc1_21_shared/common/src/client/java")
+			}
+			roots.collectMany { root ->
+				fileTree(root) { include "**/${fileName}" }.files
+			}.unique { it.canonicalPath }
+		}
+		sharedClientTargets.each { targetKey ->
+			def target = targets.find { it.key == targetKey }
+			def clientSources = effectiveTargetClientSources(target, "PackForgeClient.java")
+			if (clientSources.size() != 1) {
+				throw new GradleException("Target ${target.key} must own exactly one PackForgeClient bootstrap; found ${clientSources.size()}.")
+			}
+		}
 		def filePackSources = []
 		targets.each { target ->
 			def adapterSources = effectiveTargetJavaSources(target, "FilePackResourcesMixin.java")
