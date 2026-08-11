@@ -56,6 +56,10 @@ def platformBuilds = [
 ]
 
 def targetSupports = { target, platform -> target.platforms[platform.id] != null }
+def requiredSourceFamilyIds = [
+	"mc1_20_1", "mc1_20_2", "mc1_20_3_4", "mc1_20_5_6", "mc1_21_0_1", "mc1_21_2_3",
+	"mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7_8", "mc1_21_9_11", "mc26"
+]
 // Capability declarations are release promises. Keep the proof close to
 // artifact validation so a registry promotion cannot ship without its adapter.
 def capabilityContract = [
@@ -403,6 +407,19 @@ def verifyArtifact = { target, platform, File artifact ->
 		}
 		def clientMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.client.toString()))
 		def mainMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.main.toString()))
+		def expectedMainMixinPlugin = "com.teenkung.packforge.QuickPackMixinPlugin"
+		def expectedClientMixinPlugin = target.apiAdapter == "mc26"
+			? "com.teenkung.packforge.client.mixin.compat.GuiCompatMixinPlugin"
+			: expectedMainMixinPlugin
+		if (mainMixin.plugin != expectedMainMixinPlugin || clientMixin.plugin != expectedClientMixinPlugin) {
+			throw new GradleException("${artifact.name} is missing the expected early compatibility mixin plugins.")
+		}
+		[expectedMainMixinPlugin, expectedClientMixinPlugin].unique().each { pluginClass ->
+			def pluginPath = pluginClass.replace('.', '/') + ".class"
+			if (!names.contains(pluginPath)) {
+				throw new GradleException("${artifact.name} is missing early compatibility plugin ${pluginClass}.")
+			}
+		}
 		if ((mainMixin.mixins ?: []).contains("loader.CompositePackResourcesMixin")
 			|| names.contains("com/teenkung/packforge/mixin/loader/CompositePackResourcesMixin.class")) {
 			throw new GradleException("${artifact.name} retains the removed broad CompositePackResources mixin.")
@@ -614,6 +631,37 @@ tasks.register("validateTargetRegistry") {
 		|| registry.releaseCells.collect { it.id } != requiredStableReleaseSequence) {
 		throw new GradleException("Registry releaseCells must contain one row for every exact stable release in releaseSequence.")
 	}
+	if (!(registry.sourceFamilies instanceof List)
+		|| registry.sourceFamilies.collect { it.id } != requiredSourceFamilyIds) {
+		throw new GradleException("Registry sourceFamilies must contain the canonical twelve-family order.")
+	}
+	def declaredTargetKeys = targetKeys as Set
+	registry.sourceFamilies.each { family ->
+		["id", "minecraftAnchor", "mandatoryExactReleases", "maturity", "supportGuarantee", "javaVersion", "loaderAvailability", "targetKeys", "quickPackProfile", "compatibilityProfiles", "buildStatus"].each { field ->
+			if (family[field] == null) {
+				throw new GradleException("Registry source family '${family.id}' is missing '${field}'.")
+			}
+		}
+		def expectedFamilyMaturity = family.id == "mc26" ? "stable" : "beta"
+		if (family.maturity != expectedFamilyMaturity) {
+			throw new GradleException("Source family '${family.id}' must remain ${expectedFamilyMaturity}.")
+		}
+		if (!(family.mandatoryExactReleases instanceof List) || family.mandatoryExactReleases.isEmpty()) {
+			throw new GradleException("Source family '${family.id}' must declare exact releases.")
+		}
+		if (!(family.targetKeys instanceof List) || family.targetKeys.any { !declaredTargetKeys.contains(it.toString()) }) {
+			throw new GradleException("Source family '${family.id}' references an undeclared target.")
+		}
+		if (family.quickPackProfile.toString().isBlank()
+			|| !(family.compatibilityProfiles instanceof List)
+			|| !family.compatibilityProfiles.contains("base")) {
+			throw new GradleException("Source family '${family.id}' has incomplete compatibility profiles.")
+		}
+		def familyCells = registry.releaseCells.findAll { it.sourceFamily == family.id }.collect { it.id }
+		if (familyCells != family.mandatoryExactReleases) {
+			throw new GradleException("Source family '${family.id}' exact-release ledger does not match releaseCells.")
+		}
+	}
 	registry.releaseCells.each { cell ->
 		["id", "minecraftAnchor", "sourceFamily", "artifactFamily", "targetKey", "javaVersion", "maturity", "supportGuarantee", "loaderAvailability", "buildStatus"].each { field ->
 			if (cell[field] == null) {
@@ -626,6 +674,12 @@ tasks.register("validateTargetRegistry") {
 		}
 		if (!(cell.loaderAvailability instanceof List) || cell.loaderAvailability.isEmpty()) {
 			throw new GradleException("Release cell '${cell.id}' must declare at least one loader.")
+		}
+		if (!requiredSourceFamilyIds.contains(cell.sourceFamily.toString())) {
+			throw new GradleException("Release cell '${cell.id}' references an unknown source family '${cell.sourceFamily}'.")
+		}
+		if (!cell.buildStatus.toString().startsWith("planned") && !targetKeys.contains(cell.targetKey.toString())) {
+			throw new GradleException("Built release cell '${cell.id}' references undeclared target '${cell.targetKey}'.")
 		}
 	}
 	if (registry.registryPolicy?.pre26Maturity != "beta"
@@ -863,6 +917,7 @@ tasks.register("printResolvedMatrix") {
 			policy: registry.registryPolicy,
 			releaseSequence: registry.releaseSequence,
 			releaseCells: registry.releaseCells,
+			sourceFamilies: registry.sourceFamilies,
 			targets: resolvedTargets
 		])))
 	}
