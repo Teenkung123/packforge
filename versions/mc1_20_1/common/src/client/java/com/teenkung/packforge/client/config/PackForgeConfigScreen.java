@@ -240,7 +240,6 @@ public final class PackForgeConfigScreen extends Screen {
 		closeWithoutSaving();
 	}
 
-	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
 		int maximum = Math.max(0, this.filteredCount - this.visibleRows);
 		int next = Math.max(0, Math.min(maximum, this.firstVisible + (delta > 0.0 ? -1 : 1)));
@@ -249,12 +248,21 @@ public final class PackForgeConfigScreen extends Screen {
 			rebuild();
 			return true;
 		}
-		return super.mouseScrolled(mouseX, mouseY, delta);
+		return false;
+	}
+
+	/**
+	 * Minecraft 1.20.2 widened the scroll callback with horizontal scrolling.
+	 * Keep the pagination logic shared while exposing the exact callback shape
+	 * required by each legacy client line.
+	 */
+	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double verticalDelta) {
+		return mouseScrolled(mouseX, mouseY, verticalDelta);
 	}
 
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		renderBackground(graphics);
+		graphics.fill(0, 0, this.width, this.height, 0xB0101010);
 		super.render(graphics, mouseX, mouseY, partialTick);
 		graphics.drawCenteredString(this.font, this.title, this.width / 2, 8, 0xFFFFFFFF);
 		if (this.filteredCount > this.visibleRows) {

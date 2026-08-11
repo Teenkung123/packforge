@@ -56,6 +56,11 @@ def platformBuilds = [
 ]
 
 def targetSupports = { target, platform -> target.platforms[platform.id] != null }
+def publishedTargetKeys = registry.releaseCells
+	.findAll { it.buildStatus.toString().startsWith("existing") }
+	.collect { it.targetKey.toString() }
+	.toSet()
+def publishedTargets = targets.findAll { publishedTargetKeys.contains(it.key.toString()) }
 def requiredSourceFamilyIds = [
 	"mc1_20_1", "mc1_20_2", "mc1_20_3_4", "mc1_20_5_6", "mc1_21_0_1", "mc1_21_2_3",
 	"mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7_8", "mc1_21_9_11", "mc26"
@@ -158,7 +163,7 @@ def artifactName = { target, platform ->
 	def loader = target.platforms[platform.id]
 	"packforge-${platform.id}-${project.version}${loader.versionSuffix}-mc${target.artifactMinecraft}.jar"
 }
-def expectedArtifactNames = targets.collectMany { target ->
+def expectedArtifactNames = publishedTargets.collectMany { target ->
 	platformBuilds.findAll { targetSupports(target, it) }.collect { platform -> artifactName(target, platform) }
 }.sort()
 
@@ -1022,8 +1027,8 @@ tasks.register("verifyTargetArtifacts") {
 
 tasks.register("verifyAllArtifacts") {
 	group = "verification"
-	description = "Verifies every declared PackForge artifact."
-	dependsOn verificationTasksByTarget.values()
+	description = "Verifies every published PackForge artifact."
+	dependsOn publishedTargets.collect { verificationTasksByTarget[it.key] }
 	doLast {
 		def outputDirectory = layout.buildDirectory.dir("libs").get().asFile
 		def actualArtifactNames = fileTree(outputDirectory) {
@@ -1041,7 +1046,7 @@ tasks.register("verifyExistingArtifacts") {
 	group = "verification"
 	description = "Verifies the already-collected 17-artifact release set without rebuilding child projects."
 	doLast {
-		targets.each { target ->
+		publishedTargets.each { target ->
 			platformBuilds.findAll { targetSupports(target, it) }.each { platform ->
 				verifyArtifact(target, platform, layout.buildDirectory.file("libs/${artifactName(target, platform)}").get().asFile)
 			}
@@ -1096,19 +1101,19 @@ tasks.register("collectPlatformJars", Copy) {
 tasks.register("buildLegacySupported") {
 	group = "build"
 	description = "Builds all exact legacy Minecraft targets."
-	dependsOn targets.findAll { it.legacyApi }.collect { buildTasksByTarget[it.key] }
+	dependsOn publishedTargets.findAll { it.legacyApi }.collect { buildTasksByTarget[it.key] }
 }
 
 tasks.register("buildCurrentSupported") {
 	group = "build"
 	description = "Builds the current Minecraft target matrix."
-	dependsOn targets.findAll { !it.legacyApi }.collect { buildTasksByTarget[it.key] }
+	dependsOn publishedTargets.findAll { !it.legacyApi }.collect { buildTasksByTarget[it.key] }
 }
 
 tasks.register("buildAllSupported") {
 	group = "build"
-	description = "Builds every declared PackForge target and platform."
-	dependsOn targets.collect { buildTasksByTarget[it.key] }
+	description = "Builds every published PackForge target and platform."
+	dependsOn publishedTargets.collect { buildTasksByTarget[it.key] }
 }
 
 tasks.register("build") {

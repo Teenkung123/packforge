@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.config.FeatureFlags;
+import com.teenkung.packforge.internal.loader.FilePackResourcesArchiveHolder;
 import com.teenkung.packforge.internal.loader.SharedZipFileAccessBridge;
 import com.teenkung.packforge.loader.InputStreamSupplier;
 import com.teenkung.packforge.loader.LoaderTimings;
@@ -13,7 +14,6 @@ import com.teenkung.packforge.loader.PackIndex;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import com.teenkung.packforge.loader.ZipReadPool;
 import net.minecraft.server.packs.FilePackResources;
-import net.minecraft.server.packs.PackLocationInfo;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.IoSupplier;
 import org.spongepowered.asm.mixin.Final;
@@ -21,8 +21,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Coerce;
-import org.spongepowered.asm.mixin.injection.Inject;
 
 import java.io.InputStream;
 import java.util.Enumeration;
@@ -30,7 +28,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 @Mixin(FilePackResources.class)
-public abstract class FilePackResourcesMixin {
+public abstract class FilePackResourcesMixin implements FilePackResourcesArchiveHolder {
 	@Shadow @Final private String prefix;
 
 	@Unique
@@ -129,19 +127,10 @@ public abstract class FilePackResourcesMixin {
 		return this.packforge$maybePooledSupplier(zipFile, entry, original);
 	}
 
-	@Inject(
-		method = "<init>(Lnet/minecraft/server/packs/PackLocationInfo;Lnet/minecraft/server/packs/FilePackResources$SharedZipFileAccess;Ljava/lang/String;)V",
-		at = @At("RETURN")
-	)
-	private void packforge$captureArchive(
-		PackLocationInfo location,
-		@Coerce Object zipFileAccess,
-		String prefix,
-		org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci
-	) {
-		if (zipFileAccess instanceof SharedZipFileAccessBridge bridge) {
-			this.packforge$archive = bridge;
-		}
+	@Override
+	@Unique
+	public void packforge$setArchive(SharedZipFileAccessBridge archive) {
+		this.packforge$archive = archive;
 	}
 
 	@Unique
