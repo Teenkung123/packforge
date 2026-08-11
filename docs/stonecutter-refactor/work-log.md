@@ -3,7 +3,7 @@
 ## Phase 0 — baseline and branch safety
 
 - Date: 2026-08-11
-- Commit SHA: to be filled after the baseline documentation commit
+- Commit SHA: `71b6ba396b60b79ed0cf2bdfb8c31ab7f7c76ce0`
 - Parent stable checkpoint: `609270f533666e7636d11f7d16590be925ec836f`
 - Status: `FOCUSED_VERIFIED`
 - Files changed: `docs/stonecutter-refactor/*.md`
