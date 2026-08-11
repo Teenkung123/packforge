@@ -15,6 +15,8 @@ stonecutter {
 	 create(rootProject) {
 		 version 'mc1_20_1', '1.20.1'
 		 version 'mc1_20_2', '1.20.2'
+		 version 'mc1_20_3', '1.20.3'
+		 version 'mc1_20_4', '1.20.4'
 		 version 'mc1_21_1', '1.21.1'
 		 version 'mc1_21_4', '1.21.4'
 		 version 'mc1_21_8', '1.21.8'

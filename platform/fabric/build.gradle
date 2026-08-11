@@ -63,8 +63,8 @@ def mainResourceDirs = [
 	file("src/main/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/main/resources")
 ]
-if (target.key == "mc1_20_2") {
-	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_20_2/common/src/main/resources"))
+if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
+	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/main/resources"))
 }
 def clientJavaDirs = [
 	new File(packforgeCommonRoot, "src/client/java"),
@@ -79,7 +79,7 @@ if (target.key in ["mc1_21_1", "mc1_21_4", "mc1_21_8"]) {
 	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/main/java"))
 }
 def mainJavaSources = mainJavaDirs.collect { root ->
-	if (target.key == "mc1_20_2" && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
+	if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.java"
 			exclude "com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java"
@@ -87,14 +87,14 @@ def mainJavaSources = mainJavaDirs.collect { root ->
 	}
 	return fileTree(root)
 }
-if (target.key == "mc1_20_2") {
+if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
 	def sharedRoot = new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/main/java")
 	mainJavaSources.add(fileTree(sharedRoot) {
 		include "com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.java"
 		include "com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"
 		include "com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java"
 	})
-	def targetRoot = new File(packforgeRepositoryRoot, "versions/mc1_20_2/common/src/main/java")
+	def targetRoot = new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/main/java")
 	mainJavaSources.add(fileTree(targetRoot) {
 		include "com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"
 	})
@@ -118,7 +118,7 @@ def testResourceDirs = [
 	new File(packforgeAdapterPlatformRoot, "src/test/resources")
 ]
 def clientJavaSources = clientJavaDirs.collect { root ->
-	if (target.key == "mc1_20_2" && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
+	if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/client/atlas/BoundedSpriteDecode.java"
 			exclude "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
@@ -126,7 +126,7 @@ def clientJavaSources = clientJavaDirs.collect { root ->
 	}
 	return fileTree(root)
 }
-if (target.key == "mc1_20_2") {
+if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
 	def sharedClientRoot = new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/client/java")
 	clientJavaSources.add(fileTree(sharedClientRoot) {
 		include "com/teenkung/packforge/client/atlas/BoundedSpriteDecode.java"
@@ -136,11 +136,11 @@ if (target.key == "mc1_20_2") {
 
 sourceSets {
 	main {
-		java.setSrcDirs(target.key == "mc1_20_2" ? [] : mainJavaDirs)
+		java.setSrcDirs(target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] ? [] : mainJavaDirs)
 		resources.setSrcDirs(mainResourceDirs)
 	}
 	client {
-		java.setSrcDirs(target.key == "mc1_20_2" ? [] : clientJavaDirs)
+		java.setSrcDirs(target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] ? [] : clientJavaDirs)
 		resources.setSrcDirs(clientResourceDirs)
 	}
 	test {
