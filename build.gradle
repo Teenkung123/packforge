@@ -795,9 +795,9 @@ tasks.register("validateTargetRegistry") {
 			}
 		}
 		def sharedSourceTargets = [
-			"FilePackResourcesMixin.java": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_8"],
-			"ReloadableResourceManagerMixin.java": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_8"],
-			"SharedZipFileAccessMixin.java": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_8"]
+			"FilePackResourcesMixin.java": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8"],
+			"ReloadableResourceManagerMixin.java": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8"],
+			"SharedZipFileAccessMixin.java": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8"]
 		]
 		def effectiveTargetJavaSources = { target, fileName ->
 			def roots = [file("versions/${target.apiAdapter}")]
@@ -808,7 +808,7 @@ tasks.register("validateTargetRegistry") {
 				fileTree(root) { include "**/${fileName}" }.files
 			}.unique { it.canonicalPath }
 		}
-		def sharedClientTargets = ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_8"]
+		def sharedClientTargets = ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8"]
 		def effectiveTargetClientSources = { target, fileName ->
 			def roots = [file("versions/${target.apiAdapter}")]
 			if (target.key in sharedClientTargets) {
