@@ -93,3 +93,45 @@
 - Compatibility: reset-hook order and target-specific parser linkage are unchanged; mixin descriptors remain version-local.
 - Rollback point: parent `b97fc31fc9a978c99c171904c0036350d8f49012`.
 - Next mandatory phase: configuration schema/effective-state unification and Quick Pack ownership.
+
+## Phase 8 — Quick Pack compatibility and unified effective state
+
+- Date: 2026-08-11
+- Checkpoints: `35c47274fa5ccaf7b340327a164c0ebd5effaea7`, then `2759979bb93afc9ec62703a2ca08d429393e870b`
+- Status: `FOCUSED_VERIFIED`
+- Files changed: common Quick Pack detector/policy, loader metadata bridges, Fabric/Forge/NeoForge early mixin plugins, ownership tests, and current mixin descriptors
+- Architecture decision: use public mod ID/version metadata only; fail closed for unknown majors and suppress overlap-bearing hooks before Mixin application while preserving PackForge-only paths
+- Commands: focused loader tests/builds and final artifact scans; all executed checks passed
+- Compatibility: unit and structural evidence PASS; Quick Pack combined runtime remains `UNTESTED`
+- Rollback point: `b532d3dfe2d72461605db1f1467f95a0044d2da1`
+
+## Phase 7 — Unified configuration UI
+
+- Date: 2026-08-11
+- Commit SHA: `e460da0e39f744544b4daf2ceb9844c87282e062`
+- Parent stable checkpoint: `2759979bb93afc9ec62703a2ca08d429393e870b`
+- Status: `FOCUSED_VERIFIED`
+- Files changed: `PackForgeConfigScreenModel`, language entries, and native screen adapters for all six current anchors
+- Architecture decision: one central schema owns category order, defaults, validation, configured/effective values, ownership, and warnings; native screens only bridge API signatures
+- Results: current config tests and target builds passed; 1.20.2 UI signature bridge later passed focused Fabric/Forge builds
+- Rollback point: parent `2759979bb93afc9ec62703a2ca08d429393e870b`
+
+## Phase 9 — First exact-release feasibility cell
+
+- Date: 2026-08-11
+- Checkpoints: `cd87525fbe763a313a607d2d15183b02657d0ecd`, `e3f6f008965fd127795b2d4abe8efaff41f407af`, `0dc06bc2a6e684e7efd3d1df5f3f0f1aba6a7db0`, `862022c40249155f1d43fb55d97f3c4cb132c136`
+- Status: `FOCUSED_VERIFIED`; exact release support not promoted
+- Files changed: registry schema/family ledger, Stonecutter settings, loader source selection, 1.20.2 descriptor/access widener, constructor bridge, and published-target aggregation
+- Architecture decision: keep exact rows authoritative but prevent `planned` cells from entering the published artifact set. Share operation-level archive code and isolate only constructor signature differences in thin bridge mixins.
+- Commands/results: `validateTargetRegistry` PASS; Fabric 1.20.2 clean production build PASS; Forge 1.20.2 clean production build PASS; Fabric/Forge/NeoForge 1.21.1 clean production builds PASS; Fabric 1.21.11 clean production build PASS. NeoForge 1.20.2 attempt 1 failed on ModDev capability resolution; attempt 2 failed with Gradle/Groovy `AbstractMethodError` before compile.
+- Generated artifacts: 1.20.2 Fabric/Forge focused JARs only; they are not published. Final current aggregation remains 17 JARs.
+- Compatibility: 1.20.2 runtime/reload and exact interior release cells remain `UNTESTED`; NeoForge 1.20.2 is blocked by toolchain.
+- Rollback point: `862022c40249155f1d43fb55d97f3c4cb132c136`
+
+## Phase 12 — Current-matrix evidence
+
+- Date: 2026-08-11
+- Status: `FOCUSED_VERIFIED`, not full exact-release acceptance
+- Commands: `./gradlew.bat buildAllSupported --rerun-tasks --no-daemon --stacktrace` PASS in 5m31s; `./gradlew.bat verifyAllArtifacts --no-daemon --stacktrace` PASS in 5m18s
+- Results: all six published targets, all 17 published loader artifacts, and final structural artifact checks passed. The 22-row registry remains honest about planned/unexecuted cells.
+- Next mandatory phase: exact 1.20.3 onward cells, production startup/reload evidence, final-JAR smoke, CI/publication generation, candidate gates, and final full-matrix checkpoint.

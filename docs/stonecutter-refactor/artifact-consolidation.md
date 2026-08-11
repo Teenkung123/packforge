@@ -36,3 +36,29 @@ packforge-neoforge-1.3.4-mc26.1-26.2.jar bac9dded67b6fe83a576d915cea76b019c39840
 ```
 
 Consolidation remains blocked until exact interior-release and loader evidence exists. Do not merge beta and stable ranges.
+
+## Current post-bridge verification
+
+The current published set remains exactly 17 JARs. `buildAllSupported --rerun-tasks --no-daemon --stacktrace` passed in 5m31s and `verifyAllArtifacts --no-daemon --stacktrace` passed in 5m18s. These SHA-256 values are from that output; they are build evidence, not marketplace checksums.
+
+```text
+packforge-fabric-1.3.4-beta.2-mc1.20.1.jar fdc87bda5dc41b47d42f17c704f8517a758d0da3ecdbc4770388244ffbc27787
+packforge-fabric-1.3.4-beta.2-mc1.21.11.jar 626d9f0ce52a28fa2fb4be4d51601c41ef2a723dfcaa2ee459ce353ada34af19
+packforge-fabric-1.3.4-beta.2-mc1.21.1.jar 569ed8b68efe5a37c2819e93859129c13ba684f031832d4ef2e0b333f2468fdb
+packforge-fabric-1.3.4-beta.2-mc1.21.4.jar ee36615cd0b1e16af2c7a36db62a74db08602f9ead66a606c4f9cb1461491a9f
+packforge-fabric-1.3.4-beta.2-mc1.21.8.jar 44325b96b1a5768d976492ef3eb98ebc2b9fe680fcfc76c8362c67255949fae6
+packforge-fabric-1.3.4-mc26.1-26.2.jar 4c9edd810d94b5e0c0fe42e48c39a3067f8616d161cb53e33c6b40c561b2602d
+packforge-forge-1.3.4-beta.2-mc1.20.1.jar f15582f122ac344a817aabcbf15a233b37c6fb47be11218812818392729f1220
+packforge-forge-1.3.4-beta.2-mc1.21.11.jar ebfdeb856449b2b06dbbfd8145289aabbb8a5ff71d40c4842a917565d241d455
+packforge-forge-1.3.4-beta.2-mc1.21.1.jar 70fcd22f4a9bf8d2b88d8929ea861fd16686bd79f2e35594d9f1842b3310a13d
+packforge-forge-1.3.4-beta.2-mc1.21.4.jar 5086bf55015ed4f98a8cb687ada123fa83128fa3613ff9ab05fd01b5787764cb
+packforge-forge-1.3.4-beta.2-mc1.21.8.jar 36dd77c2613c01a82067fdba22647c04db6e64985b8c15ac246a05c271e56ab7
+packforge-forge-1.3.4-mc26.1-26.2.jar b15842c79449d2a023dd98c9dbca3ce6d5923666bc042b9d4986f78878e5face
+packforge-neoforge-1.3.4-beta.2-mc1.21.11.jar 7d967436b99ccd4df59e1e3d295a8c8289e176144eccafec2f64d4b6ea78e68a
+packforge-neoforge-1.3.4-beta.2-mc1.21.1.jar adae1349442e8296e8383001cdac8a9f6df15cd83335f885753d809c4bd7f847
+packforge-neoforge-1.3.4-beta.2-mc1.21.4.jar a0fa89e00e63ec957b55c52a2039f47c1644ee84415ffcf5415aa5def575fce4
+packforge-neoforge-1.3.4-beta.2-mc1.21.8.jar 7b042ccd2e3b69115a94a1ad6898dc7a3ac6dbc35acaf395d76f1d6102938c7f
+packforge-neoforge-1.3.4-mc26.1-26.2.jar fd849db6a6c849d270fb4c1682134f786639234a4dff9077fd6f07ddab2525cc
+```
+
+The planned 1.20.2 Fabric/Forge JARs are deliberately absent from this release set; NeoForge 1.20.2 has no verified artifact.

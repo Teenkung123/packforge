@@ -31,3 +31,7 @@ At baseline, only the following anchors exist: `1.20.1`, `1.21.1`, `1.21.4`, `1.
 | `mc26` | 26.1 | 26.1, 26.1.1, 26.1.2, 26.2 | stable | 25 |
 
 This is a target design ledger only. It is not support evidence until every exact applicable loader cell passes final-artifact startup, deterministic reload, semantic hash, and clean exit.
+
+## Registry status at the current checkpoint
+
+`gradle/minecraft-targets.json` is now schema v2 and `validateTargetRegistry`/`printResolvedMatrix` pass with all 22 mandatory exact rows. The six existing target keys remain the only published anchors. `mc1_20_2` has a focused Stonecutter target and Fabric/Forge compile/package evidence, but its family and release cell remain `planned` because NeoForge toolchain resolution and all production runtime cells are unverified. No intermediate release is inferred from a metadata range.

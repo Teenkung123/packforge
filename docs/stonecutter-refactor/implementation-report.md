@@ -15,3 +15,13 @@ Phase 6 evidence: the identical 1.21.1/1.21.4/1.21.8 `FilePackResourcesMixin`, `
 Phase 6b evidence: the exact duplicate 1.21.1/1.21.4/1.21.8 `PackForgeClient` reset bootstrap now lives in the shared 1.21 client root. The registry verifier enforces one effective owner per target, and all nine affected loader/target builds pass.
 
 Open mandatory work: full Stonecutter parity, remaining capability-specific source deduplication, unified screens, Quick Pack profiles, 22 exact releases, artifact proof/consolidation, candidate evaluation, CI/publication generation, and final runtime evidence.
+
+## Current checkpoint: registry, Quick Pack seams, and the 1.20.2 feasibility cell
+
+The current branch now has a schema-v2 registry with 22 checked-in exact release rows and twelve source families. The registry distinguishes planned cells from the six published anchors; planned cells do not enter `buildAllSupported` or the 17-artifact final verifier. Stonecutter generates the current anchors plus a focused `mc1_20_2` project.
+
+The unified configuration schema/effective-state model and native screen adapters are committed. Quick Pack detection is clean-room metadata detection only, with strict ownership of overlapping index, ZIP pool, font preselection, atlas-mip, loading-fade, and status-overlay paths. Unknown or unreadable Quick Pack versions fail closed. Combined Quick Pack runtime acceptance remains `UNTESTED`.
+
+The 1.20.2 source-family feasibility cell is intentionally still `planned`: Fabric and Forge production builds pass with a thin constructor/sprite/UI bridge, and their focused JARs contain the target descriptor and bridge. NeoForge 20.2 cannot build in this Gradle 9.5.1 workspace: ModDev 2.0.141/20.2.93 has no `neoforge-moddev-bundle` capability, while the official NeoGradle 7.0.116 second attempt fails during Groovy script compilation with `AbstractMethodError`. No 1.20.2 artifact is published or counted in the 17-artifact set.
+
+Final current-matrix evidence at checkpoint `862022c40249155f1d43fb55d97f3c4cb132c136`: `buildAllSupported --rerun-tasks --no-daemon --stacktrace` PASS in 5m31s; `verifyAllArtifacts --no-daemon --stacktrace` PASS in 5m18s; 17 artifacts collected and structurally verified. These are build/package results, not production startup or resource-reload acceptance. The remaining exact-release, Quick Pack combined-runtime, and candidate-promotion cells are explicitly unexecuted.

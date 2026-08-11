@@ -17,3 +17,7 @@ No performance candidate has a promotion verdict from the required semantic, lif
 | Atlas retry | off | `SAFE_KEEP_DEFAULT_OFF` by plan policy | separate correctness case required before promotion |
 
 Timings, diagnostics, and fade/toast preferences are not performance candidates and remain outside promotion decisions.
+
+## Current decision boundary
+
+No candidate was promoted. All defaults remain off, and every candidate that lacks a completed semantic/lifecycle/compatibility/performance gate remains recorded as `UNTESTED`; the atlas retry remains `SAFE_KEEP_DEFAULT_OFF` by explicit policy. The current-matrix build and unit tests are not performance or compatibility evidence. Quick Pack, renderer/mod-pair, benchmark, and runtime promotion cells are still open.

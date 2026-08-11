@@ -13,6 +13,11 @@ Outcome labels follow the assignment: `FULL_OPTIMIZED_PATH`, `HOOK_PRESERVING_CO
 | Forge 1.20.1 final remapped/JarJar artifact | `UNTESTED` | dedicated final-JAR harness not executed |
 | Quick Pack 1.5.x | `UNTESTED` | no runtime dependency/profile yet |
 | Sodium/Iris/ImmediatelyFast/ModernFix/FerriteCore/etc. | `UNTESTED` | no exact third-party profile run |
-| Exact 22-release × official-loader matrix | `UNTESTED` | registry still has six anchors only |
+| Current six-anchor × declared-loader production matrix | PASS | forced `buildAllSupported`; 17 artifacts and per-target artifact verifiers passed in 5m31s |
+| Aggregate current-artifact verification | PASS | `verifyAllArtifacts`; exact 17-name set passed in 5m18s |
+| Fabric 1.20.2 focused production build | `UNTESTED` runtime | `platform/fabric ... clean build` PASS; no startup/reload harness |
+| Forge 1.20.2 focused production build | `UNTESTED` runtime | `platform/forge ... clean build` PASS; no final-JAR startup/reload harness |
+| NeoForge 1.20.2 focused build | `FAILED` toolchain | ModDev 2.0.141 lacks the 20.2 capability; NeoGradle 7.0.116 fails under Gradle 9.5.1 before compile |
+| Exact 22-release × official-loader matrix | `UNTESTED` | registry has all 22 rows; only current anchors are published, and 1.20.2 remains planned |
 
 Build and package success is not treated as runtime acceptance.
