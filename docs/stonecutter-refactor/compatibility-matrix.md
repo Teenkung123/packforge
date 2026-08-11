@@ -24,6 +24,9 @@ Outcome labels follow the assignment: `FULL_OPTIMIZED_PATH`, `HOOK_PRESERVING_CO
 | Fabric/Forge/NeoForge 1.20.4 final artifacts | `UNTESTED` runtime | exact `verifyMc1_20_4Artifacts` PASS; all three JARs package the archive bridge, SpriteLoader hook, descriptor, and beta metadata; no startup/reload harness |
 | Fabric 1.20.5 final artifact | `UNTESTED` runtime | exact `buildMc1_20_5` and `verifyMc1_20_5Artifacts` PASS; final JAR contains the Java21 family client mixin, descriptor, `fabric.mod.json`, and access widener; no startup/reload harness |
 | Fabric/Forge/NeoForge 1.20.6 final artifacts | `UNTESTED` runtime | exact `buildMc1_20_6` and `verifyMc1_20_6Artifacts` PASS; all three JARs contain the Java21 family archive/reload/client hooks and loader metadata; no startup/reload harness |
+| Fabric/Forge/NeoForge 1.21 final artifacts | `UNTESTED` runtime | exact `buildMc1_21` and `verifyMc1_21Artifacts` PASS; all three final JARs contain the shared archive/reload/client hooks, `PackSelectionScreenMixin`, and loader metadata; no startup/reload harness |
+| Fabric/NeoForge 1.21.2 final artifacts | `UNTESTED` runtime | exact `buildMc1_21_2` and `verifyMc1_21_2Artifacts` PASS; official Forge 1.21.2 is unavailable, so the exact loader matrix is Fabric + NeoForge; no startup/reload harness |
+| Fabric/Forge/NeoForge 1.21.3 final artifacts | `UNTESTED` runtime | exact `buildMc1_21_3` and `verifyMc1_21_3Artifacts` PASS; all three final JARs contain the shared archive/reload/client hooks, `PackSelectionScreenMixin`, and loader metadata; no startup/reload harness |
 | Exact 22-release × official-loader matrix | `UNTESTED` | registry has all 22 rows; only current anchors are published, and 1.20.2 remains planned |
 
 Build and package success is not treated as runtime acceptance.

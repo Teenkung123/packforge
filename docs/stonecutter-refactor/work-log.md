@@ -164,3 +164,19 @@
 - Compatibility: final JAR inspection confirms the family client mixin, archive/reload hooks, exact family descriptor, access widener where applicable, and loader metadata. All 1.20.5/1.20.6 production startup, deterministic reload, semantic-hash, Quick Pack, and clean-exit cells remain `UNTESTED`; no cell enters published aggregation.
 - Rollback point: `21524f3`.
 - Next mandatory phase: exact 1.21 release gaps, then final-artifact runtime evidence for every exact applicable cell.
+
+## Phase 11 — exact 1.21, 1.21.2, and 1.21.3 source-family cells
+
+- Date: 2026-08-11
+- Commit SHA: `71de8fe`
+- Parent stable checkpoint: `3c52d21`
+- Status: `FOCUSED_VERIFIED`; exact release support not promoted
+- Files changed: exact 1.21/1.21.2/1.21.3 registry cells, exact loader availability and coordinates, Stonecutter nodes, and shared 1.21 source selection
+- Architecture decision: keep exact target metadata separate while reusing the proven `mc1_21_1` adapter for 1.21 and the `mc1_21_4` adapter for 1.21.2/1.21.3. Preserve the official loader matrix: Fabric/Forge/NeoForge for 1.21 and 1.21.3; Fabric/NeoForge for 1.21.2 because no official Forge 1.21.2 line is available.
+- Coordinates and pack metadata: 1.21 uses Fabric Loader `0.19.3`, Fabric API `0.102.0+1.21`, Forge `1.21-51.0.17`, NeoForge `21.0.167`, pack format `34`; 1.21.2 uses Fabric API `0.106.1+1.21.2`, Mod Menu `12.0.1`, NeoForge `21.2.1-beta`, pack format `42`; 1.21.3 uses Fabric API `0.114.1+1.21.3`, Forge `1.21.3-53.1.12`, NeoForge `21.3.97`, pack format `42`.
+- Commands/results: `./gradlew.bat validateTargetRegistry --no-daemon --console plain --stacktrace` PASS; `buildMc1_21` plus `verifyMc1_21Artifacts` PASS; `buildMc1_21_2` plus `verifyMc1_21_2Artifacts` PASS; `buildMc1_21_3` plus `verifyMc1_21_3Artifacts` PASS. Forge 1.21 required one bounded retry after Mavenizer cache hydration; NeoForge 1.21 required one bounded retry after a transient missing Gradle test-results file. The final aggregate commands passed.
+- Generated artifacts and SHA-256: `packforge-fabric-1.3.4-beta.6-mc1.21.jar` `2DA454952BE45379071001581159BECB8A2B4049FF89A259F10ED1CF53E6347F`; `packforge-forge-1.3.4-beta.6-mc1.21.jar` `731D50DD7E3B2FE1218DE0F6C9484700EB23A185ADB961450AC3DB9438077869`; `packforge-neoforge-1.3.4-beta.6-mc1.21.jar` `A8CBE85069B2BCA0DCF003D1DC642AD77CDEDA190ADBA2577FC9478EFB424733`; `packforge-fabric-1.3.4-beta.6-mc1.21.2.jar` `249FF0B3AF2268CAEAB0E5AFACC1A29CE7CF7C5CAB2AA0EBB3821869EF6F7C22`; `packforge-neoforge-1.3.4-beta.6-mc1.21.2.jar` `EC3473C0F629858657F58030AC48DC3B78B24A772540D2371137E53430C99001`; `packforge-fabric-1.3.4-beta.6-mc1.21.3.jar` `44E479D761B045732F1CFF65510E10A176A94DACDF9638C3AE30ED360C44E072`; `packforge-forge-1.3.4-beta.6-mc1.21.3.jar` `F2C7C409196B0C5DC180C81082FBACD0D3DCC81D3D27E5E7DF147EB1B2B26BD2`; `packforge-neoforge-1.3.4-beta.6-mc1.21.3.jar` `F954036BC8D4CFCCF46B15F034CB2E0C971C2418816C94438BB0F550A3AD642D`.
+- Structural evidence: all eight final JARs contain `PackForgeClient.class`, `PackSelectionScreenMixin.class`, `FilePackResourcesMixin.class`, `SharedZipFileAccessMixin.class`, and `ReloadableResourceManagerMixin.class`; Fabric JARs contain `fabric.mod.json` and `packforge.accesswidener`, Forge JARs contain `META-INF/mods.toml`, and NeoForge JARs contain `META-INF/neoforge.mods.toml`.
+- Compatibility: all 1.21/1.21.2/1.21.3 production startup, deterministic reload, semantic-hash, Quick Pack, and clean-exit cells remain `UNTESTED`; no cell enters published aggregation.
+- Rollback point: `71de8fe`.
+- Next mandatory phase: exact 1.21.5/1.21.6/1.21.7 cells, then 1.21.9/1.21.10 and exact hotfix evidence for 26.1.1/26.1.2.

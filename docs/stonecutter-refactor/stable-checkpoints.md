@@ -145,3 +145,12 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Verification: `validateTargetRegistry` PASS; 1.20.5 Fabric `buildMc1_20_5` plus `verifyMc1_20_5Artifacts` PASS; 1.20.6 Fabric/Forge/NeoForge `buildMc1_20_6` plus `verifyMc1_20_6Artifacts` PASS
 - Status: `FOCUSED_VERIFIED` for build/package scope; both exact releases remain planned pending production startup, deterministic reload, semantic hash, Quick Pack, and clean-exit evidence
 - Rollback: revert `21524f3` to remove the Java21 exact cells while retaining the 1.20.3/1.20.4 family checkpoint
+
+## Exact 1.21, 1.21.2, and 1.21.3 source-family cells
+
+- Commit SHA: `71de8fe`
+- Parent SHA: `3c52d21`
+- Scope: exact 1.21/1.21.2/1.21.3 registry metadata, official loader availability, Stonecutter nodes, and shared 1.21 source selection
+- Verification: `validateTargetRegistry` PASS; 1.21 all-loader `buildMc1_21` plus `verifyMc1_21Artifacts` PASS; 1.21.2 Fabric/NeoForge `buildMc1_21_2` plus `verifyMc1_21_2Artifacts` PASS; 1.21.3 all-loader `buildMc1_21_3` plus `verifyMc1_21_3Artifacts` PASS
+- Status: `FOCUSED_VERIFIED` for build/package scope; all three exact releases remain planned pending production startup, deterministic reload, semantic hash, Quick Pack, and clean-exit evidence
+- Rollback: revert `71de8fe` to remove the exact 1.21-family cells while retaining the Java21 source-family checkpoint
