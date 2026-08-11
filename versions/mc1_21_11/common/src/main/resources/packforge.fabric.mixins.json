@@ -5,7 +5,6 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"loader.FilePackResourcesMixin",
-		"loader.FilePackResourcesArchiveMixin",
 		"loader.SharedZipFileAccessMixin",
 		"observe.ReloadableResourceManagerMixin",
 		"observe.SimpleReloadInstanceMixin"
