@@ -1,3 +1,4 @@
+import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.util.zip.ZipFile
 
@@ -6,9 +7,16 @@ group = project.maven_group
 
 def registryFile = file("gradle/minecraft-targets.json")
 def registry = new JsonSlurper().parse(registryFile)
-if (registry.schemaVersion != 1) {
+if (registry.schemaVersion != 2) {
 	throw new GradleException("Unsupported PackForge target registry schema: ${registry.schemaVersion}")
 }
+
+def requiredStableReleaseSequence = [
+	"1.20.1", "1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6",
+	"1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4", "1.21.5",
+	"1.21.6", "1.21.7", "1.21.8", "1.21.9", "1.21.10", "1.21.11",
+	"26.1", "26.1.1", "26.1.2", "26.2"
+]
 
 def compareNumericVersions = { left, right ->
 	def leftParts = left.toString().tokenize('.').collect { it as int }
@@ -597,6 +605,35 @@ tasks.register("validateTargetRegistry") {
 	if (registry.defaultTarget == null || !targetKeys.contains(registry.defaultTarget)) {
 		throw new GradleException("defaultTarget must identify a declared PackForge target.")
 	}
+	if (!(registry.releaseSequence instanceof List)
+		|| registry.releaseSequence != requiredStableReleaseSequence) {
+		throw new GradleException("Registry releaseSequence must exactly contain the checked-in 1.20.1-26.2 stable release sequence.")
+	}
+	if (!(registry.releaseCells instanceof List)
+		|| registry.releaseCells.size() != requiredStableReleaseSequence.size()
+		|| registry.releaseCells.collect { it.id } != requiredStableReleaseSequence) {
+		throw new GradleException("Registry releaseCells must contain one row for every exact stable release in releaseSequence.")
+	}
+	registry.releaseCells.each { cell ->
+		["id", "minecraftAnchor", "sourceFamily", "artifactFamily", "targetKey", "javaVersion", "maturity", "supportGuarantee", "loaderAvailability", "buildStatus"].each { field ->
+			if (cell[field] == null) {
+				throw new GradleException("Registry release cell '${cell.id}' is missing '${field}'.")
+			}
+		}
+		def expectedMaturity = cell.id.startsWith("26.") ? "stable" : "beta"
+		if (cell.maturity != expectedMaturity) {
+			throw new GradleException("Release cell '${cell.id}' must remain ${expectedMaturity}.")
+		}
+		if (!(cell.loaderAvailability instanceof List) || cell.loaderAvailability.isEmpty()) {
+			throw new GradleException("Release cell '${cell.id}' must declare at least one loader.")
+		}
+	}
+	if (registry.registryPolicy?.pre26Maturity != "beta"
+		|| registry.registryPolicy?.mc26Maturity != "stable"
+		|| registry.registryPolicy?.noCrossMaturityArtifacts != true
+		|| registry.registryPolicy?.exactReleaseRowsRequired != true) {
+		throw new GradleException("Registry maturity and exact-release policy is incomplete or unsafe.")
+	}
 	def undeclaredContracts = targets
 		.collectMany { target -> target.capabilities }
 		.toSet()
@@ -610,10 +647,26 @@ tasks.register("validateTargetRegistry") {
 			}
 		}
 		targets.each { target ->
-			["key", "taskSuffix", "minecraftVersion", "artifactMinecraft", "apiAdapter", "javaVersion", "legacyApi", "packMetadata", "mixinConfigs", "capabilities", "platforms"].each { field ->
+			["key", "id", "taskSuffix", "minecraftAnchor", "minecraftRange", "minecraftVersion", "artifactMinecraft", "sourceFamily", "artifactFamily", "javaVersion", "mixinCompatibility", "mappingMode", "packFormatRange", "loaderAvailability", "loaderBuildVersions", "maturity", "supportGuarantee", "requiredExactSmokeVersions", "artifactMetadataRange", "quickPack", "compatibilityProfiles", "apiAdapter", "legacyApi", "packMetadata", "mixinConfigs", "capabilities", "platforms"].each { field ->
 				if (target[field] == null) {
 					throw new GradleException("PackForge target '${target.key}' is missing '${field}'.")
 				}
+			}
+			if (target.id != target.key) {
+				throw new GradleException("PackForge target '${target.key}' must use the same value for id and key during schema v2 migration.")
+			}
+			def expectedTargetMaturity = target.minecraftVersion.toString().startsWith("26.") ? "stable" : "beta"
+			if (target.maturity != expectedTargetMaturity) {
+				throw new GradleException("PackForge target '${target.key}' must remain ${expectedTargetMaturity}.")
+			}
+			if (target.loaderAvailability.sort() != target.platforms.keySet().toList().sort()) {
+				throw new GradleException("PackForge target '${target.key}' loaderAvailability must match its declared platforms.")
+			}
+			if (!(target.requiredExactSmokeVersions instanceof List) || target.requiredExactSmokeVersions.isEmpty()) {
+				throw new GradleException("PackForge target '${target.key}' must declare exact smoke versions.")
+			}
+			if (!(target.compatibilityProfiles instanceof List) || !target.compatibilityProfiles.contains("base")) {
+				throw new GradleException("PackForge target '${target.key}' must declare the base compatibility profile.")
 			}
 			if (target.platforms.isEmpty()) {
 				throw new GradleException("PackForge target '${target.key}' must enable at least one platform.")
@@ -755,6 +808,36 @@ tasks.register("validateTargetRegistry") {
 				throw new GradleException("${descriptor} still registers the removed CompositePackResources mixin.")
 			}
 		}
+	}
+}
+
+tasks.register("printResolvedMatrix") {
+	group = "verification"
+	description = "Prints the complete registry-derived exact-release and artifact matrix as JSON."
+	dependsOn tasks.named("validateTargetRegistry")
+	doLast {
+		def resolvedTargets = targets.collect { target ->
+			[
+				id: target.id,
+				minecraftAnchor: target.minecraftAnchor,
+				minecraftRange: target.minecraftRange,
+				sourceFamily: target.sourceFamily,
+				artifactFamily: target.artifactFamily,
+				maturity: target.maturity,
+				javaVersion: target.javaVersion,
+				requiredExactSmokeVersions: target.requiredExactSmokeVersions,
+				platforms: target.platforms.collectEntries { platformId, loader ->
+					[(platformId): [maturity: loader.maturity, artifactMinecraft: target.artifactMinecraft, versionSuffix: loader.versionSuffix]]
+				}
+			]
+		}
+		println(JsonOutput.prettyPrint(JsonOutput.toJson([
+			schemaVersion: registry.schemaVersion,
+			policy: registry.registryPolicy,
+			releaseSequence: registry.releaseSequence,
+			releaseCells: registry.releaseCells,
+			targets: resolvedTargets
+		])))
 	}
 }
 

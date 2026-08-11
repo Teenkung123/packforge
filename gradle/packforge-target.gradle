@@ -7,7 +7,7 @@ if (!registryFile.isFile()) {
 }
 
 def registry = new JsonSlurper().parse(registryFile)
-if (registry.schemaVersion != 1) {
+if (registry.schemaVersion != 2) {
 	throw new GradleException("Unsupported PackForge target registry schema: ${registry.schemaVersion}")
 }
 

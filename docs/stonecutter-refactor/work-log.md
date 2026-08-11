@@ -16,3 +16,21 @@
 - Source metrics: 16,837 production LOC / 212 Java files; 20 normalized duplicate-file groups across versions.
 - Rollback point: baseline HEAD `609270f533666e7636d11f7d16590be925ec836f`.
 - Next mandatory phase: registry schema v2 without artifact behavior change.
+
+## Phase 1 — canonical registry schema v2
+
+- Date: 2026-08-11
+- Commit SHA: to be filled after the registry checkpoint commit
+- Parent stable checkpoint: `bfd63ce2549f81731f5ba05a4e7cfeeeeb627c20`
+- Status: `FOCUSED_VERIFIED`
+- Files changed: `gradle/minecraft-targets.json`, `build.gradle`, `gradle/packforge-target.gradle`, registry evidence docs
+- Architecture decision: keep current six build targets and 17 artifacts while adding schema v2 family metadata, fixed maturity policy, checked-in 22-release exact ledger, and registry-derived JSON output. Planned cells do not claim support until exact artifacts pass.
+- Commands: `./gradlew.bat validateTargetRegistry printResolvedMatrix --no-daemon --stacktrace`; `./gradlew.bat buildTarget -Ppackforge_target=mc1_21_1 --no-daemon --stacktrace`.
+- Results: schema validation and matrix output PASS; focused Fabric, Forge, and NeoForge 1.21.1 builds plus target artifact verifiers PASS. First build attempt exposed a stale schema v1 guard in `gradle/packforge-target.gradle`; repaired before checkpoint and reran successfully.
+- Generated artifacts: current 1.21.1 target artifacts rebuilt; no target count or public artifact naming change.
+- Semantic hashes: unchanged baseline/indexed PackIndex hash; no algorithm change.
+- Compatibility: no runtime behavior change intended; exact-release cells marked planned or range-unverified where proof is absent.
+- Source metrics: unchanged from Phase 0.
+- Deviations: Stonecutter not yet authoritative; this unit intentionally stops at registry authority and current-build compatibility.
+- Rollback point: parent `bfd63ce2549f81731f5ba05a4e7cfeeeeb627c20`.
+- Next mandatory phase: Stonecutter current-target scaffold/pilot.
