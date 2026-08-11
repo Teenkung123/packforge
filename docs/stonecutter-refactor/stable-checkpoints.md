@@ -28,3 +28,12 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Verification: `:mc1_21_1:tasks`; `:mc1_21_1:verifyStonecutterCurrentTarget`; Fabric, Forge, and NeoForge child builds plus exact three-artifact check
 - Status: `FOCUSED_VERIFIED`
 - Rollback: revert this checkpoint to return to the registry-only build; the legacy root aggregator remains available in the parent
+
+## Central capability ownership and feature policy
+
+- Commit SHA: `PENDING_CHECKPOINT_SHA`
+- Parent SHA: `5f3ee74`
+- Scope: immutable `FeaturePolicy`, compatibility `FeatureFlags` facade, and reload-boundary policy capture
+- Verification: focused Fabric 1.21.1 test suite; 106 tests completed successfully
+- Status: `FOCUSED_VERIFIED`
+- Rollback: revert this checkpoint to return to the Stonecutter pilot; capability declarations and public feature-flag calls remain in the parent

@@ -50,3 +50,17 @@
 - Compatibility: no runtime hook or artifact packaging behavior changed; this is a parallel build path only.
 - Rollback point: parent `8d53b8abd996b6d03a0cf135325144db5748c985`.
 - Next mandatory phase: central effective ownership policy and capability deduplication.
+
+## Phase 5 — central capability ownership and feature policy
+
+- Date: 2026-08-11
+- Commit SHA: `PENDING_CHECKPOINT_SHA`
+- Parent stable checkpoint: `5f3ee74`
+- Status: `FOCUSED_VERIFIED`
+- Files changed: `common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java`, `FeatureFlags.java`, `PackForgeCapabilities.java`, `ReloadFeatureSnapshot.java`, `FeaturePolicyTest.java`
+- Architecture decision: keep `FeatureFlags` as the compatibility facade, but move capability/config gating into an immutable `FeaturePolicy`. Reload capture copies the mutable config and reads the artifact-generated capability profile once at the reload boundary.
+- Commands: `./gradlew.bat -p platform/fabric -Ppackforge_target=mc1_21_1 test --no-daemon --stacktrace`.
+- Results: Fabric 1.21.1 suite PASS; 106 tests completed.
+- Compatibility: no feature default or capability identifier changed; reserved atlas-split settings remain disabled and absent capability profiles still fail closed.
+- Rollback point: parent `5f3ee74`.
+- Next mandatory phase: capability declaration deduplication and generated-profile ownership checks.

@@ -15,6 +15,10 @@ public final class PackForgeCapabilities {
 		return PROFILE.supports(capability);
 	}
 
+	static PackForgeCapabilityProfile profile() {
+		return PROFILE;
+	}
+
 	public static String target() {
 		return PROFILE.target();
 	}

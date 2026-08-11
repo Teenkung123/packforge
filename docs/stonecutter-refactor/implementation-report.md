@@ -8,4 +8,6 @@ Phase 1 evidence: `validateTargetRegistry` and `printResolvedMatrix` pass with 2
 
 Phase 2 evidence: Stonecutter 0.9.7 generates `:mc1_21_1`, and `verifyStonecutterCurrentTarget` builds the three standalone loader projects and checks the exact current artifact set. The first delegation was intentionally rejected as a recursive task graph and replaced with direct platform invocations; the legacy root aggregator remains unchanged.
 
+Phase 5 evidence: `FeaturePolicy` now owns capability/config gating and copies the live config at a policy boundary. `ReloadFeatureSnapshot.capture()` uses one policy instance, while the unchanged `FeatureFlags` facade preserves existing callers. The focused Fabric suite passes with 106 tests.
+
 Open mandatory work: full Stonecutter parity, central effective ownership policy, capability deduplication, unified screens, Quick Pack profiles, 22 exact releases, artifact proof/consolidation, candidate evaluation, CI/publication generation, and final runtime evidence.
