@@ -1,5 +1,6 @@
 package com.teenkung.packforge.client.mixin.compat;
 
+import net.fabricmc.loader.api.FabricLoader;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -9,18 +10,26 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
-/** Selects the GUI owner without loading Minecraft classes or using reflection. */
+/** Combines 26.x GUI selection with early Quick Pack ownership suppression. */
 public final class GuiCompatMixinPlugin implements IMixinConfigPlugin {
+	private static final String QUICK_PACK = "quick-pack";
 	private static final String MINECRAFT_MIXIN = "com.teenkung.packforge.client.mixin.compat.MinecraftGui26_1Mixin";
 	private static final String GUI_MIXIN = "com.teenkung.packforge.client.mixin.compat.Gui26_2Mixin";
 	private static final String SET_SCREEN_DESCRIPTOR = "(Lnet/minecraft/client/gui/screens/Screen;)V";
+	private static final Set<String> QUICK_PACK_OWNED_MIXINS = Set.of(
+		"client.mixin.font.FontManagerMixin",
+		"client.mixin.font.FontSetMixin",
+		"client.mixin.ui.LoadingOverlayMixin"
+	);
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		if (MINECRAFT_MIXIN.equals(mixinClassName) || GUI_MIXIN.equals(mixinClassName)) {
-			return hasMethod(targetClassName, "setScreen", SET_SCREEN_DESCRIPTOR);
+		if ((MINECRAFT_MIXIN.equals(mixinClassName) || GUI_MIXIN.equals(mixinClassName))
+			&& !hasMethod(targetClassName, "setScreen", SET_SCREEN_DESCRIPTOR)) {
+			return false;
 		}
-		return true;
+		return !FabricLoader.getInstance().isModLoaded(QUICK_PACK)
+			|| QUICK_PACK_OWNED_MIXINS.stream().noneMatch(mixinClassName::endsWith);
 	}
 
 	private static boolean hasMethod(String targetClassName, String name, String descriptor) {

@@ -111,6 +111,10 @@ sourceSets {
 
 dependencies {
 	minecraft "com.mojang:minecraft:${minecraftDependencyVersion}"
+	// Fabric Loader supplies Mixin at runtime for official-mapped targets too;
+	// keep its public plugin API available to the early compatibility plugin.
+	compileOnly "net.fabricmc:sponge-mixin:${packforgeRegistry.fabricMixinVersion}"
+	add("clientCompileOnly", "net.fabricmc:sponge-mixin:${packforgeRegistry.fabricMixinVersion}")
 	if (loaderConfig.mappingMode == "named") {
 		mappings loom.officialMojangMappings()
 	}
@@ -122,9 +126,6 @@ dependencies {
 			runtimeOnly "org.ow2.asm:${module}:${packforgeRegistry.fabricAsmVersion}"
 		}
 		runtimeOnly "net.fabricmc:sponge-mixin:${packforgeRegistry.fabricMixinVersion}"
-	}
-	if (loaderConfig.mappingMode == "named") {
-		compileOnly "net.fabricmc:sponge-mixin:${packforgeRegistry.fabricMixinVersion}"
 	}
 	// Loom/Fabric API can inject compile-time interfaces into Minecraft classes.
 	// Keep those types available to javac without making Fabric API a runtime dependency.
