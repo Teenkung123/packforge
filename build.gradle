@@ -735,11 +735,23 @@ tasks.register("validateTargetRegistry") {
 				throw new GradleException("${source} contains raw intermediary selector '${rawSelector.group()}'.")
 			}
 		}
+		def sharedSourceTargets = [
+			"FilePackResourcesMixin.java": ["mc1_21_1", "mc1_21_4", "mc1_21_8"],
+			"ReloadableResourceManagerMixin.java": ["mc1_21_1", "mc1_21_4", "mc1_21_8"],
+			"SharedZipFileAccessMixin.java": ["mc1_21_1", "mc1_21_4", "mc1_21_8"]
+		]
+		def effectiveTargetJavaSources = { target, fileName ->
+			def roots = [file("versions/${target.apiAdapter}")]
+			if (target.key in (sharedSourceTargets[fileName] ?: [])) {
+				roots << file("versions/mc1_21_shared/common/src/main/java")
+			}
+			roots.collectMany { root ->
+				fileTree(root) { include "**/${fileName}" }.files
+			}.unique { it.canonicalPath }
+		}
 		def filePackSources = []
 		targets.each { target ->
-			def adapterSources = fileTree("versions/${target.apiAdapter}") {
-				include "**/FilePackResourcesMixin.java"
-			}.files
+			def adapterSources = effectiveTargetJavaSources(target, "FilePackResourcesMixin.java")
 			if (adapterSources.size() != 1) {
 				throw new GradleException("Target ${target.key} must own exactly one FilePackResources mixin; found ${adapterSources.size()}.")
 			}
@@ -771,9 +783,7 @@ tasks.register("validateTargetRegistry") {
 		}
 		def reloadManagerSources = []
 		targets.each { target ->
-			def adapterSources = fileTree("versions/${target.apiAdapter}") {
-				include "**/ReloadableResourceManagerMixin.java"
-			}.files
+			def adapterSources = effectiveTargetJavaSources(target, "ReloadableResourceManagerMixin.java")
 			if (adapterSources.size() != 1) {
 				throw new GradleException("Target ${target.key} must own exactly one ReloadableResourceManager mixin; found ${adapterSources.size()}.")
 			}
