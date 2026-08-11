@@ -37,3 +37,21 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Verification: focused Fabric 1.21.1 test suite; 106 tests completed successfully
 - Status: `FOCUSED_VERIFIED`
 - Rollback: revert this checkpoint to return to the Stonecutter pilot; capability declarations and public feature-flag calls remain in the parent
+
+## Stonecutter root verification wiring
+
+- Commit SHA: `80a35d7bff2a186bf62a3696dc54dcf2dc639e14`
+- Parent SHA: `5f3ee749fe080f2f6035d9b5b0adf9a6924d1a3d`
+- Scope: restore repository-level registry/release tasks on the Stonecutter root and gate the current-target verifier on registry validation
+- Verification: `./gradlew.bat :validateTargetRegistry`; `:mc1_21_1:verifyStonecutterCurrentTarget`
+- Status: `FOCUSED_VERIFIED`
+- Rollback: revert this build-wiring repair; the Stonecutter pilot remains available but root verification would no longer be attached
+
+## Archive and reload implementation deduplication
+
+- Commit SHA: `723c504ca5ec2012e8535efc15bd96d4fbec8854`
+- Parent SHA: `80a35d7bff2a186bf62a3696dc54dcf2dc639e14`
+- Scope: shared 1.21.1/1.21.4/1.21.8 archive/reload mixins, platform source roots, and effective-source ownership validation
+- Verification: root registry guard plus `buildTarget` for 1.21.1, 1.21.4, and 1.21.8; all three loader artifact verifiers passed for each target
+- Status: `FOCUSED_VERIFIED`
+- Rollback: revert this checkpoint to restore per-version 1.21.1/1.21.4/1.21.8 hook copies

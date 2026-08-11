@@ -47,6 +47,7 @@
 - Results: Stonecutter target project task discovery PASS; Fabric, Forge, and NeoForge 1.21.1 standalone builds PASS; exact three-artifact pilot set PASS.
 - Generated artifacts: `build/stonecutter/mc1_21_1/libs` contains the three verified pilot JARs; public artifact names are unchanged.
 - Repair evidence: the first pilot delegation recursively re-entered the root Stonecutter task. The process tree was stopped and the task was repaired to invoke each standalone platform build directly before checkpointing.
+- Follow-up build wiring: `80a35d7bff2a186bf62a3696dc54dcf2dc639e14` explicitly reapplies the repository build script to the Stonecutter root project and makes the Stonecutter verifier depend on the root registry guard. This preserves root release checks without re-entering the platform build graph.
 - Compatibility: no runtime hook or artifact packaging behavior changed; this is a parallel build path only.
 - Rollback point: parent `8d53b8abd996b6d03a0cf135325144db5748c985`.
 - Next mandatory phase: central effective ownership policy and capability deduplication.
@@ -64,3 +65,17 @@
 - Compatibility: no feature default or capability identifier changed; reserved atlas-split settings remain disabled and absent capability profiles still fail closed.
 - Rollback point: parent `5f3ee74`.
 - Next mandatory phase: capability declaration deduplication and generated-profile ownership checks.
+
+## Phase 6 — archive and reload implementation deduplication
+
+- Date: 2026-08-11
+- Commit SHA: `723c504ca5ec2012e8535efc15bd96d4fbec8854`
+- Parent stable checkpoint: `80a35d7bff2a186bf62a3696dc54dcf2dc639e14`
+- Status: `FOCUSED_VERIFIED`
+- Files changed: `versions/mc1_21_shared/common/src/main/java/.../FilePackResourcesMixin.java`, `SharedZipFileAccessMixin.java`, `ReloadableResourceManagerMixin.java`, three platform source-set declarations, and the effective-source registry validator
+- Architecture decision: make the byte-identical 1.21.1/1.21.4/1.21.8 archive and reload hooks one shared implementation. Keep mixin descriptors version-local because resource processing rejects duplicate paths; keep 1.21.11 version-owned until its full source family is proven compatible.
+- Commands: `./gradlew.bat :validateTargetRegistry --no-daemon --stacktrace`; `./gradlew.bat -Ppackforge_target=mc1_21_1 :buildTarget --no-daemon --stacktrace`; same `buildTarget` command for `mc1_21_4` and `mc1_21_8`.
+- Results: registry guard PASS; all Fabric, Forge, and NeoForge builds plus artifact verifiers PASS for 1.21.1, 1.21.4, and 1.21.8. Direct inspection of the three 1.21.1 final JARs found exactly one packaged class for each relocated hook.
+- Compatibility: hook source text is unchanged; only effective source ownership changed. No broad selector or fallback hook was introduced.
+- Rollback point: parent `80a35d7bff2a186bf62a3696dc54dcf2dc639e14`.
+- Next mandatory phase: model/sprite scheduling and remaining capability-specific source deduplication.
