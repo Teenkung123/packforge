@@ -20,7 +20,7 @@
 ## Phase 1 — canonical registry schema v2
 
 - Date: 2026-08-11
-- Commit SHA: to be filled after the registry checkpoint commit
+- Commit SHA: `8d53b8abd996b6d03a0cf135325144db5748c985`
 - Parent stable checkpoint: `bfd63ce2549f81731f5ba05a4e7cfeeeeb627c20`
 - Status: `FOCUSED_VERIFIED`
 - Files changed: `gradle/minecraft-targets.json`, `build.gradle`, `gradle/packforge-target.gradle`, registry evidence docs

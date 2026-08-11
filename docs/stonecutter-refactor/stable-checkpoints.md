@@ -13,7 +13,7 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 
 ## Registry schema v2
 
-- Commit SHA: to be recorded immediately after the registry checkpoint commit
+- Commit SHA: `8d53b8abd996b6d03a0cf135325144db5748c985`
 - Parent SHA: `bfd63ce2549f81731f5ba05a4e7cfeeeeb627c20`
 - Scope: schema v2 fields, checked-in 22-release sequence/cells, maturity policy, and resolved-matrix task
 - Verification: `./gradlew.bat validateTargetRegistry printResolvedMatrix buildTarget -Ppackforge_target=mc1_21_1 --no-daemon --stacktrace`; final focused build and all three child artifact verifiers passed
