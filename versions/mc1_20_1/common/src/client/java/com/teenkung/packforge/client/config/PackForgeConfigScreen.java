@@ -134,8 +134,7 @@ public final class PackForgeConfigScreen extends Screen {
 		Component labelText = Component.translatable(option.sectionKey()).append(": ")
 			.append(Component.translatable(option.titleKey()));
 		StringWidget label = new StringWidget(left, y, labelWidth, 20, labelText, this.font);
-		label.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey()).append("\n")
-			.append(Component.translatable(option.applyScope().translationKey()))));
+		label.setTooltip(Tooltip.create(optionTooltip(option)));
 		addRenderableWidget(label);
 
 		AbstractWidget control = createControl(option, left + labelWidth + 4, y);
@@ -198,6 +197,24 @@ public final class PackForgeConfigScreen extends Screen {
 		box.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey()).append("\n")
 			.append(Component.literal(option.minimum() + "-" + option.maximum()).withStyle(ChatFormatting.RED))));
 		updateDoneButton();
+	}
+
+	private Component optionTooltip(PackForgeConfigScreenModel.OptionSpec option) {
+		PackForgeConfigScreenModel.EffectiveState state = PackForgeConfigScreenModel.effectiveState(option, this.draft.working());
+		var tooltip = Component.translatable(option.descriptionKey())
+			.append("\n").append(Component.translatable(option.applyScope().translationKey()))
+			.append("\n").append(Component.translatable("packforge.config.effective.configured", state.configuredValue()))
+			.append("\n").append(Component.translatable("packforge.config.effective.effective", state.effectiveValue()));
+		if (!state.externalOwner().isEmpty()) {
+			tooltip = tooltip.append(Component.literal("\n")).append(Component.translatable("packforge.config.effective.owner", state.externalOwner()));
+		}
+		if (!state.disabledReason().isEmpty()) {
+			tooltip = tooltip.append(Component.literal("\n")).append(Component.translatable("packforge.config.effective.reason", state.disabledReason()));
+		}
+		if (!state.warning().isEmpty()) {
+			tooltip = tooltip.append(Component.literal("\n")).append(Component.translatable("packforge.config.effective.warning", state.warning()));
+		}
+		return tooltip;
 	}
 
 	private void apply() {

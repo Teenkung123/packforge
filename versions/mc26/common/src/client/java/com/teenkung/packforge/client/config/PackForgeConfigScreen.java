@@ -185,7 +185,7 @@ public final class PackForgeConfigScreen extends Screen {
 		OptionEntry(PackForgeConfigScreenModel.OptionSpec option, Font font) {
 			this.option = option;
 			this.label = new StringWidget(0, 0, 260, 20, Component.translatable(option.titleKey()), font);
-			this.label.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey()).append("\n").append(Component.translatable(option.applyScope().translationKey()))));
+			this.label.setTooltip(Tooltip.create(optionTooltip(option)));
 			this.control = createControl(option, font);
 			this.reset = Button.builder(Component.translatable("packforge.config.reset"), button -> {
 				draft.reset(option);
@@ -241,6 +241,24 @@ public final class PackForgeConfigScreen extends Screen {
 			box.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey()).append("\n")
 				.append(Component.literal(option.minimum() + "-" + option.maximum()).withStyle(ChatFormatting.RED))));
 			setInputValidity(option, false);
+		}
+
+		private Component optionTooltip(PackForgeConfigScreenModel.OptionSpec option) {
+			PackForgeConfigScreenModel.EffectiveState state = PackForgeConfigScreenModel.effectiveState(option, draft.working());
+			var tooltip = Component.translatable(option.descriptionKey())
+				.append("\n").append(Component.translatable(option.applyScope().translationKey()))
+				.append("\n").append(Component.translatable("packforge.config.effective.configured", state.configuredValue()))
+				.append("\n").append(Component.translatable("packforge.config.effective.effective", state.effectiveValue()));
+			if (!state.externalOwner().isEmpty()) {
+				tooltip = tooltip.append(Component.literal("\n")).append(Component.translatable("packforge.config.effective.owner", state.externalOwner()));
+			}
+			if (!state.disabledReason().isEmpty()) {
+				tooltip = tooltip.append(Component.literal("\n")).append(Component.translatable("packforge.config.effective.reason", state.disabledReason()));
+			}
+			if (!state.warning().isEmpty()) {
+				tooltip = tooltip.append(Component.literal("\n")).append(Component.translatable("packforge.config.effective.warning", state.warning()));
+			}
+			return tooltip;
 		}
 
 		@Override

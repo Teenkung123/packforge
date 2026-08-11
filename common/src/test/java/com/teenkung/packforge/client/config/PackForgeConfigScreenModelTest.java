@@ -2,10 +2,12 @@ package com.teenkung.packforge.client.config;
 
 import com.teenkung.packforge.config.PackForgeCapability;
 import com.teenkung.packforge.config.PackForgeConfig;
+import com.teenkung.packforge.config.QuickPackCompatibility;
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -26,7 +28,7 @@ class PackForgeConfigScreenModelTest {
 
 		assertEquals(List.of("reload_optimizer", "loader_index", "loader_zip_pool", "loader_timings"),
 			options.stream().map(PackForgeConfigScreenModel.OptionSpec::id).toList());
-		assertEquals(List.of(PackForgeConfigScreenModel.Category.RELOAD),
+		assertEquals(List.of(PackForgeConfigScreenModel.Category.RELOAD, PackForgeConfigScreenModel.Category.DIAGNOSTICS),
 			PackForgeConfigScreenModel.availableCategories(LEGACY));
 	}
 
@@ -56,7 +58,13 @@ class PackForgeConfigScreenModelTest {
 			PackForgeCapability.ATLAS_DECODE_BATCHING);
 		List<PackForgeConfigScreenModel.OptionSpec> options = PackForgeConfigScreenModel.availableOptions(reload);
 		assertEquals(21, options.size());
-		assertTrue(options.stream().allMatch(option -> option.category() == PackForgeConfigScreenModel.Category.RELOAD));
+		assertTrue(PackForgeConfigScreenModel.availableCategories(reload).containsAll(List.of(
+			PackForgeConfigScreenModel.Category.RELOAD,
+			PackForgeConfigScreenModel.Category.MODELS,
+			PackForgeConfigScreenModel.Category.FONTS,
+			PackForgeConfigScreenModel.Category.ATLAS,
+			PackForgeConfigScreenModel.Category.COMPATIBILITY,
+			PackForgeConfigScreenModel.Category.DIAGNOSTICS)));
 	}
 
 	@Test
@@ -72,8 +80,7 @@ class PackForgeConfigScreenModelTest {
 			PackForgeCapability.ATLAS_PHASE_TIMINGS, PackForgeCapability.ATLAS_DECODE_BATCHING);
 		List<PackForgeConfigScreenModel.OptionSpec> options = PackForgeConfigScreenModel.availableOptions(oldReload);
 		assertEquals(20, options.size());
-		assertEquals(List.of(PackForgeConfigScreenModel.Category.RELOAD),
-			PackForgeConfigScreenModel.availableCategories(oldReload));
+		assertTrue(PackForgeConfigScreenModel.availableCategories(oldReload).contains(PackForgeConfigScreenModel.Category.RELOAD));
 		assertFalse(options.stream()
 			.anyMatch(option -> option.id().equals("font_provider_selection")));
 	}
@@ -114,5 +121,34 @@ class PackForgeConfigScreenModelTest {
 
 		assertThrows(IllegalArgumentException.class, () -> option.set(new PackForgeConfig.Cfg(), 0));
 		assertThrows(IllegalArgumentException.class, () -> option.set(new PackForgeConfig.Cfg(), 11));
+	}
+
+	@Test
+	void schemaCarriesTypeDefaultAndValidationForEveryOption() {
+		assertTrue(PackForgeConfigScreenModel.allOptions().stream()
+			.allMatch(option -> !option.type().isBlank() && !option.defaultValue().isBlank() && !option.validation().isBlank()));
+	}
+
+	@Test
+	void effectiveStateShowsQuickPackOwnershipWithoutChangingDraftValue() {
+		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
+		PackForgeConfigScreenModel.OptionSpec option = PackForgeConfigScreenModel.allOptions().stream()
+			.filter(candidate -> candidate.id().equals("loader_index"))
+			.findFirst()
+			.orElseThrow();
+		QuickPackCompatibility.Profile quickPack = new QuickPackCompatibility.Profile(
+			QuickPackCompatibility.Status.VERIFIED_1_5,
+			Optional.of("1.5.7"),
+			java.util.Set.of(PackForgeCapability.RESOURCE_PACK_INDEX)
+		);
+
+		PackForgeConfigScreenModel.EffectiveState state = PackForgeConfigScreenModel.effectiveState(option, config, quickPack);
+
+		assertEquals("on", state.configuredValue());
+		assertEquals("off", state.effectiveValue());
+		assertFalse(state.effective());
+		assertEquals("quick-pack", state.externalOwner());
+		assertEquals("on", option.defaultValue());
+		assertTrue(config.loaderIndexEnabled);
 	}
 }

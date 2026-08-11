@@ -3,6 +3,8 @@ package com.teenkung.packforge.client.config;
 import com.teenkung.packforge.config.PackForgeCapabilities;
 import com.teenkung.packforge.config.PackForgeCapability;
 import com.teenkung.packforge.config.PackForgeConfig;
+import com.teenkung.packforge.config.FeaturePolicy;
+import com.teenkung.packforge.config.QuickPackCompatibility;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,8 +26,12 @@ import java.util.function.ToIntFunction;
 public final class PackForgeConfigScreenModel {
 	public enum Category {
 		RELOAD("reload"),
+		MODELS("models"),
+		FONTS("fonts"),
 		ATLAS("atlas"),
-		STARTUP("startup");
+		STARTUP("startup"),
+		COMPATIBILITY("compatibility"),
+		DIAGNOSTICS("diagnostics");
 
 		private final String id;
 
@@ -80,6 +86,31 @@ public final class PackForgeConfigScreenModel {
 			return "packforge.config.section." + section();
 		}
 
+		default String type() {
+			if (this instanceof BooleanOption) {
+				return "boolean";
+			}
+			if (this instanceof IntegerOption) {
+				return "integer";
+			}
+			return "string_list";
+		}
+
+		default String defaultValue() {
+			return configuredValue(DEFAULTS, this);
+		}
+
+		default String validation() {
+			if (this instanceof IntegerOption integer) {
+				return integer.minimum() + ".." + integer.maximum();
+			}
+			return type().equals("string_list") ? "comma-separated" : "boolean";
+		}
+
+		default EffectiveState resolve(PackForgeConfig.Cfg config, FeaturePolicy policy) {
+			return resolveState(this, config, policy);
+		}
+
 		default boolean supported(Set<PackForgeCapability> capabilities) {
 			return capabilities.contains(capability());
 		}
@@ -87,6 +118,24 @@ public final class PackForgeConfigScreenModel {
 		void reset(PackForgeConfig.Cfg target);
 
 		boolean sameValue(PackForgeConfig.Cfg left, PackForgeConfig.Cfg right);
+	}
+
+	/** Non-persistent configured/effective state shown by native screen adapters. */
+	public record EffectiveState(
+		String configuredValue,
+		String effectiveValue,
+		boolean effective,
+		String externalOwner,
+		String disabledReason,
+		String warning
+	) {
+		public EffectiveState {
+			configuredValue = configuredValue == null ? "" : configuredValue;
+			effectiveValue = effectiveValue == null ? "" : effectiveValue;
+			externalOwner = externalOwner == null ? "" : externalOwner;
+			disabledReason = disabledReason == null ? "" : disabledReason;
+			warning = warning == null ? "" : warning;
+		}
 	}
 
 	public record BooleanOption(
@@ -236,6 +285,16 @@ public final class PackForgeConfigScreenModel {
 		return List.copyOf(categories);
 	}
 
+	public static EffectiveState effectiveState(OptionSpec option, PackForgeConfig.Cfg config) {
+		Objects.requireNonNull(option, "option");
+		return option.resolve(config, FeaturePolicy.forConfiguration(config));
+	}
+
+	static EffectiveState effectiveState(OptionSpec option, PackForgeConfig.Cfg config, QuickPackCompatibility.Profile quickPack) {
+		Objects.requireNonNull(option, "option");
+		return option.resolve(config, FeaturePolicy.forConfiguration(config, quickPack));
+	}
+
 	public static boolean sameValues(PackForgeConfig.Cfg left, PackForgeConfig.Cfg right) {
 		for (OptionSpec option : OPTIONS) {
 			if (!option.sameValue(left, right)) {
@@ -243,6 +302,74 @@ public final class PackForgeConfigScreenModel {
 			}
 		}
 		return true;
+	}
+
+	private static EffectiveState resolveState(OptionSpec option, PackForgeConfig.Cfg config, FeaturePolicy policy) {
+		String configured = configuredValue(config, option);
+		boolean effective = effectiveEnabled(option, config, policy);
+		String externalOwner = policy.quickPackOwns(option.capability()) ? "quick-pack" : "";
+		String reason = policy.quickPackDisabledReason(option.capability());
+		String warning = !effective && externalOwner.isEmpty()
+			? "Configured but inactive because a prerequisite or capability is disabled"
+			: "";
+		String effectiveValue = option instanceof BooleanOption
+			? (effective ? "on" : "off")
+			: configured;
+		return new EffectiveState(configured, effectiveValue, effective, externalOwner, reason, warning);
+	}
+
+	private static boolean effectiveEnabled(OptionSpec option, PackForgeConfig.Cfg config, FeaturePolicy policy) {
+		if (policy.quickPackOwns(option.capability())) {
+			return false;
+		}
+		if (option instanceof BooleanOption booleanOption && !booleanOption.get(config)) {
+			return false;
+		}
+		return switch (option.id()) {
+			case "reload_optimizer" -> policy.reloadOptimizerEnabled();
+			case "loader_index" -> policy.loaderIndexEnabled();
+			case "loader_zip_pool" -> policy.loaderZipPoolEnabled();
+			case "loader_timings" -> policy.loaderTimingsEnabled();
+			case "reload_listener_timings" -> policy.reloadListenerTimingsEnabled();
+			case "shader_stall_diagnostics" -> policy.shaderApplyStallDiagnosticsEnabled();
+			case "immediatelyfast_font_guard" -> policy.immediatelyFastFontAtlasCompatEnabled();
+			case "loading_status_overlay" -> policy.loadingStatusOverlayEnabled();
+			case "loading_fade_out_disabled" -> policy.loadingScreenFadeOutDisabled();
+			case "reload_summary_toast" -> policy.reloadSummaryToastEnabled();
+			case "font_provider_selection" -> policy.fontPrepareProviderSelectionEnabled();
+			case "font_bitmap_cache" -> policy.fontBitmapProviderCacheEnabled();
+			case "font_reload_diagnostics" -> policy.fontReloadDiagnosticsEnabled();
+			case "model_parse_batching", "model_parse_batch_size" -> policy.modelParseBatchingEnabled();
+			case "model_parse_timings" -> policy.modelParseTimingEnabled();
+			case "model_adaptive_batching" -> policy.modelAdaptiveBatchingEnabled();
+			case "model_duplicate_cache" -> policy.modelDuplicateParseCacheEnabled();
+			case "atlas_phase_timings" -> policy.atlasPhaseTimingsEnabled();
+			case "atlas_decode_batching", "atlas_decode_batch_size" -> policy.atlasDecodeBatchingEnabled();
+			case "large_atlas_fixer" -> policy.largeAtlasFixerEnabled();
+			case "model_uv_clamp" -> policy.modelUvTransparencyClampEnabled();
+			case "atlas_cap", "atlas_cap_pixels", "atlas_exclude_ids" -> policy.atlasCapEnabled();
+			case "atlas_retry", "atlas_retry_attempts", "atlas_retry_disable_with_iris" -> policy.atlasRetryEnabled();
+			case "atlas_mip_parallel", "atlas_mip_batch_size" -> policy.atlasMipParallelEnabled();
+			case "startup_optimizer" -> policy.startupOptimizerEnabled();
+			case "startup_timings" -> policy.startupTimingsEnabled();
+			case "startup_status_overlay" -> policy.startupStatusOverlayEnabled();
+			case "startup_executor_tuning", "startup_worker_threads", "startup_thread_priority" -> policy.startupExecutorTuningEnabled();
+			case "startup_skip_smooth_boot" -> policy.startupSkipWithSmoothBoot();
+			case "startup_async_data" -> policy.startupAsyncDataParsingEnabled();
+			case "startup_async_class_scan" -> policy.startupAsyncClassScanEnabled();
+			case "startup_async_font_atlas" -> policy.startupAsyncFontAtlasEnabled();
+			default -> true;
+		};
+	}
+
+	private static String configuredValue(PackForgeConfig.Cfg config, OptionSpec option) {
+		if (option instanceof BooleanOption booleanOption) {
+			return booleanOption.get(config) ? "on" : "off";
+		}
+		if (option instanceof IntegerOption integerOption) {
+			return Integer.toString(integerOption.get(config));
+		}
+		return ((StringListOption) option).format(config);
 	}
 
 	private static List<OptionSpec> buildOptions() {
@@ -260,35 +387,35 @@ public final class PackForgeConfigScreenModel {
 			cfg -> cfg.loadingScreenFadeOutDisabled, (cfg, value) -> cfg.loadingScreenFadeOutDisabled = value));
 		options.add(bool("reload_summary_toast", Category.RELOAD, "reload_ui", PackForgeCapability.RELOAD_SUMMARY_TOAST, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.reloadSummaryToastEnabled, (cfg, value) -> cfg.reloadSummaryToastEnabled = value));
-		options.add(bool("font_provider_selection", Category.RELOAD, "fonts", PackForgeCapability.FONT_PROVIDER_PRESELECTION, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("font_provider_selection", Category.FONTS, "fonts", PackForgeCapability.FONT_PROVIDER_PRESELECTION, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.fontPrepareProviderSelectionEnabled, (cfg, value) -> cfg.fontPrepareProviderSelectionEnabled = value));
-		options.add(bool("font_bitmap_cache", Category.RELOAD, "fonts", PackForgeCapability.FONT_BITMAP_CACHE, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("font_bitmap_cache", Category.FONTS, "fonts", PackForgeCapability.FONT_BITMAP_CACHE, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.fontBitmapProviderCacheEnabled, (cfg, value) -> cfg.fontBitmapProviderCacheEnabled = value));
-		options.add(bool("model_parse_batching", Category.RELOAD, "models", PackForgeCapability.MODEL_PARSE_BATCHING, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("model_parse_batching", Category.MODELS, "models", PackForgeCapability.MODEL_PARSE_BATCHING, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.modelParseBatchingEnabled, (cfg, value) -> cfg.modelParseBatchingEnabled = value));
-		options.add(integer("model_parse_batch_size", Category.RELOAD, "models", PackForgeCapability.MODEL_PARSE_BATCHING, ApplyScope.RESOURCE_RELOAD,
+		options.add(integer("model_parse_batch_size", Category.MODELS, "models", PackForgeCapability.MODEL_PARSE_BATCHING, ApplyScope.RESOURCE_RELOAD,
 			8, 1024, cfg -> cfg.modelParseBatchSize, (cfg, value) -> cfg.modelParseBatchSize = value));
-		options.add(bool("model_parse_timings", Category.RELOAD, "models", PackForgeCapability.MODEL_PARSE_TIMINGS, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("model_parse_timings", Category.MODELS, "models", PackForgeCapability.MODEL_PARSE_TIMINGS, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.modelParseTimingEnabled, (cfg, value) -> cfg.modelParseTimingEnabled = value));
-		options.add(bool("model_adaptive_batching", Category.RELOAD, "models", PackForgeCapability.MODEL_ADAPTIVE_BATCHING, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("model_adaptive_batching", Category.MODELS, "models", PackForgeCapability.MODEL_ADAPTIVE_BATCHING, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.modelAdaptiveBatchingEnabled, (cfg, value) -> cfg.modelAdaptiveBatchingEnabled = value));
-		options.add(bool("model_duplicate_cache", Category.RELOAD, "models", PackForgeCapability.MODEL_DUPLICATE_CACHE, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("model_duplicate_cache", Category.MODELS, "models", PackForgeCapability.MODEL_DUPLICATE_CACHE, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.modelDuplicateParseCacheEnabled, (cfg, value) -> cfg.modelDuplicateParseCacheEnabled = value));
-		options.add(bool("loader_timings", Category.RELOAD, "logging", PackForgeCapability.LOADER_TIMINGS, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("loader_timings", Category.DIAGNOSTICS, "logging", PackForgeCapability.LOADER_TIMINGS, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.loaderTimingsEnabled, (cfg, value) -> cfg.loaderTimingsEnabled = value));
-		options.add(bool("reload_listener_timings", Category.RELOAD, "logging", PackForgeCapability.RELOAD_LISTENER_TIMINGS, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("reload_listener_timings", Category.DIAGNOSTICS, "logging", PackForgeCapability.RELOAD_LISTENER_TIMINGS, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.reloadListenerTimingsEnabled, (cfg, value) -> cfg.reloadListenerTimingsEnabled = value));
-		options.add(bool("shader_stall_diagnostics", Category.RELOAD, "logging", PackForgeCapability.SHADER_STALL_DIAGNOSTICS, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("shader_stall_diagnostics", Category.DIAGNOSTICS, "logging", PackForgeCapability.SHADER_STALL_DIAGNOSTICS, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.shaderApplyStallDiagnosticsEnabled, (cfg, value) -> cfg.shaderApplyStallDiagnosticsEnabled = value));
-		options.add(bool("immediatelyfast_font_guard", Category.RELOAD, "compatibility", PackForgeCapability.IMMEDIATELY_FAST_FONT_ATLAS_COMPAT, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("immediatelyfast_font_guard", Category.COMPATIBILITY, "compatibility", PackForgeCapability.IMMEDIATELY_FAST_FONT_ATLAS_COMPAT, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.immediatelyFastFontAtlasCompatEnabled, (cfg, value) -> cfg.immediatelyFastFontAtlasCompatEnabled = value));
-		options.add(bool("font_reload_diagnostics", Category.RELOAD, "logging", PackForgeCapability.FONT_RELOAD_DIAGNOSTICS, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("font_reload_diagnostics", Category.DIAGNOSTICS, "logging", PackForgeCapability.FONT_RELOAD_DIAGNOSTICS, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.fontReloadDiagnosticsEnabled, (cfg, value) -> cfg.fontReloadDiagnosticsEnabled = value));
-		options.add(bool("atlas_phase_timings", Category.RELOAD, "logging", PackForgeCapability.ATLAS_PHASE_TIMINGS, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("atlas_phase_timings", Category.DIAGNOSTICS, "logging", PackForgeCapability.ATLAS_PHASE_TIMINGS, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.atlasPhaseTimingsEnabled, (cfg, value) -> cfg.atlasPhaseTimingsEnabled = value));
-		options.add(bool("atlas_decode_batching", Category.RELOAD, "atlas_decode", PackForgeCapability.ATLAS_DECODE_BATCHING, ApplyScope.RESOURCE_RELOAD,
+		options.add(bool("atlas_decode_batching", Category.ATLAS, "atlas_decode", PackForgeCapability.ATLAS_DECODE_BATCHING, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.atlasDecodeBatchingEnabled, (cfg, value) -> cfg.atlasDecodeBatchingEnabled = value));
-		options.add(integer("atlas_decode_batch_size", Category.RELOAD, "atlas_decode", PackForgeCapability.ATLAS_DECODE_BATCHING, ApplyScope.RESOURCE_RELOAD,
+		options.add(integer("atlas_decode_batch_size", Category.ATLAS, "atlas_decode", PackForgeCapability.ATLAS_DECODE_BATCHING, ApplyScope.RESOURCE_RELOAD,
 			16, 4096, cfg -> cfg.atlasDecodeBatchSize, (cfg, value) -> cfg.atlasDecodeBatchSize = value));
 
 		options.add(bool("large_atlas_fixer", Category.ATLAS, "general", PackForgeCapability.ATLAS_CAP, ApplyScope.RESOURCE_RELOAD,
@@ -305,7 +432,7 @@ public final class PackForgeConfigScreenModel {
 			cfg -> cfg.atlasRetryEnabled, (cfg, value) -> cfg.atlasRetryEnabled = value));
 		options.add(integer("atlas_retry_attempts", Category.ATLAS, "atlas_retry", PackForgeCapability.ATLAS_RETRY, ApplyScope.RESOURCE_RELOAD,
 			1, 10, cfg -> cfg.atlasRetryMaxAttempts, (cfg, value) -> cfg.atlasRetryMaxAttempts = value));
-		options.add(bool("atlas_retry_disable_with_iris", Category.ATLAS, "atlas_retry", PackForgeCapability.ATLAS_RETRY, ApplyScope.GAME_RESTART,
+		options.add(bool("atlas_retry_disable_with_iris", Category.COMPATIBILITY, "atlas_retry", PackForgeCapability.ATLAS_RETRY, ApplyScope.GAME_RESTART,
 			cfg -> cfg.forceDisablePartIIIWithIris, (cfg, value) -> cfg.forceDisablePartIIIWithIris = value));
 		options.add(bool("atlas_mip_parallel", Category.ATLAS, "atlas_mipmaps", PackForgeCapability.ATLAS_MIP_PARALLEL, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.atlasMipParallelEnabled, (cfg, value) -> cfg.atlasMipParallelEnabled = value));
@@ -324,7 +451,7 @@ public final class PackForgeConfigScreenModel {
 			0, Runtime.getRuntime().availableProcessors(), cfg -> cfg.startupWorkerThreads, (cfg, value) -> cfg.startupWorkerThreads = value));
 		options.add(integer("startup_thread_priority", Category.STARTUP, "executors", PackForgeCapability.STARTUP_EXECUTOR_TUNING, ApplyScope.GAME_RESTART,
 			Thread.MIN_PRIORITY, Thread.MAX_PRIORITY, cfg -> cfg.startupThreadPriority, (cfg, value) -> cfg.startupThreadPriority = value));
-		options.add(bool("startup_skip_smooth_boot", Category.STARTUP, "compatibility", PackForgeCapability.STARTUP_EXECUTOR_TUNING, ApplyScope.GAME_RESTART,
+		options.add(bool("startup_skip_smooth_boot", Category.COMPATIBILITY, "compatibility", PackForgeCapability.STARTUP_EXECUTOR_TUNING, ApplyScope.GAME_RESTART,
 			cfg -> cfg.startupSkipWithSmoothBoot, (cfg, value) -> cfg.startupSkipWithSmoothBoot = value));
 		options.add(bool("startup_async_data", Category.STARTUP, "future_async", PackForgeCapability.STARTUP_ASYNC_DATA, ApplyScope.GAME_RESTART,
 			cfg -> cfg.startupAsyncDataParsingEnabled, (cfg, value) -> cfg.startupAsyncDataParsingEnabled = value));

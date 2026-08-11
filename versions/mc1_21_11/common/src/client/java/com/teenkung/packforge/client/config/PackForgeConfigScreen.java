@@ -1,6 +1,7 @@
 package com.teenkung.packforge.client.config;
 
 import com.teenkung.packforge.config.PackForgeConfig;
+import com.teenkung.packforge.config.PackForgeCapabilities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -18,8 +19,9 @@ public final class PackForgeConfigScreen extends Screen {
 	private static final int ROW_HEIGHT = 28;
 	private final Screen parent;
 	private final PackForgeConfigDraft draft = new PackForgeConfigDraft();
-	private final List<PackForgeConfigScreenModel.OptionSpec> options = PackForgeConfigScreenModel.availableOptions().stream()
-		.filter(option -> option.category() == PackForgeConfigScreenModel.Category.RELOAD).toList();
+	private final List<PackForgeConfigScreenModel.OptionSpec> options = PackForgeConfigScreenModel.availableOptions();
+	private final List<PackForgeConfigScreenModel.Category> categories = PackForgeConfigScreenModel.availableCategories(PackForgeCapabilities.available());
+	private PackForgeConfigScreenModel.Category activeCategory;
 	private String filter = "";
 	private int page;
 	private Component saveError;
@@ -28,6 +30,7 @@ public final class PackForgeConfigScreen extends Screen {
 	public PackForgeConfigScreen(Screen parent) {
 		super(Component.translatable("packforge.config.title"));
 		this.parent = parent;
+		this.activeCategory = categories.isEmpty() ? null : categories.getFirst();
 	}
 
 	@Override
@@ -35,6 +38,7 @@ public final class PackForgeConfigScreen extends Screen {
 		clearWidgets();
 		int contentWidth = Math.min(520, this.width - 24);
 		int left = (this.width - contentWidth) / 2;
+		addCategoryButtons(left, contentWidth);
 		search = addRenderableWidget(new EditBox(this.font, left, 28, contentWidth, 20, Component.translatable("packforge.config.search")));
 		search.setHint(Component.translatable("packforge.config.search"));
 		search.setValue(filter);
@@ -64,17 +68,29 @@ public final class PackForgeConfigScreen extends Screen {
 	}
 
 	private List<PackForgeConfigScreenModel.OptionSpec> filtered() {
-		if (filter.isEmpty()) return options;
-		return options.stream().filter(option -> option.id().contains(filter) || option.section().contains(filter)
+		return options.stream().filter(option -> option.category() == activeCategory && (filter.isEmpty() || option.id().contains(filter) || option.section().contains(filter)
 			|| Component.translatable(option.titleKey()).getString().toLowerCase(Locale.ROOT).contains(filter)
-			|| Component.translatable(option.descriptionKey()).getString().toLowerCase(Locale.ROOT).contains(filter)).toList();
+			|| Component.translatable(option.descriptionKey()).getString().toLowerCase(Locale.ROOT).contains(filter))).toList();
+	}
+
+	private void addCategoryButtons(int left, int width) {
+		if (categories.isEmpty()) return;
+		int buttonWidth = Math.max(1, (width - (categories.size() - 1) * 4) / categories.size());
+		for (int index = 0; index < categories.size(); index++) {
+			PackForgeConfigScreenModel.Category category = categories.get(index);
+			addRenderableWidget(Button.builder(Component.translatable(category.translationKey()), button -> {
+				activeCategory = category;
+				page = 0;
+				rebuild();
+			}).bounds(left + index * (buttonWidth + 4), 2, buttonWidth, 20).build());
+		}
 	}
 
 	private void addRow(PackForgeConfigScreenModel.OptionSpec option, int left, int y, int width) {
 		int resetWidth = 54;
 		int controlWidth = option instanceof PackForgeConfigScreenModel.StringListOption ? 170 : 104;
 		StringWidget label = new StringWidget(left, y, Math.max(1, width - controlWidth - resetWidth - 8), 20, Component.translatable(option.titleKey()), this.font);
-		label.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey()).append("\n").append(Component.translatable(option.applyScope().translationKey()))));
+		label.setTooltip(Tooltip.create(optionTooltip(option)));
 		addRenderableWidget(label);
 		int controlX = left + width - controlWidth - resetWidth - 4;
 		if (option instanceof PackForgeConfigScreenModel.BooleanOption bool) {
@@ -97,6 +113,24 @@ public final class PackForgeConfigScreen extends Screen {
 	private void updateInteger(PackForgeConfigScreenModel.IntegerOption option, EditBox box, String value) {
 		try { int parsed = Integer.parseInt(value.trim()); if (!option.valid(parsed)) throw new NumberFormatException(); option.set(draft.working(), parsed); box.setTextColor(0xE0E0E0); }
 		catch (NumberFormatException ignored) { box.setTextColor(0xFF5555); box.setTooltip(Tooltip.create(Component.literal(option.minimum() + "-" + option.maximum()))); }
+	}
+
+	private Component optionTooltip(PackForgeConfigScreenModel.OptionSpec option) {
+		PackForgeConfigScreenModel.EffectiveState state = PackForgeConfigScreenModel.effectiveState(option, draft.working());
+		var tooltip = Component.translatable(option.descriptionKey())
+			.append("\n").append(Component.translatable(option.applyScope().translationKey()))
+			.append("\n").append(Component.translatable("packforge.config.effective.configured", state.configuredValue()))
+			.append("\n").append(Component.translatable("packforge.config.effective.effective", state.effectiveValue()));
+		if (!state.externalOwner().isEmpty()) {
+			tooltip = tooltip.append(Component.literal("\n")).append(Component.translatable("packforge.config.effective.owner", state.externalOwner()));
+		}
+		if (!state.disabledReason().isEmpty()) {
+			tooltip = tooltip.append(Component.literal("\n")).append(Component.translatable("packforge.config.effective.reason", state.disabledReason()));
+		}
+		if (!state.warning().isEmpty()) {
+			tooltip = tooltip.append(Component.literal("\n")).append(Component.translatable("packforge.config.effective.warning", state.warning()));
+		}
+		return tooltip;
 	}
 
 	private void apply() { PackForgeConfig.SaveResult result = draft.apply(); if (result.successful()) Minecraft.getInstance().setScreen(parent); else { saveError = Component.translatable("packforge.config.save_failed", result.errorMessage()); rebuild(); } }
