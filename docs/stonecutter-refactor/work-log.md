@@ -150,3 +150,17 @@
 - Compatibility: final JAR inspection confirms the archive constructor bridge, operation-level archive hook, SpriteLoader hook, exact family descriptor, and beta metadata are packaged where available. All 1.20.3/1.20.4 startup, deterministic reload, semantic-hash, Quick Pack, and clean-exit cells remain `UNTESTED`; no cell enters published aggregation.
 - Rollback point: `948e437`.
 - Next mandatory phase: exact 1.20.5 and 1.20.6 Java-21 source-family cells, then exact 1.21 gaps.
+
+## Phase 10 — exact 1.20.5 and 1.20.6 Java21 source-family cells
+
+- Date: 2026-08-11
+- Commit SHA: `21524f3`
+- Parent stable checkpoint: `1569eff`
+- Status: `FOCUSED_VERIFIED`; exact release support not promoted
+- Files changed: exact registry target cells, Stonecutter nodes, Java21 family client/resource/test source selection, and the family Fabric descriptor/access widener
+- Architecture decision: reuse the proven 1.21 shared archive/reload/client hooks and `mc1_21_1` adapter contracts; isolate only the 1.20.x `ResourceLocation` client constructor and Fabric font-test helper in family-local sources. Keep 1.20.5 Fabric-only because official loader metadata exposes no Forge or NeoForge cell for that release; keep all three declared loaders for 1.20.6.
+- Commands/results: `./gradlew.bat validateTargetRegistry --no-daemon --stacktrace` PASS; `./gradlew.bat buildMc1_20_5 --rerun-tasks --no-daemon --console plain --stacktrace` PASS, including `verifyMc1_20_5Artifacts`; `./gradlew.bat buildMc1_20_6 --rerun-tasks --no-daemon --console plain --stacktrace` PASS, including `verifyMc1_20_6Artifacts`.
+- Generated artifacts and SHA-256: `packforge-fabric-1.3.4-beta.5-mc1.20.5.jar` `B957D0ABC9453D1965E552EC84BC77A02EBB6186D10B85F3E9E486098F25E774`; `packforge-fabric-1.3.4-beta.5-mc1.20.6.jar` `B14EEE15EB261B4FB708E038E75430E8E0028712ADF429DB776D4D6188045FF8`; `packforge-forge-1.3.4-beta.5-mc1.20.6.jar` `8A98DE2A14DBEC361667818E2DC57C923E9E8F80D5937BAC7B1960DC1E560070`; `packforge-neoforge-1.3.4-beta.5-mc1.20.6.jar` `1B3501C27B94F2872007D93CBC69619A7CCCAFB750798FA3D7295B41B2A02C4D`.
+- Compatibility: final JAR inspection confirms the family client mixin, archive/reload hooks, exact family descriptor, access widener where applicable, and loader metadata. All 1.20.5/1.20.6 production startup, deterministic reload, semantic-hash, Quick Pack, and clean-exit cells remain `UNTESTED`; no cell enters published aggregation.
+- Rollback point: `21524f3`.
+- Next mandatory phase: exact 1.21 release gaps, then final-artifact runtime evidence for every exact applicable cell.

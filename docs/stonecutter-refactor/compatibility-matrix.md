@@ -22,6 +22,8 @@ Outcome labels follow the assignment: `FULL_OPTIMIZED_PATH`, `HOOK_PRESERVING_CO
 | Forge 1.20.3 focused production build | `UNTESTED` runtime | exact `buildMc1_20_3` Forge build PASS; final JAR structural evidence captured, no final-JAR startup/reload harness |
 | NeoForge 1.20.3 focused build | `FAILED` toolchain | NeoForge 20.3.8-beta has no `neoforge-moddev-bundle` capability for ModDev 2.0.141; failure occurs before source compilation |
 | Fabric/Forge/NeoForge 1.20.4 final artifacts | `UNTESTED` runtime | exact `verifyMc1_20_4Artifacts` PASS; all three JARs package the archive bridge, SpriteLoader hook, descriptor, and beta metadata; no startup/reload harness |
+| Fabric 1.20.5 final artifact | `UNTESTED` runtime | exact `buildMc1_20_5` and `verifyMc1_20_5Artifacts` PASS; final JAR contains the Java21 family client mixin, descriptor, `fabric.mod.json`, and access widener; no startup/reload harness |
+| Fabric/Forge/NeoForge 1.20.6 final artifacts | `UNTESTED` runtime | exact `buildMc1_20_6` and `verifyMc1_20_6Artifacts` PASS; all three JARs contain the Java21 family archive/reload/client hooks and loader metadata; no startup/reload harness |
 | Exact 22-release × official-loader matrix | `UNTESTED` | registry has all 22 rows; only current anchors are published, and 1.20.2 remains planned |
 
 Build and package success is not treated as runtime acceptance.

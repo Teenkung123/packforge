@@ -136,3 +136,12 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Verification: `validateTargetRegistry` PASS; 1.20.4 all-loader production builds plus `verifyMc1_20_4Artifacts` PASS; 1.20.3 Fabric/Forge production builds PASS; NeoForge 1.20.3 blocked before compile by the official 20.3 artifact’s missing ModDev bundle capability
 - Status: `FOCUSED_VERIFIED` for the declared build/package scope; both exact releases remain planned pending every required loader and runtime evidence
 - Rollback: revert `948e437` to remove the two exact cells and family wiring while retaining the prior 1.20.2 feasibility checkpoint
+
+## Exact 1.20.5 and 1.20.6 Java21 source-family cells
+
+- Commit SHA: `21524f3`
+- Parent SHA: `1569eff`
+- Scope: exact 1.20.5/1.20.6 registry cells, Stonecutter nodes, Java21 shared-hook source selection, family-local 1.20.x client/test compatibility sources, and target descriptor/access widener
+- Verification: `validateTargetRegistry` PASS; 1.20.5 Fabric `buildMc1_20_5` plus `verifyMc1_20_5Artifacts` PASS; 1.20.6 Fabric/Forge/NeoForge `buildMc1_20_6` plus `verifyMc1_20_6Artifacts` PASS
+- Status: `FOCUSED_VERIFIED` for build/package scope; both exact releases remain planned pending production startup, deterministic reload, semantic hash, Quick Pack, and clean-exit evidence
+- Rollback: revert `21524f3` to remove the Java21 exact cells while retaining the 1.20.3/1.20.4 family checkpoint
