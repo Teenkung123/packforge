@@ -20,6 +20,12 @@ stonecutter {
 
 rootProject.name = 'packforge'
 
+// Stonecutter owns the generated version nodes; keep the repository-level
+// registry and release aggregation tasks available on the root project too.
+gradle.rootProject {
+	apply from: file('build.gradle')
+}
+
 // Loader projects are standalone builds invoked by the root aggregation tasks
 // through the repository wrapper. Do not include them as composite builds here:
 // doing so would make a globally installed Gradle resolve loader plugins before

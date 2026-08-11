@@ -49,6 +49,7 @@ tasks.register('buildStonecutterCurrentTarget') {
 tasks.register('verifyStonecutterCurrentTarget') {
 	group = 'verification'
 	description = "Builds and verifies the registry target selected by Stonecutter (${currentTarget.key})."
+	dependsOn(':validateTargetRegistry')
 	dependsOn('buildStonecutterCurrentTarget')
 	doLast {
 		def output = outputDirectory.get().asFile
