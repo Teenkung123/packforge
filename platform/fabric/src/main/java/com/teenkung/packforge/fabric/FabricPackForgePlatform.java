@@ -5,6 +5,7 @@ import com.teenkung.packforge.platform.PackForgePlatform;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 
@@ -19,6 +20,12 @@ public final class FabricPackForgePlatform implements PackForgePlatform {
 	@Override
 	public boolean isModLoaded(String modId) {
 		return loader.isModLoaded(modId);
+	}
+
+	@Override
+	public Optional<String> modVersion(String modId) {
+		return loader.getModContainer(modId)
+			.map(container -> container.getMetadata().getVersion().getFriendlyString());
 	}
 
 	@Override

@@ -5,6 +5,7 @@ import com.teenkung.packforge.platform.PackForgePlatform;
 import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 
@@ -17,6 +18,11 @@ public final class ForgePackForgePlatform implements PackForgePlatform {
 	@Override
 	public boolean isModLoaded(String modId) {
 		return ForgeModListCompat.isLoaded(modId);
+	}
+
+	@Override
+	public Optional<String> modVersion(String modId) {
+		return ForgeModListCompat.version(modId);
 	}
 
 	@Override

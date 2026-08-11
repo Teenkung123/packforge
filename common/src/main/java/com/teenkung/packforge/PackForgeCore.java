@@ -3,6 +3,7 @@ package com.teenkung.packforge;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.config.PackForgeCapabilities;
 import com.teenkung.packforge.config.PackForgeConfig;
+import com.teenkung.packforge.config.QuickPackCompatibility;
 import com.teenkung.packforge.platform.PackForgeServices;
 import com.teenkung.packforge.startup.StartupAsyncFeatures;
 import com.teenkung.packforge.startup.StartupExecutorTuner;
@@ -25,6 +26,7 @@ public final class PackForgeCore {
 		long configStartNs = System.nanoTime();
 		PackForgeConfig.load();
 		StartupTimings.recordDuration("packforge_config_load", System.nanoTime() - configStartNs);
+		QuickPackCompatibility.detectAndLog();
 		StartupTimings.event("packforge_config_loaded");
 		PackForge.LOGGER.info("PackForge capabilities: target={} available={} unavailable={}",
 			PackForgeCapabilities.target(), PackForgeCapabilities.available(), PackForgeCapabilities.unavailable());

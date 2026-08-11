@@ -6,6 +6,7 @@ import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLPaths;
 
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 
@@ -18,6 +19,12 @@ public final class NeoForgePackForgePlatform implements PackForgePlatform {
 	@Override
 	public boolean isModLoaded(String modId) {
 		return ModList.get().isLoaded(modId);
+	}
+
+	@Override
+	public Optional<String> modVersion(String modId) {
+		return ModList.get().getModContainerById(modId)
+			.map(container -> String.valueOf(container.getModInfo().getVersion()));
 	}
 
 	@Override

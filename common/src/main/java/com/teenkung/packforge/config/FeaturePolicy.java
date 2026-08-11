@@ -45,18 +45,32 @@ import static com.teenkung.packforge.config.PackForgeCapability.ZIP_READ_POOL;
 public final class FeaturePolicy {
 	private final PackForgeConfig.Cfg config;
 	private final PackForgeCapabilityProfile capabilities;
+	private final QuickPackCompatibility.Profile quickPack;
 
-	private FeaturePolicy(PackForgeConfig.Cfg config, PackForgeCapabilityProfile capabilities) {
+	private FeaturePolicy(PackForgeConfig.Cfg config, PackForgeCapabilityProfile capabilities, QuickPackCompatibility.Profile quickPack) {
 		this.config = PackForgeConfig.copyOf(Objects.requireNonNull(config, "config"));
 		this.capabilities = Objects.requireNonNull(capabilities, "capabilities");
+		this.quickPack = Objects.requireNonNull(quickPack, "quickPack");
 	}
 
 	public static FeaturePolicy current() {
-		return new FeaturePolicy(PackForgeConfig.get(), PackForgeCapabilities.profile());
+		return new FeaturePolicy(PackForgeConfig.get(), PackForgeCapabilities.profile(), QuickPackCompatibility.current());
+	}
+
+	public static FeaturePolicy forConfiguration(PackForgeConfig.Cfg config) {
+		return forConfiguration(config, QuickPackCompatibility.current());
+	}
+
+	public static FeaturePolicy forConfiguration(PackForgeConfig.Cfg config, QuickPackCompatibility.Profile quickPack) {
+		return new FeaturePolicy(config, PackForgeCapabilities.profile(), quickPack);
 	}
 
 	static FeaturePolicy forTesting(PackForgeConfig.Cfg config, PackForgeCapabilityProfile capabilities) {
-		return new FeaturePolicy(config, capabilities);
+		return forTesting(config, capabilities, QuickPackCompatibility.absentForTesting());
+	}
+
+	static FeaturePolicy forTesting(PackForgeConfig.Cfg config, PackForgeCapabilityProfile capabilities, QuickPackCompatibility.Profile quickPack) {
+		return new FeaturePolicy(config, capabilities, quickPack);
 	}
 
 	public boolean reloadOptimizerEnabled() { return config.reloadOptimizerEnabled; }
@@ -73,13 +87,13 @@ public final class FeaturePolicy {
 	public boolean modelUvTransparencyClampEnabled() { return enabled(MODEL_UV_TRANSPARENCY_CLAMP, largeAtlasFixerEnabled(), config.modelUvTransparencyClampEnabled); }
 	public boolean fontReloadDiagnosticsEnabled() { return enabled(FONT_RELOAD_DIAGNOSTICS, reloadOptimizerEnabled(), config.fontReloadDiagnosticsEnabled); }
 	public boolean fontPrepareProviderSelectionEnabled() {
-		return supports(FONT_PROVIDER_PRESELECTION)
+		return supports(FONT_PROVIDER_PRESELECTION) && !quickPack.owns(FONT_PROVIDER_PRESELECTION)
 			&& ((reloadOptimizerEnabled() && config.fontPrepareProviderSelectionEnabled) || startupAsyncFontAtlasEnabled());
 	}
 	public boolean fontBitmapProviderCacheEnabled() { return enabled(FONT_BITMAP_CACHE, reloadOptimizerEnabled(), config.fontBitmapProviderCacheEnabled); }
 	public boolean atlasPhaseTimingsEnabled() { return enabled(ATLAS_PHASE_TIMINGS, reloadOptimizerEnabled(), config.atlasPhaseTimingsEnabled); }
 	public boolean atlasMipParallelEnabled() {
-		return supports(ATLAS_MIP_PARALLEL)
+		return supports(ATLAS_MIP_PARALLEL) && !quickPack.owns(ATLAS_MIP_PARALLEL)
 			&& ((largeAtlasFixerEnabled() && config.atlasMipParallelEnabled) || startupAsyncFontAtlasEnabled());
 	}
 	public int atlasMipBatchSize() { return config.atlasMipBatchSize; }
@@ -135,7 +149,23 @@ public final class FeaturePolicy {
 		return capabilities.available();
 	}
 
+	public boolean quickPackLoaded() {
+		return quickPack.loaded();
+	}
+
+	public boolean quickPackOwns(PackForgeCapability capability) {
+		return quickPack.owns(capability);
+	}
+
+	public String quickPackDisabledReason(PackForgeCapability capability) {
+		return quickPack.disabledReason(capability);
+	}
+
+	public QuickPackCompatibility.Profile quickPackProfile() {
+		return quickPack;
+	}
+
 	private boolean enabled(PackForgeCapability capability, boolean parentGuard, boolean configured) {
-		return supports(capability) && parentGuard && configured;
+		return supports(capability) && !quickPack.owns(capability) && parentGuard && configured;
 	}
 }
