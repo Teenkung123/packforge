@@ -31,8 +31,8 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 
 ## Central capability ownership and feature policy
 
-- Commit SHA: `PENDING_CHECKPOINT_SHA`
-- Parent SHA: `5f3ee74`
+- Commit SHA: `de3138344c633ca68b450e9688d0adb556c3de83`
+- Parent SHA: `5f3ee749fe080f2f6035d9b5b0adf9a6924d1a3d`
 - Scope: immutable `FeaturePolicy`, compatibility `FeatureFlags` facade, and reload-boundary policy capture
 - Verification: focused Fabric 1.21.1 test suite; 106 tests completed successfully
 - Status: `FOCUSED_VERIFIED`

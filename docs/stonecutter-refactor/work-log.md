@@ -54,8 +54,8 @@
 ## Phase 5 — central capability ownership and feature policy
 
 - Date: 2026-08-11
-- Commit SHA: `PENDING_CHECKPOINT_SHA`
-- Parent stable checkpoint: `5f3ee74`
+- Commit SHA: `de3138344c633ca68b450e9688d0adb556c3de83`
+- Parent stable checkpoint: `5f3ee749fe080f2f6035d9b5b0adf9a6924d1a3d`
 - Status: `FOCUSED_VERIFIED`
 - Files changed: `common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java`, `FeatureFlags.java`, `PackForgeCapabilities.java`, `ReloadFeatureSnapshot.java`, `FeaturePolicyTest.java`
 - Architecture decision: keep `FeatureFlags` as the compatibility facade, but move capability/config gating into an immutable `FeaturePolicy`. Reload capture copies the mutable config and reads the artifact-generated capability profile once at the reload boundary.
