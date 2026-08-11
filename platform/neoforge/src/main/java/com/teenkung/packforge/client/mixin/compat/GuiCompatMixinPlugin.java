@@ -28,8 +28,13 @@ public final class GuiCompatMixinPlugin implements IMixinConfigPlugin {
 			&& !hasMethod(targetClassName, "setScreen", SET_SCREEN_DESCRIPTOR)) {
 			return false;
 		}
-		return !ModList.get().isLoaded(QUICK_PACK)
+		return !quickPackLoaded()
 			|| QUICK_PACK_OWNED_MIXINS.stream().noneMatch(mixinClassName::endsWith);
+	}
+
+	private static boolean quickPackLoaded() {
+		ModList modList = ModList.get();
+		return modList != null && modList.isLoaded(QUICK_PACK);
 	}
 
 	private static boolean hasMethod(String targetClassName, String name, String descriptor) {

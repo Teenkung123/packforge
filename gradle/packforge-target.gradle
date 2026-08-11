@@ -64,7 +64,7 @@ project.ext.packforgeBuildPackMetadata = { boolean fixture ->
 		throw new GradleException("Unsupported pack metadata schema '${target.packMetadata.schema}' for '${target.key}'.")
 	}
 	def metadata = [pack: packSection]
-	if (fixture && overlayFormats != null) {
+	if (fixture && overlayFormats != null && target.sourceFamily != "mc26") {
 		metadata.overlays = [entries: [[formats: overlayFormats, directory: "overlay"]]]
 	}
 	return metadata

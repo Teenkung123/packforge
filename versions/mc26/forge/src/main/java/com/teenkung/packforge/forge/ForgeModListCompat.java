@@ -9,7 +9,12 @@ public final class ForgeModListCompat {
 	}
 
 	public static boolean isLoaded(String modId) {
-		return ModList.isLoaded(modId);
+		try {
+			return ModList.isLoaded(modId);
+		} catch (NullPointerException ignored) {
+			// Forge prepares Mixin plugins before its indexed mod list is initialized.
+			return false;
+		}
 	}
 
 	public static Optional<String> version(String modId) {

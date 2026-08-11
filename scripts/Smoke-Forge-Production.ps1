@@ -15,6 +15,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $NativesRoot,
 
+    [string] $ResourcePackPath,
+
     [Parameter(Mandatory = $true)]
     [string] $JavaPath,
 
@@ -24,7 +26,9 @@ param(
     [int] $TimeoutSeconds = 900,
 
     [ValidateRange(0, 10)]
-    [int] $ReloadCount = 2
+    [int] $ReloadCount = 2,
+
+    [switch] $AllowControlledTermination
 )
 
 Set-StrictMode -Version 2.0
@@ -273,6 +277,11 @@ if (-not $artifactMatch.Success) {
 }
 $artifactMinecraft = $artifactMatch.Groups[1].Value
 $targetMarker = 'mc' + $artifactMinecraft.Replace('.', '_').Replace('-', '_to_')
+$repositoryRoot = Split-Path -Parent $PSScriptRoot
+$resourcePackSource = $ResourcePackPath
+if ([string]::IsNullOrWhiteSpace($resourcePackSource)) {
+    $resourcePackSource = Join-Path $repositoryRoot "platform\forge\run\$targetMarker\resourcepacks\deterministic-large-pack.zip"
+}
 
 $childJsonPath = Resolve-RequiredPath -Path (Join-Path $clientRoot "versions\$VersionName\$VersionName.json") -Description 'Forge version metadata'
 $child = Get-Content -LiteralPath $childJsonPath -Raw | ConvertFrom-Json
@@ -330,6 +339,17 @@ $stagedArtifact = Join-Path $modsRoot ([IO.Path]::GetFileName($artifact))
 Copy-Item -LiteralPath $artifact -Destination $stagedArtifact
 if ((Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $stagedArtifact -Algorithm SHA256).Hash) {
     throw 'Staged production artifact hash mismatch.'
+}
+if ($AllowControlledTermination.IsPresent) {
+    $resourcePackSource = Resolve-RequiredPath -Path $resourcePackSource -Description 'Deterministic production resource pack'
+    $resourcePackRoot = Join-Path $gameRoot 'resourcepacks'
+    New-Item -ItemType Directory -Path $resourcePackRoot -Force | Out-Null
+    Copy-Item -LiteralPath $resourcePackSource -Destination (Join-Path $resourcePackRoot 'deterministic-large-pack.zip') -Force
+    $optionsPath = Join-Path $gameRoot 'options.txt'
+    Set-Content -LiteralPath $optionsPath -Encoding utf8 -Value @(
+        'resourcePacks:["vanilla","file/deterministic-large-pack.zip"]'
+        'incompatibleResourcePacks:[]'
+    )
 }
 
 $replacements = @{
@@ -392,6 +412,16 @@ $startInfo.UseShellExecute = $false
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
 $startInfo.Arguments = [string]::Join(' ', @($javaArguments | ForEach-Object { ConvertTo-WindowsCommandLineArgument -Value $_ }))
+if ($AllowControlledTermination.IsPresent) {
+    $runtimeSmokeOption = "-Dpackforge.runtimeSmokeReloadCount=$ReloadCount"
+    $existingJavaToolOptions = [Environment]::GetEnvironmentVariable('JAVA_TOOL_OPTIONS', 'Process')
+    $startInfo.Environment['JAVA_TOOL_OPTIONS'] = if ([string]::IsNullOrWhiteSpace($existingJavaToolOptions)) {
+        $runtimeSmokeOption
+    } else {
+        "$existingJavaToolOptions $runtimeSmokeOption"
+    }
+    $startInfo.Environment['PACKFORGE_RUNTIME_RESOURCE_HASH'] = 'true'
+}
 
 $process = [Diagnostics.Process]::new()
 $process.StartInfo = $startInfo
@@ -424,8 +454,13 @@ try {
                 break
             }
         }
+        $hasRuntimeReady = (-not $AllowControlledTermination.IsPresent) -or
+            $logText.IndexOf('PackForge runtime smoke ready:', [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasResourceHash = (-not $AllowControlledTermination.IsPresent) -or
+            $logText.IndexOf('PackForge resolved-resource hash:', [StringComparison]::OrdinalIgnoreCase) -ge 0
         if ($process.HasExited) { throw "Production Forge exited before readiness with code $($process.ExitCode)." }
-        if ($hasArtifact -and $hasCapabilities -and $hasReload -and ($ReloadCount -eq 0 -or $window -ne [IntPtr]::Zero)) {
+        if ($hasArtifact -and $hasCapabilities -and $hasReload -and $hasRuntimeReady -and $hasResourceHash `
+            -and ($AllowControlledTermination.IsPresent -or $ReloadCount -eq 0 -or $window -ne [IntPtr]::Zero)) {
             $ready = $true
             break
         }
@@ -433,28 +468,63 @@ try {
     }
     if (-not $ready) { throw 'Production Forge did not reach its exact-artifact capability and final-atlas markers before timeout.' }
 
-    for ($reload = 1; $reload -le $ReloadCount; $reload++) {
-        [string] $before = Get-LogText -Path $latestLog
-        $beforeCount = @($reloadMarkers | ForEach-Object { Get-MarkerCount -Text $before -Marker $_ } | Measure-Object -Sum).Sum
-        if (-not [PackForgeProductionSmokeNative]::SendReload($window)) { throw "Could not send F3+T for reload $reload." }
-        $reloadDeadline = [datetime]::UtcNow.AddSeconds(180)
-        if ($reloadDeadline -gt $deadline) { $reloadDeadline = $deadline }
-        $reloaded = $false
-        while ([datetime]::UtcNow -lt $reloadDeadline) {
+    if ($AllowControlledTermination.IsPresent) {
+        $expectedReloadCount = $ReloadCount + 1
+        $controllerDeadline = [datetime]::UtcNow.AddSeconds(240)
+        if ($controllerDeadline -gt $deadline) { $controllerDeadline = $deadline }
+        $controllerComplete = $false
+        while ([datetime]::UtcNow -lt $controllerDeadline) {
             [string] $logText = Get-LogText -Path $latestLog
-            Assert-NoFatalLog -Text $logText -Context "production reload $reload"
-            $currentCount = @($reloadMarkers | ForEach-Object { Get-MarkerCount -Text $logText -Marker $_ } | Measure-Object -Sum).Sum
-            if ($currentCount -gt $beforeCount) {
-                $reloaded = $true
+            Assert-NoFatalLog -Text $logText -Context 'controller reload'
+            $controllerReloadCount = Get-MarkerCount -Text $logText -Marker 'PackForge reload session:'
+            $controllerHashCount = Get-MarkerCount -Text $logText -Marker 'PackForge resolved-resource hash:'
+            $controllerComplete = $logText.IndexOf('PackForge runtime smoke complete:', [StringComparison]::OrdinalIgnoreCase) -ge 0
+            if ($controllerReloadCount -ge $expectedReloadCount -and
+                $controllerHashCount -ge $expectedReloadCount -and $controllerComplete) {
                 break
             }
-            if ($process.HasExited) { throw "Production Forge exited during reload $reload with code $($process.ExitCode)." }
+            if ($process.HasExited) { break }
             Start-Sleep -Seconds 2
         }
-        if (-not $reloaded) { throw "Production reload $reload did not complete before timeout." }
+        [string] $logText = Get-LogText -Path $latestLog
+        $controllerReloadCount = Get-MarkerCount -Text $logText -Marker 'PackForge reload session:'
+        $controllerHashCount = Get-MarkerCount -Text $logText -Marker 'PackForge resolved-resource hash:'
+        $controllerComplete = $logText.IndexOf('PackForge runtime smoke complete:', [StringComparison]::OrdinalIgnoreCase) -ge 0
+        if ($controllerReloadCount -lt $expectedReloadCount -or
+            $controllerHashCount -lt $expectedReloadCount -or -not $controllerComplete) {
+            throw "Runtime smoke controller did not complete: reloads=$controllerReloadCount/$expectedReloadCount hashes=$controllerHashCount/$expectedReloadCount complete=$controllerComplete."
+        }
+
+        if (-not $process.WaitForExit(90000)) { throw 'Production Forge did not exit after the runtime smoke controller completed.' }
+        if ($process.ExitCode -ne 0) { throw "Production Forge controller exit code was $($process.ExitCode)." }
+        $cleanExit = $true
+        $controlledTermination = $true
+    } elseif ($ReloadCount -gt 0) {
+        for ($reload = 1; $reload -le $ReloadCount; $reload++) {
+            [string] $before = Get-LogText -Path $latestLog
+            $beforeCount = @($reloadMarkers | ForEach-Object { Get-MarkerCount -Text $before -Marker $_ } | Measure-Object -Sum).Sum
+            if (-not [PackForgeProductionSmokeNative]::SendReload($window)) { throw "Could not send F3+T for reload $reload." }
+            $reloadDeadline = [datetime]::UtcNow.AddSeconds(180)
+            if ($reloadDeadline -gt $deadline) { $reloadDeadline = $deadline }
+            $reloaded = $false
+            while ([datetime]::UtcNow -lt $reloadDeadline) {
+                [string] $logText = Get-LogText -Path $latestLog
+                Assert-NoFatalLog -Text $logText -Context "production reload $reload"
+                $currentCount = @($reloadMarkers | ForEach-Object { Get-MarkerCount -Text $logText -Marker $_ } | Measure-Object -Sum).Sum
+                if ($currentCount -gt $beforeCount) {
+                    $reloaded = $true
+                    break
+                }
+                if ($process.HasExited) { throw "Production Forge exited during reload $reload with code $($process.ExitCode)." }
+                Start-Sleep -Seconds 2
+            }
+            if (-not $reloaded) { throw "Production reload $reload did not complete before timeout." }
+        }
     }
 
-    if ($ReloadCount -eq 0) {
+    if ($AllowControlledTermination.IsPresent) {
+        # The controller requested a clean client stop and the process was verified above.
+    } elseif ($ReloadCount -eq 0) {
         Stop-Process -Id $process.Id -Force
         [void] $process.WaitForExit(30000)
         $controlledTermination = $true

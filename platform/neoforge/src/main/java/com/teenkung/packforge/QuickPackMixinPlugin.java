@@ -22,8 +22,13 @@ public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		return !ModList.get().isLoaded(QUICK_PACK)
+		return !quickPackLoaded()
 			|| QUICK_PACK_OWNED_MIXINS.stream().noneMatch(mixinClassName::endsWith);
+	}
+
+	private static boolean quickPackLoaded() {
+		ModList modList = ModList.get();
+		return modList != null && modList.isLoaded(QUICK_PACK);
 	}
 
 	@Override public void onLoad(String mixinPackage) {}

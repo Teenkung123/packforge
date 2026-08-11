@@ -16,6 +16,8 @@ param(
 
     [string] $ForgeVersionOverride,
 
+    [string] $MinecraftVersionOverride,
+
     [string] $NeoForgeVersionOverride,
 
     [string] $ArtifactPathOverride,
@@ -646,6 +648,27 @@ if (-not [string]::IsNullOrWhiteSpace($requestedForgeOverride)) {
     }
 }
 
+$minecraftOverride = ''
+$requestedMinecraftOverride = $MinecraftVersionOverride
+if ([string]::IsNullOrWhiteSpace($requestedMinecraftOverride)) {
+    $requestedMinecraftOverride = [Environment]::GetEnvironmentVariable('PACKFORGE_MINECRAFT_VERSION_OVERRIDE')
+}
+if (-not [string]::IsNullOrWhiteSpace($requestedMinecraftOverride)) {
+    if ($Platform -ne 'fabric') {
+        throw 'MinecraftVersionOverride is valid only for Fabric smoke runs.'
+    }
+
+    $requestedMinecraftOverride = $requestedMinecraftOverride.Trim()
+    if ($requestedMinecraftOverride -notmatch '^[0-9]+\.[0-9]+(?:\.[0-9]+)?$') {
+        throw 'MinecraftVersionOverride must be a stable Minecraft version such as 26.1.1.'
+    }
+    $requiredExactVersions = @($targetConfig.requiredExactSmokeVersions | ForEach-Object { [string] $_ })
+    if ($requiredExactVersions -notcontains $requestedMinecraftOverride) {
+        throw "MinecraftVersionOverride must target one of: $($requiredExactVersions -join ', ')."
+    }
+    $minecraftOverride = $requestedMinecraftOverride
+}
+
 $neoForgeOverride = ''
 $requestedNeoForgeOverride = $NeoForgeVersionOverride
 if ([string]::IsNullOrWhiteSpace($requestedNeoForgeOverride)) {
@@ -754,6 +777,8 @@ $passed = $false
 $cleanExit = $false
 $controlledTermination = $false
 $artifactHash = 'source-mode'
+$previousJavaToolOptions = [Environment]::GetEnvironmentVariable('JAVA_TOOL_OPTIONS', 'Process')
+$javaToolOptionsChanged = $false
 
 try {
     foreach ($directory in @($runRoot, $logRoot, $configRoot, $resourcePackRoot, $modsRoot)) {
@@ -854,7 +879,7 @@ try {
     Write-Utf8NoBom -Path $configFile -Contents $configText
     Write-Utf8NoBom -Path $optionsFile -Contents @'
 resourcePacks:["vanilla","file/deterministic-large-pack.zip"]
-incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
+incompatibleResourcePacks:[]
 '@
 
     $existingJavaProcessIds = @(Get-JavaProcessIds)
@@ -868,17 +893,38 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
     if ($forgeOverride.Length -gt 0) {
         $runArguments += "-Ppackforge_forge_version_override=$forgeOverride"
     }
+    if ($minecraftOverride.Length -gt 0) {
+        $runArguments += "-Ppackforge_minecraft_version_override=$minecraftOverride"
+    }
     if ($neoForgeOverride.Length -gt 0) {
         $runArguments += "-Ppackforge_neoforge_version_override=$neoForgeOverride"
     }
     $runArguments += @('runClient', '--no-daemon')
 
-    $clientProcess = Start-GradleProcess `
-        -GradleWrapper $gradleWrapper `
-        -Arguments $runArguments `
-        -WorkingDirectory $repoRoot `
-        -StandardOutput $gradleStdout `
-        -StandardError $gradleStderr
+    if ($AllowControlledTermination.IsPresent) {
+        $runtimeSmokeOption = "-Dpackforge.runtimeSmokeReloadCount=$effectiveReloadCount"
+        $runtimeJavaToolOptions = $previousJavaToolOptions
+        if ([string]::IsNullOrWhiteSpace($runtimeJavaToolOptions)) {
+            $runtimeJavaToolOptions = $runtimeSmokeOption
+        } else {
+            $runtimeJavaToolOptions = "$runtimeJavaToolOptions $runtimeSmokeOption"
+        }
+        [Environment]::SetEnvironmentVariable('JAVA_TOOL_OPTIONS', $runtimeJavaToolOptions, 'Process')
+        $javaToolOptionsChanged = $true
+    }
+    try {
+        $clientProcess = Start-GradleProcess `
+            -GradleWrapper $gradleWrapper `
+            -Arguments $runArguments `
+            -WorkingDirectory $repoRoot `
+            -StandardOutput $gradleStdout `
+            -StandardError $gradleStderr
+    } finally {
+        if ($javaToolOptionsChanged) {
+            [Environment]::SetEnvironmentVariable('JAVA_TOOL_OPTIONS', $previousJavaToolOptions, 'Process')
+            $javaToolOptionsChanged = $false
+        }
+    }
     $clientRootProcessId = [int] $clientProcess.Id
     Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
 
@@ -906,6 +952,7 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
         $hasReload = $hasPackForgeReload -or $hasVanillaReload
         $hasArtifact = (-not $artifactSmoke) -or $logText.IndexOf($artifactMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasResourceHash = (-not $resourceHashEnabled) -or $logText.IndexOf('PackForge resolved-resource hash:', [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasRuntimeReady = (-not $AllowControlledTermination.IsPresent) -or $logText.IndexOf('PackForge runtime smoke ready:', [StringComparison]::OrdinalIgnoreCase) -ge 0
         if ($clientProcess.HasExited) {
             $clientProcess.WaitForExit()
             $clientProcess.Refresh()
@@ -915,7 +962,7 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
             throw "runClient exited before readiness with code $clientExitCode.`n$stdoutTail`n$stderrTail"
         }
         if (($null -ne $minecraftWindow -or $AllowControlledTermination) `
-            -and $hasCapabilities -and $hasReload -and $hasArtifact -and $hasResourceHash) {
+            -and $hasCapabilities -and $hasReload -and $hasArtifact -and $hasResourceHash -and $hasRuntimeReady) {
             $ready = $true
             break
         }
@@ -925,86 +972,146 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
     if (-not $ready) {
         throw "Client readiness timed out: window=$($null -ne $minecraftWindow) allowControlled=$($AllowControlledTermination.IsPresent) capabilities=$hasCapabilities reload=$hasReload artifact=$hasArtifact resourceHash=$hasResourceHash."
     }
-    if ($null -eq $minecraftWindow -and $effectiveReloadCount -gt 0) {
-        throw 'A visible Minecraft window is required for F3+T reload validation.'
-    }
-
-    for ($reload = 1; $reload -le $effectiveReloadCount; $reload++) {
-        $beforeText = Read-LogText -Path $logFile
-        $previousReloadCount = Get-LogMarkerCount -Text $beforeText -Marker $reloadMarker
-        $previousHashCount = Get-LogMarkerCount -Text $beforeText -Marker 'PackForge resolved-resource hash:'
-        Send-F3T -WindowHandle $minecraftWindow.Handle
-
-        $reloadDeadline = [datetime]::UtcNow.AddSeconds(180)
-        if ($reloadDeadline -gt $deadline) { $reloadDeadline = $deadline }
-        $reloadReady = $false
-        while ([datetime]::UtcNow -lt $reloadDeadline) {
+    if ($AllowControlledTermination.IsPresent) {
+        $expectedReloadCount = $effectiveReloadCount + 1
+        $controllerDeadline = [datetime]::UtcNow.AddSeconds(240)
+        if ($controllerDeadline -gt $deadline) { $controllerDeadline = $deadline }
+        $controllerComplete = $false
+        while ([datetime]::UtcNow -lt $controllerDeadline) {
             Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
-            $reloadText = Read-LogText -Path $logFile
-            Assert-NoFatalLog -Text $reloadText -FatalPattern $fatalPattern -Context "reload $reload"
-            $currentReloadCount = Get-LogMarkerCount -Text $reloadText -Marker $reloadMarker
-            $currentHashCount = Get-LogMarkerCount -Text $reloadText -Marker 'PackForge resolved-resource hash:'
-            if ($currentReloadCount -gt $previousReloadCount -and `
-                ((-not $resourceHashEnabled) -or $currentHashCount -gt $previousHashCount)) {
-                $reloadReady = $true
+            $controllerText = Read-LogText -Path $logFile
+            Assert-NoFatalLog -Text $controllerText -FatalPattern $fatalPattern -Context 'controller reload'
+            $controllerReloadCount = Get-LogMarkerCount -Text $controllerText -Marker $reloadMarker
+            $controllerHashCount = Get-LogMarkerCount -Text $controllerText -Marker 'PackForge resolved-resource hash:'
+            $controllerComplete = $controllerText.IndexOf('PackForge runtime smoke complete:', [StringComparison]::OrdinalIgnoreCase) -ge 0
+            if ($controllerReloadCount -ge $expectedReloadCount `
+                -and ((-not $resourceHashEnabled) -or $controllerHashCount -ge $expectedReloadCount) `
+                -and $controllerComplete) {
                 break
             }
             if ($clientProcess.HasExited) {
                 $clientProcess.WaitForExit()
                 $clientProcess.Refresh()
                 $clientExitCode = Get-GradleExitCode -Process $clientProcess
-                throw "runClient exited during reload $reload with code $clientExitCode."
+                throw "runClient exited during controller reload with code $clientExitCode."
             }
             Start-Sleep -Seconds 2
         }
-        if (-not $reloadReady) { throw "Resource reload $reload did not emit a new completion marker before timeout." }
-    }
+        $controllerText = Read-LogText -Path $logFile
+        $controllerReloadCount = Get-LogMarkerCount -Text $controllerText -Marker $reloadMarker
+        $controllerHashCount = Get-LogMarkerCount -Text $controllerText -Marker 'PackForge resolved-resource hash:'
+        if ($controllerReloadCount -lt $expectedReloadCount `
+            -or ($resourceHashEnabled -and $controllerHashCount -lt $expectedReloadCount) `
+            -or -not $controllerComplete) {
+            throw "Runtime smoke controller did not complete: reloads=$controllerReloadCount/$expectedReloadCount hashes=$controllerHashCount/$expectedReloadCount complete=$controllerComplete."
+        }
 
-    if ($null -eq $minecraftWindow) {
-        Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
-        Stop-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
+        $exitDeadline = [datetime]::UtcNow.AddSeconds(90)
+        if ($exitDeadline -gt $deadline) { $exitDeadline = $deadline }
+        while (-not $clientProcess.HasExited -and [datetime]::UtcNow -lt $exitDeadline) {
+            Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
+            Start-Sleep -Seconds 2
+        }
+        if (-not $clientProcess.HasExited) {
+            throw 'runClient did not exit after the runtime smoke controller completed.'
+        }
+        $clientProcess.Refresh()
+        $clientProcess.WaitForExit()
+        $clientProcess.Refresh()
+        $clientExitCode = Get-GradleExitCode -Process $clientProcess
+        if ($null -eq $clientExitCode) {
+            throw 'runClient exited after controller completion without a readable exit code.'
+        }
+        if ([int] $clientExitCode -ne 0) {
+            throw "runClient exited after controller completion with code $clientExitCode."
+        }
+        $cleanExit = $true
         $controlledTermination = $true
     } else {
-        if (-not [PackForgeSmokeNative]::CloseWindow($minecraftWindow.Handle)) {
-            throw 'Could not request a clean close for the Minecraft window.'
+        if ($null -eq $minecraftWindow -and $effectiveReloadCount -gt 0) {
+            throw 'A visible Minecraft window is required for F3+T reload validation.'
         }
 
-		$closeDeadline = [datetime]::UtcNow.AddSeconds(90)
-		if ($closeDeadline -gt $deadline) { $closeDeadline = $deadline }
-		while ([datetime]::UtcNow -lt $closeDeadline) {
-			Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
-			if (-not [PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle) -and $clientProcess.HasExited) {
-				break
-			}
-			if ($clientProcess.HasExited -and [PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle)) {
-				throw 'Minecraft exited without closing its visible window cleanly.'
-			}
-			Start-Sleep -Seconds 2
-		}
+        for ($reload = 1; $reload -le $effectiveReloadCount; $reload++) {
+            $beforeText = Read-LogText -Path $logFile
+            $previousReloadCount = Get-LogMarkerCount -Text $beforeText -Marker $reloadMarker
+            $previousHashCount = Get-LogMarkerCount -Text $beforeText -Marker 'PackForge resolved-resource hash:'
+            Send-F3T -WindowHandle $minecraftWindow.Handle
 
-		if ([PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle)) {
-			throw 'Minecraft window did not close before the clean-exit timeout.'
-		}
-		if (-not $clientProcess.HasExited) {
-			throw 'runClient did not exit after the Minecraft window was closed.'
-		}
-		$clientProcess.Refresh()
-		$clientProcess.WaitForExit()
-		$clientProcess.Refresh()
-		$clientExitCode = Get-GradleExitCode -Process $clientProcess
-		if ($null -eq $clientExitCode) {
-			throw 'runClient exited after clean close without a readable exit code.'
-		}
-		if ([int] $clientExitCode -ne 0) {
-			throw "runClient exited after clean close with code $clientExitCode."
-		}
-		$cleanExit = $true
+            $reloadDeadline = [datetime]::UtcNow.AddSeconds(180)
+            if ($reloadDeadline -gt $deadline) { $reloadDeadline = $deadline }
+            $reloadReady = $false
+            while ([datetime]::UtcNow -lt $reloadDeadline) {
+                Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
+                $reloadText = Read-LogText -Path $logFile
+                Assert-NoFatalLog -Text $reloadText -FatalPattern $fatalPattern -Context "reload $reload"
+                $currentReloadCount = Get-LogMarkerCount -Text $reloadText -Marker $reloadMarker
+                $currentHashCount = Get-LogMarkerCount -Text $reloadText -Marker 'PackForge resolved-resource hash:'
+                if ($currentReloadCount -gt $previousReloadCount -and `
+                    ((-not $resourceHashEnabled) -or $currentHashCount -gt $previousHashCount)) {
+                    $reloadReady = $true
+                    break
+                }
+                if ($clientProcess.HasExited) {
+                    $clientProcess.WaitForExit()
+                    $clientProcess.Refresh()
+                    $clientExitCode = Get-GradleExitCode -Process $clientProcess
+                    throw "runClient exited during reload $reload with code $clientExitCode."
+                }
+                Start-Sleep -Seconds 2
+            }
+            if (-not $reloadReady) { throw "Resource reload $reload did not emit a new completion marker before timeout." }
         }
+
+        if ($null -eq $minecraftWindow) {
+            Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
+            Stop-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
+            $controlledTermination = $true
+        } else {
+            if (-not [PackForgeSmokeNative]::CloseWindow($minecraftWindow.Handle)) {
+                throw 'Could not request a clean close for the Minecraft window.'
+            }
+
+		    $closeDeadline = [datetime]::UtcNow.AddSeconds(90)
+		    if ($closeDeadline -gt $deadline) { $closeDeadline = $deadline }
+		    while ([datetime]::UtcNow -lt $closeDeadline) {
+			    Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
+			    if (-not [PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle) -and $clientProcess.HasExited) {
+				    break
+			    }
+			    if ($clientProcess.HasExited -and [PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle)) {
+				    throw 'Minecraft exited without closing its visible window cleanly.'
+			    }
+			    Start-Sleep -Seconds 2
+		    }
+
+		    if ([PackForgeSmokeNative]::IsWindowVisibleAndValid($minecraftWindow.Handle)) {
+			    throw 'Minecraft window did not close before the clean-exit timeout.'
+		    }
+		    if (-not $clientProcess.HasExited) {
+			    throw 'runClient did not exit after the Minecraft window was closed.'
+		    }
+		    $clientProcess.Refresh()
+		    $clientProcess.WaitForExit()
+		    $clientProcess.Refresh()
+		    $clientExitCode = Get-GradleExitCode -Process $clientProcess
+		    if ($null -eq $clientExitCode) {
+			    throw 'runClient exited after clean close without a readable exit code.'
+		    }
+		    if ([int] $clientExitCode -ne 0) {
+			    throw "runClient exited after clean close with code $clientExitCode."
+		    }
+		    $cleanExit = $true
+        }
+    }
 
     $finalRunText = Get-RunText -RunRoot $runRoot -LogPaths @($logFile, $gradleStdout, $gradleStderr) -SinceUtc $clientStartUtc
     Assert-NoFatalLog -Text $finalRunText -FatalPattern $fatalPattern -Context 'client shutdown'
     $passed = $true
 } finally {
+    if ($javaToolOptionsChanged) {
+        [Environment]::SetEnvironmentVariable('JAVA_TOOL_OPTIONS', $previousJavaToolOptions, 'Process')
+    }
     if (-not $passed -and $clientRootProcessId -gt 0) {
         Register-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
         Stop-OwnedProcessTree -RootProcessId $clientRootProcessId -OwnedProcesses $clientOwnedProcesses
@@ -1013,6 +1120,7 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
 
 $overrideLabel = 'lower-bound'
 if ($forgeOverride.Length -gt 0) { $overrideLabel = $forgeOverride }
+if ($minecraftOverride.Length -gt 0) { $overrideLabel = "minecraft=$minecraftOverride" }
 if ($neoForgeOverride.Length -gt 0) { $overrideLabel = $neoForgeOverride }
 $smokeMode = 'source'
 if ($artifactSmoke) { $smokeMode = 'artifact' }
