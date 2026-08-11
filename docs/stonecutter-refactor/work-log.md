@@ -79,3 +79,17 @@
 - Compatibility: hook source text is unchanged; only effective source ownership changed. No broad selector or fallback hook was introduced.
 - Rollback point: parent `80a35d7bff2a186bf62a3696dc54dcf2dc639e14`.
 - Next mandatory phase: model/sprite scheduling and remaining capability-specific source deduplication.
+
+## Phase 6b — shared 1.21 client bootstrap
+
+- Date: 2026-08-11
+- Commit SHA: `e15103a52b52308ed7648cd27e6ff32f4e7ad24d`
+- Parent stable checkpoint: `b97fc31fc9a978c99c171904c0036350d8f49012`
+- Status: `FOCUSED_VERIFIED`
+- Files changed: shared `versions/mc1_21_shared/common/src/client/java/.../PackForgeClient.java` and the exact-one effective-source validator
+- Architecture decision: the identical 1.21.1/1.21.4/1.21.8 client reset bootstrap is shared; model parser and model-manager mixins remain version-owned because their Minecraft value types and hooks differ.
+- Commands: `./gradlew.bat :validateTargetRegistry --no-daemon --stacktrace`; `./gradlew.bat -Ppackforge_target=mc1_21_1 :buildTarget --no-daemon --stacktrace`; same `buildTarget` command for `mc1_21_4` and `mc1_21_8`.
+- Results: registry guard PASS; all Fabric, Forge, and NeoForge builds plus artifact verifiers PASS for all three affected targets.
+- Compatibility: reset-hook order and target-specific parser linkage are unchanged; mixin descriptors remain version-local.
+- Rollback point: parent `b97fc31fc9a978c99c171904c0036350d8f49012`.
+- Next mandatory phase: configuration schema/effective-state unification and Quick Pack ownership.

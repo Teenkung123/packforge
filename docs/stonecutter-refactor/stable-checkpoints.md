@@ -55,3 +55,12 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Verification: root registry guard plus `buildTarget` for 1.21.1, 1.21.4, and 1.21.8; all three loader artifact verifiers passed for each target
 - Status: `FOCUSED_VERIFIED`
 - Rollback: revert this checkpoint to restore per-version 1.21.1/1.21.4/1.21.8 hook copies
+
+## Shared 1.21 client bootstrap
+
+- Commit SHA: `e15103a52b52308ed7648cd27e6ff32f4e7ad24d`
+- Parent SHA: `b97fc31fc9a978c99c171904c0036350d8f49012`
+- Scope: shared 1.21.1/1.21.4/1.21.8 `PackForgeClient` reset bootstrap and exact-one effective-source validation
+- Verification: root registry guard and all-loader `buildTarget` for 1.21.1, 1.21.4, and 1.21.8
+- Status: `FOCUSED_VERIFIED`
+- Rollback: revert this checkpoint to restore the three version-local client bootstrap copies
