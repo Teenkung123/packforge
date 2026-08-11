@@ -1,0 +1,19 @@
+{
+	"required": true,
+	"package": "com.teenkung.packforge.mixin",
+	"plugin": "com.teenkung.packforge.QuickPackMixinPlugin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"loader.FilePackResourcesMixin",
+		"loader.FilePackResourcesArchiveMixin",
+		"loader.SharedZipFileAccessMixin",
+		"observe.ReloadableResourceManagerMixin",
+		"observe.SimpleReloadInstanceMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

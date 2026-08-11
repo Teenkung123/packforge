@@ -57,9 +57,9 @@ def platformBuilds = [
 
 def targetSupports = { target, platform -> target.platforms[platform.id] != null }
 def publishedTargetKeys = registry.releaseCells
-	.findAll { it.buildStatus.toString().startsWith("existing") }
-	.collect { it.targetKey.toString() }
-	.toSet()
+	.groupBy { it.targetKey.toString() }
+	.findAll { targetKey, cells -> cells.every { it.buildStatus.toString() == "existing" } }
+	.keySet()
 def publishedTargets = targets.findAll { publishedTargetKeys.contains(it.key.toString()) }
 def requiredSourceFamilyIds = [
 	"mc1_20_1", "mc1_20_2", "mc1_20_3_4", "mc1_20_5_6", "mc1_21_0_1", "mc1_21_2_3",

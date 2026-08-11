@@ -27,8 +27,13 @@ public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
 	}
 
 	private static boolean quickPackLoaded() {
-		ModList modList = ModList.get();
-		return modList != null && modList.isLoaded(QUICK_PACK);
+		try {
+			ModList modList = ModList.get();
+			return modList != null && modList.isLoaded(QUICK_PACK);
+		} catch (NullPointerException ignored) {
+			// NeoForge may invoke Mixin plugins before its indexed mod list is ready.
+			return false;
+		}
 	}
 
 	@Override public void onLoad(String mixinPackage) {}

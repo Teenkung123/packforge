@@ -103,6 +103,9 @@ def mainJavaDirs = [
 	new File(packforgeAdapterPlatformRoot, "src/main/java"),
 	new File(packforgeAdapterPlatformRoot, "src/client/java")
 ]
+if (target.key == "mc1_21_5") {
+	mainJavaDirs.add(2, new File(packforgeRepositoryRoot, "versions/mc1_21_5/common/src/main/java"))
+}
 if (target.key in ["mc1_21_9", "mc1_21_10"]) {
 	mainJavaDirs.add(2, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/main/java"))
 }
@@ -120,6 +123,11 @@ if (target.key in ["mc1_21_9", "mc1_21_10"]) {
 	mainJavaDirs.add(3, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/client/java"))
 }
 def mainJavaSources = mainJavaDirs.collect { root ->
+	if (target.key == "mc1_21_5" && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
+		return fileTree(root) {
+			exclude "com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java"
+		}
+	}
 	if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.java"
@@ -181,6 +189,9 @@ def mainResourceDirs = [
 	new File(packforgeAdapterPlatformRoot, "src/main/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/client/resources")
 ]
+if (target.key == "mc1_21_5") {
+	mainResourceDirs.add(2, new File(packforgeRepositoryRoot, "versions/mc1_21_5/common/src/main/resources"))
+}
 if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
 	mainResourceDirs.add(2, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/main/resources"))
 }
@@ -332,7 +343,7 @@ if (needsLegacyRuntimeRemap) {
 }
 
 tasks.named("sourcesJar") {
-	if (target.key in ["mc1_21_9", "mc1_21_10"]) {
+	if (target.key in ["mc1_21_5", "mc1_21_9", "mc1_21_10"]) {
 		duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 	} else {
 		duplicatesStrategy = DuplicatesStrategy.FAIL
