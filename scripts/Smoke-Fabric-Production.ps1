@@ -23,6 +23,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $JavaPath,
 
+    [string[]] $AdditionalModPaths,
+
     [string] $FallbackLibrariesRoot,
 
     [ValidateRange(60, 86400)]
@@ -76,6 +78,25 @@ public static class PackForgeFabricProductionSmokeNative
     private static extern bool PostMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
+    [DllImport("user32.dll")]
+    private static extern uint SendInput(uint inputCount, Input[] inputs, int inputSize);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KeyboardInput
+    {
+        public ushort virtualKey;
+        public ushort scanCode;
+        public uint flags;
+        public uint time;
+        public UIntPtr extraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Input
+    {
+        public uint type;
+        public KeyboardInput keyboard;
+    }
 
     public static IntPtr FindMinecraftWindow(int processId)
     {
@@ -123,25 +144,26 @@ public static class PackForgeFabricProductionSmokeNative
     public static bool SendF3T(IntPtr handle)
     {
         if (!Activate(handle)) return false;
+        Thread.Sleep(150);
+        var inputs = new[]
+        {
+            new Input { type = 1, keyboard = new KeyboardInput { virtualKey = 0x72 } },
+            new Input { type = 1, keyboard = new KeyboardInput { virtualKey = 0x54 } },
+            new Input { type = 1, keyboard = new KeyboardInput { virtualKey = 0x54, flags = KeyUp } },
+            new Input { type = 1, keyboard = new KeyboardInput { virtualKey = 0x72, flags = KeyUp } }
+        };
+        if (SendInput((uint) inputs.Length, inputs, Marshal.SizeOf(typeof(Input))) == inputs.Length) return true;
+
         keybd_event(0x72, 0, 0, UIntPtr.Zero);
         try
         {
-            Thread.Sleep(50);
+            Thread.Sleep(75);
             keybd_event(0x54, 0, 0, UIntPtr.Zero);
-            try
-            {
-                Thread.Sleep(50);
-                return true;
-            }
-            finally
-            {
-                keybd_event(0x54, 0, KeyUp, UIntPtr.Zero);
-            }
+            try { Thread.Sleep(75); }
+            finally { keybd_event(0x54, 0, KeyUp, UIntPtr.Zero); }
         }
-        finally
-        {
-            keybd_event(0x72, 0, KeyUp, UIntPtr.Zero);
-        }
+        finally { keybd_event(0x72, 0, KeyUp, UIntPtr.Zero); }
+        return true;
     }
 
     public static bool Close(IntPtr handle)
@@ -355,7 +377,7 @@ function Get-LibraryRelativePath {
     }
 
     $extension = 'jar'
-    $atIndex = $coordinate.LastIndexOf('@')
+    $atIndex = $coordinate.LastIndexOf([char] 64)
     if ($atIndex -ge 0) {
         $extension = $coordinate.Substring($atIndex + 1)
         $coordinate = $coordinate.Substring(0, $atIndex)
@@ -731,12 +753,39 @@ if ($sourceHash -ne $stagedHash) {
     throw "Staged production artifact SHA-256 mismatch: source=$sourceHash staged=$stagedHash"
 }
 
+$stagedAdditionalMods = [Collections.Generic.List[object]]::new()
+foreach ($additionalModPath in @($AdditionalModPaths)) {
+    if ([string]::IsNullOrWhiteSpace($additionalModPath)) { continue }
+    $additionalMod = Resolve-RequiredPath -Path $additionalModPath -Description 'Additional production profile mod'
+    $additionalName = [IO.Path]::GetFileName($additionalMod)
+    if ([string]::IsNullOrWhiteSpace($additionalName) -or $additionalName -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\-]*\.jar$') {
+        throw "Additional production profile mod must be a safe JAR filename: $additionalName"
+    }
+    if ($additionalName -ieq $artifactName) {
+        throw "Additional production profile mod collides with the PackForge artifact: $additionalName"
+    }
+    $additionalDestination = Join-Path $modsRoot $additionalName
+    Copy-Item -LiteralPath $additionalMod -Destination $additionalDestination -Force
+    $additionalSourceHash = (Get-FileHash -LiteralPath $additionalMod -Algorithm SHA256).Hash.ToUpperInvariant()
+    $additionalStagedHash = (Get-FileHash -LiteralPath $additionalDestination -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($additionalSourceHash -ne $additionalStagedHash) {
+        throw "Staged additional mod SHA-256 mismatch: source=$additionalSourceHash staged=$additionalStagedHash"
+    }
+    [void] $stagedAdditionalMods.Add([ordered]@{
+        artifact = $additionalName
+        sourcePath = $additionalMod
+        stagedPath = $additionalDestination
+        sha256 = $additionalSourceHash
+    })
+}
+
 $provenancePath = Join-Path $runRoot 'artifact-provenance.json'
 $provenance = [ordered]@{
     artifact = $artifactName
     sourcePath = $artifact
     stagedPath = $stagedArtifact
     sha256 = $sourceHash
+    additionalMods = @($stagedAdditionalMods)
     minecraftVersion = $MinecraftVersion
     fabricVersion = $VersionName
     target = $targetMarker
@@ -798,6 +847,10 @@ $javaArguments = [Collections.Generic.List[string]]::new()
 [void] $javaArguments.Add('-Xmx2048m')
 [void] $javaArguments.Add("-Djava.io.tmpdir=$tempRoot")
 [void] $javaArguments.Add("-Duser.home=$homeRoot")
+$controllerMode = $AllowControlledTermination.IsPresent
+if ($controllerMode) {
+    [void] $javaArguments.Add("-Dpackforge.runtimeSmokeReloadCount=$ReloadCount")
+}
 
 $metadataJvmArguments = @(Expand-LauncherArguments `
     -Arguments (Get-ObjectProperty -Object $metadata -Name 'arguments' | ForEach-Object { Get-ObjectProperty -Object $_ -Name 'jvm' }) `
@@ -908,35 +961,56 @@ try {
         throw 'A visible Minecraft window is required for the requested F3+T reload validation.'
     }
 
-    for ($reload = 1; $reload -le $ReloadCount; $reload++) {
-        $minecraftWindow = [PackForgeFabricProductionSmokeNative]::FindMinecraftWindow($process.Id)
-        if ($minecraftWindow -eq [IntPtr]::Zero) {
-            throw "No visible Minecraft window was available for Fabric reload $reload."
-        }
+    if ($controllerMode) {
         $beforeText = Get-LogText -Path $latestLog
-        $previousReloadCount = Get-LogMarkerCount -Text $beforeText -Marker $reloadMarker
-        if (-not [PackForgeFabricProductionSmokeNative]::SendF3T($minecraftWindow)) {
-            throw "Could not send F3+T for Fabric reload $reload."
-        }
-
-        $reloadDeadline = [datetime]::UtcNow.AddSeconds(180)
+        $expectedReloadCount = (Get-LogMarkerCount -Text $beforeText -Marker $reloadMarker) + $ReloadCount
+        $reloadDeadline = [datetime]::UtcNow.AddSeconds(300)
         if ($reloadDeadline -gt $deadline) { $reloadDeadline = $deadline }
-        $reloadReady = $false
         while ([datetime]::UtcNow -lt $reloadDeadline) {
             $reloadText = Get-LogText -Path $latestLog
-            Assert-NoFatalLog -Text $reloadText -Context "Fabric reload $reload"
-            if ((Get-LogMarkerCount -Text $reloadText -Marker $reloadMarker) -gt $previousReloadCount) {
-                $reloadReady = $true
-                break
-            }
+            Assert-NoFatalLog -Text $reloadText -Context 'Fabric controlled reloads'
+            if ((Get-LogMarkerCount -Text $reloadText -Marker $reloadMarker) -ge $expectedReloadCount) { break }
             if ($process.HasExited) {
                 $process.Refresh()
-                throw "Fabric production client exited during reload $reload with code $($process.ExitCode)."
+                throw "Fabric production client exited during controlled reloads with code $($process.ExitCode)."
             }
             Start-Sleep -Seconds 2
         }
-        if (-not $reloadReady) {
-            throw "Fabric reload $reload did not emit a new completion marker before timeout."
+        $finalReloadText = Get-LogText -Path $latestLog
+        if ((Get-LogMarkerCount -Text $finalReloadText -Marker $reloadMarker) -lt $expectedReloadCount) {
+            throw "Fabric controlled reloads did not emit $ReloadCount new completion markers before timeout."
+        }
+    } else {
+        for ($reload = 1; $reload -le $ReloadCount; $reload++) {
+            $minecraftWindow = [PackForgeFabricProductionSmokeNative]::FindMinecraftWindow($process.Id)
+            if ($minecraftWindow -eq [IntPtr]::Zero) {
+                throw "No visible Minecraft window was available for Fabric reload $reload."
+            }
+            $beforeText = Get-LogText -Path $latestLog
+            $previousReloadCount = Get-LogMarkerCount -Text $beforeText -Marker $reloadMarker
+            if (-not [PackForgeFabricProductionSmokeNative]::SendF3T($minecraftWindow)) {
+                throw "Could not send F3+T for Fabric reload $reload."
+            }
+
+            $reloadDeadline = [datetime]::UtcNow.AddSeconds(180)
+            if ($reloadDeadline -gt $deadline) { $reloadDeadline = $deadline }
+            $reloadReady = $false
+            while ([datetime]::UtcNow -lt $reloadDeadline) {
+                $reloadText = Get-LogText -Path $latestLog
+                Assert-NoFatalLog -Text $reloadText -Context "Fabric reload $reload"
+                if ((Get-LogMarkerCount -Text $reloadText -Marker $reloadMarker) -gt $previousReloadCount) {
+                    $reloadReady = $true
+                    break
+                }
+                if ($process.HasExited) {
+                    $process.Refresh()
+                    throw "Fabric production client exited during reload $reload with code $($process.ExitCode)."
+                }
+                Start-Sleep -Seconds 2
+            }
+            if (-not $reloadReady) {
+                throw "Fabric reload $reload did not emit a new completion marker before timeout."
+            }
         }
     }
 
@@ -1014,4 +1088,4 @@ if ($finalLog -notmatch $capabilityPattern) { throw 'Final Fabric log is missing
 if ($finalLog.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -lt 0) { throw 'Final Fabric log is missing the PackForge reload marker.' }
 if ($finalLog -notmatch $artifactSourcePattern) { throw 'Final Fabric log is missing the exact PackForge artifact source marker.' }
 
-Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"
+Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"

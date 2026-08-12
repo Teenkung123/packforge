@@ -9,7 +9,7 @@ Current published/build artifact count is 17:
 - Beta pre-26.x: 14
 - Total bytes after clean build: 23,691,877
 
-Current public artifact names are target-specific, with beta suffixes on pre-26.x artifacts and a `26.1-26.2` range on stable artifacts. No expanded exact-release artifact proof exists yet, so no consolidation decision may be made from metadata alone.
+Current public artifact names are target-specific, with beta suffixes on pre-26.x artifacts and a `26.1-26.2` range on stable artifacts. The expanded exact target artifacts are built and runtime-checked as CI/focused evidence; the public set remains the smaller 17-artifact anchor set until a separate, same-binary range proof authorizes publication. No beta artifact is merged with the stable 26.x range.
 
 ## Baseline checksums
 
@@ -35,7 +35,7 @@ packforge-neoforge-1.3.4-beta.2-mc1.21.8.jar 7d905f712d7a67644d7a1c41989dda4c53e
 packforge-neoforge-1.3.4-mc26.1-26.2.jar bac9dded67b6fe83a576d915cea76b019c398401c36653b74064ce32ca5a12e2
 ```
 
-Consolidation remains blocked until exact interior-release and loader evidence exists. Do not merge beta and stable ranges.
+Consolidation decision: retain the 17 public artifacts, use the registry-derived exact matrix for interior-release verification, and keep pre-26.x beta metadata separate from the stable 26.x range. The exact target artifacts are not silently added to publication by changing registry status alone.
 
 ## Current post-bridge verification
 
@@ -61,4 +61,57 @@ packforge-neoforge-1.3.4-beta.2-mc1.21.8.jar 7b042ccd2e3b69115a94a1ad6898dc7a3ac
 packforge-neoforge-1.3.4-mc26.1-26.2.jar fd849db6a6c849d270fb4c1682134f786639234a4dff9077fd6f07ddab2525cc
 ```
 
-The planned 1.20.2 Fabric/Forge JARs are deliberately absent from this release set; NeoForge 1.20.2 has no verified artifact.
+The exact 1.20.2/1.20.3/1.20.4 artifacts are deliberately absent from this public release set even though all three loaders now have focused build and production smoke evidence. The registry keeps those rows `planned-verified` so publication remains a separate, reviewable action and the 17-artifact count is stable.
+
+## Expanded exact target evidence
+
+The following final distribution hashes are the most recent exact target artifacts used by the legacy production harnesses:
+
+```text
+packforge-fabric-1.3.4-beta.3-mc1.20.2.jar ABAF4C151DF806B616617326E8D4B63A18ECDA4E2A3DE42760F62CA150B1B8CF
+packforge-forge-1.3.4-beta.3-mc1.20.2.jar B7CD647909BFFD728BC9004ACDA793597751AC708C3C2DE228CBAE768977E68E
+packforge-neoforge-1.3.4-beta.3-mc1.20.2.jar 6742DF5281A60D580AC6C7BC5A2275398836DCBEB6FD6A7A1E56208BA587711C
+packforge-fabric-1.3.4-beta.4-mc1.20.3.jar 4BC0004A1DE3168952019A72AB2F43093162E00E8BA95DA289A4F04C0F29B9CB
+packforge-forge-1.3.4-beta.4-mc1.20.3.jar 6F3024BE481424EFFF50FA350075CE5E27702094A020E561367B3F471C150A56
+packforge-neoforge-1.3.4-beta.4-mc1.20.3.jar 7FB0A87F52CE61440452F5D9C1D90976A485653A844870C07EBD7F631B9AE73A
+packforge-fabric-1.3.4-beta.4-mc1.20.4.jar 23BDC3DBDC2578F060DAE6C2FA68194B9426BDB48F064E2CBA954D561FED78BE
+packforge-forge-1.3.4-beta.4-mc1.20.4.jar DC3EFA275C0E8E0879CC3C86E6B689B12C2E67B000804AE3DF9F43878F81EB30
+packforge-neoforge-1.3.4-beta.4-mc1.20.4.jar 666A7DF5BB402C0551F7572534AD0D2923BA6724180A57E6E7C447ABA2C98203
+packforge-fabric-1.3.4-mc26.1-26.2.jar 4C9EDD810D94B5E0C0FE42E48C39A3067F8616D161CB53E33C6B40C561B2602D
+packforge-forge-1.3.4-mc26.1-26.2.jar 139B3ACF0F24818C0ED4B711B19467EFB2E7597DD73D0E9520EF0F0C93B13A14
+packforge-neoforge-1.3.4-mc26.1-26.2.jar FDC63B9D58F5A10F48D745CDE47E617625E33921DF06CA3838E7220E15D521DA
+```
+
+The exact 1.20.5 through 1.21.10 family hashes are recorded in their phase entries in `work-log.md`; all were structurally verified before runtime smoke.
+
+## Latest registry and manifest evidence
+
+- Mojang stable release manifest: `https://piston-meta.mojang.com/mc/game/version_manifest_v2.json`
+- Recorded manifest SHA-256: `380769b566afa9e768c82e1337fa3af3052aea47c7a9fe09d2c5a96edcef2e6c`
+- Verification: `scripts/Verify-Mojang-ReleaseSequence.ps1` PASS; all 22 required release IDs present and ordered.
+- Current generated matrix counts: 19 build targets, 62 exact smoke cells, 26 public-anchor smoke cells, 17 publication rows.
+- Current root `build --no-daemon --console plain --stacktrace`: PASS in 4m22s (`87 actionable tasks: 24 executed, 63 up-to-date`); current 26.x NeoForge all-in-one output embeds MixinExtras exactly once and passes the focused 26.x artifact verifier.
+
+The current 17-artifact hashes after that build are recorded below. They are local build checksums, not marketplace checksums:
+
+```text
+packforge-fabric-1.3.4-beta.2-mc1.20.1.jar fdc87bda5dc41b47d42f17c704f8517a758d0da3ecdbc4770388244ffbc27787
+packforge-fabric-1.3.4-beta.2-mc1.21.11.jar 626d9f0ce52a28fa2fb4be4d51601c41ef2a723dfcaa2ee459ce353ada34af19
+packforge-fabric-1.3.4-beta.2-mc1.21.1.jar 569ed8b68efe5a37c2819e93859129c13ba684f031832d4ef2e0b333f2468fdb
+packforge-fabric-1.3.4-beta.2-mc1.21.4.jar ee36615cd0b1e16af2c7a36db62a74db08602f9ead66a606c4f9cb1461491a9f
+packforge-fabric-1.3.4-beta.2-mc1.21.8.jar 44325b96b1a5768d976492ef3eb98ebc2b9fe680fcfc76c8362c67255949fae6
+packforge-fabric-1.3.4-mc26.1-26.2.jar 4c9edd810d94b5e0c0fe42e48c39a3067f8616d161cb53e33c6b40c561b2602d
+packforge-forge-1.3.4-beta.2-mc1.20.1.jar e137920e81cd2cc9ac6d746699d9af918770a8c30d009df47adc76c859cc3caa
+packforge-forge-1.3.4-beta.2-mc1.21.11.jar 20920f25a3004bf54232028d2ddd4d615c71fdcfb136ee5a03d1162b7ced0dfb
+packforge-forge-1.3.4-beta.2-mc1.21.1.jar b2c51714e0ca2b5b7d4f76e3cb290be489f7d417f1adc5c108359b2ff5dc1ca5
+packforge-forge-1.3.4-beta.2-mc1.21.4.jar 58080059009b399894c9f83d0bc71f0105443d4b9021d1c40f410c8084d745d6
+packforge-forge-1.3.4-beta.2-mc1.21.8.jar c2a3e8ebb9a71d4f05d6d8419923ef33bb9164ded9a55a195cb9cf31604430ca
+packforge-forge-1.3.4-mc26.1-26.2.jar 06d140f5984ab9e0e80d51d1a374695182d19ae3b0cc3c962fbebbe39df65876
+packforge-neoforge-1.3.4-beta.2-mc1.21.11.jar 3597c043b97b895e70d3820490fefc61ad306c574489947b6c44f3f842c337a5
+packforge-neoforge-1.3.4-beta.2-mc1.21.1.jar 3906c8fb436909cc6f8a5c02fece9aa10af47580fdce30d15d886f5b7f975e60
+packforge-neoforge-1.3.4-beta.2-mc1.21.4.jar d2644c4a22917fafa1a964aeec416d4902a59042e9b6bd9fdef624d9a3de8c6f
+packforge-neoforge-1.3.4-beta.2-mc1.21.8.jar 64704daffd62214391414ff77995554e66fe70fe5f16b66def0dcc944115a8a7
+packforge-neoforge-1.3.4-mc26.1-26.2.jar 6f68f8989ccdb119439ccd479110dcca50e7d6b1eb8e1f0e1a7ad71f07e5ce8d
+```
+
+The pre-26 rows are not promoted merely because their exact target artifacts pass. The remaining artifact-consolidation work is to prove a range binary, split unsafe ranges, and keep the final count within the plan’s 17-artifact target or evidence-backed 21-artifact fallback.

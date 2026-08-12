@@ -10,29 +10,41 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: ${{ matrix.target }}
+  matrix:
+    name: Generate registry matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - mc26_1_to_26_2
-          - mc1_21_1
-          - mc1_21_4
-          - mc1_21_8
-          - mc1_21_11
-          - mc1_20_1
+    outputs:
+      targets: ${{ steps.generate.outputs.targets }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Java 25
+      - name: Verify Mojang stable release ledger
+        shell: pwsh
+        run: ./scripts/Verify-Mojang-ReleaseSequence.ps1
+
+      - name: Generate target matrix from registry
+        id: generate
+        shell: bash
+        run: echo "targets=$(python scripts/Generate-CiMatrix.py build)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.target }}
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.targets) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up target Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "25"
+          java-version: ${{ matrix.java_version }}
 
       - name: Restore target-scoped Gradle and Mavenizer caches
         uses: actions/cache@v4

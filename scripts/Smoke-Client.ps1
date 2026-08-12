@@ -596,6 +596,14 @@ if ($targetMatches.Count -ne 1) {
 }
 $targetConfig = $targetMatches[0]
 
+$legacyNeoGradleTargets = @('mc1_20_2', 'mc1_20_3', 'mc1_20_4')
+if ($Platform -eq 'neoforge' -and $legacyNeoGradleTargets -contains $Target) {
+    $gradleWrapper = Join-Path $repoRoot 'platform\neoforge\gradlew.bat'
+    if (-not (Test-Path -LiteralPath $gradleWrapper -PathType Leaf)) {
+        throw "Legacy NeoForge smoke requires the dedicated Gradle 8.8 wrapper: $gradleWrapper"
+    }
+}
+
 $platformProperty = @($targetConfig.platforms.PSObject.Properties | Where-Object { $_.Name -eq $Platform })
 if ($platformProperty.Count -ne 1) {
     throw "PackForge target '$Target' does not support platform '$Platform'."

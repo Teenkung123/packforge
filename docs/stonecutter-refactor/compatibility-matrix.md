@@ -1,32 +1,51 @@
-# Compatibility baseline
+# Compatibility matrix
 
-Outcome labels follow the assignment: `FULL_OPTIMIZED_PATH`, `HOOK_PRESERVING_COALESCED_PATH`, `SAFE_ORIGINAL_PATH`, `EXTERNALLY_OWNED_PATH`, `UNAVAILABLE`, `UNTESTED`, and `FAILED`.
+Outcome labels are the assignment labels: `FULL_OPTIMIZED_PATH`, `HOOK_PRESERVING_COALESCED_PATH`, `SAFE_ORIGINAL_PATH`, `EXTERNALLY_OWNED_PATH`, `UNAVAILABLE`, `UNTESTED`, and `FAILED`.
+
+## Exact release acceptance
+
+The final exact smoke pass covered 22 release rows and 62 officially available loader cells. Each cell used its registry target, final distribution artifact, startup marker, deterministic resource reload controller, semantic/resource evidence where supported, and clean client shutdown. The standard base profile requested two reloads; the Quick Pack profile requested ten.
+
+| Minecraft release | Required loaders | Result | Evidence |
+|---|---|---|---|
+| 1.20.1 | Fabric, Forge | `FULL_OPTIMIZED_PATH` | Existing beta anchor production smoke and artifact verification. |
+| 1.20.2 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final Fabric/Forge/NeoForge artifacts; two reloads and clean exit. |
+| 1.20.3 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final Fabric/Forge/NeoForge artifacts; legacy NeoForge descriptor/bootstrap repaired and rerun. |
+| 1.20.4 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final Fabric/Forge/NeoForge artifacts; two reloads and clean exit. |
+| 1.20.5 | Fabric | `FULL_OPTIMIZED_PATH` | Official loader availability is Fabric-only; final artifact smoke passed. |
+| 1.20.6 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final Java-21-family artifacts; two reloads and clean exit. |
+| 1.21 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; two reloads and clean exit. |
+| 1.21.1 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; also the Quick Pack 1.5.0 profile on Fabric. |
+| 1.21.2 | Fabric, NeoForge | `FULL_OPTIMIZED_PATH` | Official Forge line unavailable; Fabric/NeoForge exact cells passed. |
+| 1.21.3 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; two reloads and clean exit. |
+| 1.21.4 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Existing beta anchor production smoke and artifact verification. |
+| 1.21.5 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; two reloads and clean exit. |
+| 1.21.6 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; two reloads and clean exit. |
+| 1.21.7 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; two reloads and clean exit. |
+| 1.21.8 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Existing beta anchor production smoke and artifact verification. |
+| 1.21.9 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; two reloads and clean exit. |
+| 1.21.10 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; two reloads and clean exit. |
+| 1.21.11 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Existing beta anchor production smoke and artifact verification. |
+| 26.1 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Stable range artifact; exact anchor smoke passed. |
+| 26.1.1 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Stable range artifact with registry loader overrides; exact smoke passed. |
+| 26.1.2 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Stable range artifact with registry loader overrides; exact smoke passed. |
+| 26.2 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Stable range artifact; exact interior-release smoke passed. |
+
+All pre-26.x rows remain beta and all 26.x rows remain stable. No loader is inferred where the registry declares it unavailable.
+
+## Required compatibility profiles
 
 | Profile | Result | Evidence |
 |---|---|---|
-| Fabric 1.21.1 focused unit suite | PASS | Gradle `test`, 40s |
-| Forge 1.20.1 focused unit suite | PASS | Gradle `test`, 48s |
-| NeoForge 26.1-26.2 focused unit suite | PASS | Gradle `test`, 40s |
-| PackIndex deterministic fixture | PASS | equal baseline/indexed SHA-256; 99.66% indexed lookup improvement |
-| Fabric 26.x packaged startup/reload | `UNTESTED` full harness / partial runtime | startup and reload-complete log; F3+T window activation failed |
-| Forge 1.20.1 source-mode startup/reload, Forge 47.4.22 | `UNTESTED` final-JAR / partial runtime | startup and reload-complete log; F3+T window activation failed |
-| Forge 1.20.1 final remapped/JarJar artifact | `UNTESTED` | dedicated final-JAR harness not executed |
-| Quick Pack 1.5.x | `UNTESTED` | no runtime dependency/profile yet |
-| Sodium/Iris/ImmediatelyFast/ModernFix/FerriteCore/etc. | `UNTESTED` | no exact third-party profile run |
-| Current six-anchor × declared-loader production matrix | PASS | forced `buildAllSupported`; 17 artifacts and per-target artifact verifiers passed in 5m31s |
-| Aggregate current-artifact verification | PASS | `verifyAllArtifacts`; exact 17-name set passed in 5m18s |
-| Fabric 1.20.2 focused production build | `UNTESTED` runtime | `platform/fabric ... clean build` PASS; no startup/reload harness |
-| Forge 1.20.2 focused production build | `UNTESTED` runtime | `platform/forge ... clean build` PASS; no final-JAR startup/reload harness |
-| NeoForge 1.20.2 focused build | `FAILED` toolchain | ModDev 2.0.141 lacks the 20.2 capability; NeoGradle 7.0.116 fails under Gradle 9.5.1 before compile |
-| Fabric 1.20.3 focused production build | `UNTESTED` runtime | exact `buildMc1_20_3` Fabric build PASS; final JAR structural evidence captured, no startup/reload harness |
-| Forge 1.20.3 focused production build | `UNTESTED` runtime | exact `buildMc1_20_3` Forge build PASS; final JAR structural evidence captured, no final-JAR startup/reload harness |
-| NeoForge 1.20.3 focused build | `FAILED` toolchain | NeoForge 20.3.8-beta has no `neoforge-moddev-bundle` capability for ModDev 2.0.141; failure occurs before source compilation |
-| Fabric/Forge/NeoForge 1.20.4 final artifacts | `UNTESTED` runtime | exact `verifyMc1_20_4Artifacts` PASS; all three JARs package the archive bridge, SpriteLoader hook, descriptor, and beta metadata; no startup/reload harness |
-| Fabric 1.20.5 final artifact | `UNTESTED` runtime | exact `buildMc1_20_5` and `verifyMc1_20_5Artifacts` PASS; final JAR contains the Java21 family client mixin, descriptor, `fabric.mod.json`, and access widener; no startup/reload harness |
-| Fabric/Forge/NeoForge 1.20.6 final artifacts | `UNTESTED` runtime | exact `buildMc1_20_6` and `verifyMc1_20_6Artifacts` PASS; all three JARs contain the Java21 family archive/reload/client hooks and loader metadata; no startup/reload harness |
-| Fabric/Forge/NeoForge 1.21 final artifacts | `UNTESTED` runtime | exact `buildMc1_21` and `verifyMc1_21Artifacts` PASS; all three final JARs contain the shared archive/reload/client hooks, `PackSelectionScreenMixin`, and loader metadata; no startup/reload harness |
-| Fabric/NeoForge 1.21.2 final artifacts | `UNTESTED` runtime | exact `buildMc1_21_2` and `verifyMc1_21_2Artifacts` PASS; official Forge 1.21.2 is unavailable, so the exact loader matrix is Fabric + NeoForge; no startup/reload harness |
-| Fabric/Forge/NeoForge 1.21.3 final artifacts | `UNTESTED` runtime | exact `buildMc1_21_3` and `verifyMc1_21_3Artifacts` PASS; all three final JARs contain the shared archive/reload/client hooks, `PackSelectionScreenMixin`, and loader metadata; no startup/reload harness |
-| Exact 22-release × official-loader matrix | `UNTESTED` | registry has all 22 rows; only current anchors are published, and 1.20.2 remains planned |
+| Quick Pack Fabric 1.21.1, version 1.5.0 | `EXTERNALLY_OWNED_PATH` | Real third-party JAR; `status=VERIFIED_1_5`; six overlap capabilities owned by Quick Pack; ten reloads; clean exit. |
+| Unknown future Quick Pack major | `EXTERNALLY_OWNED_PATH` | Unit policy test; all overlap paths fail closed. |
+| Sodium/Iris/ImmediatelyFast/ModernFix/FerriteCore pairwise profiles | `UNTESTED` | Not part of the executed exact-release acceptance run; no claim is made. |
+| Official Forge 1.21.2 | `UNAVAILABLE` | No official Forge 1.21.2 line is declared in the registry. |
 
-Build and package success is not treated as runtime acceptance.
+## Build/package evidence
+
+`validateTargetRegistry`, `printResolvedMatrix`, exact target verifiers, and the current published 17-artifact verifier pass. Build proof remains separate from runtime proof. Final artifact SHA-256 values are recorded in `artifact-consolidation.md` and the phase entries in `work-log.md`.
+
+## Publication status
+
+The exact-cell evidence above is not a claim that the public manifest covers every row. Current registry-derived publication contains 17 artifacts and 26 public-anchor smoke cells; the remaining pre-26 rows stay `planned-verified` until range-artifact proof is recorded. The official Mojang stable-release sequence guard passes for all 22 required IDs.

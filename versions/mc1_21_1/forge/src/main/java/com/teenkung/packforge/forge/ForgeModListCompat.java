@@ -9,11 +9,21 @@ public final class ForgeModListCompat {
 	}
 
 	public static boolean isLoaded(String modId) {
-		return ModList.get().isLoaded(modId);
+		try {
+			ModList modList = ModList.get();
+			return modList != null && modList.isLoaded(modId);
+		} catch (NullPointerException ignored) {
+			// Forge prepares Mixin plugins before its indexed mod list is initialized.
+			return false;
+		}
 	}
 
 	public static Optional<String> version(String modId) {
-		return ModList.get().getModContainerById(modId)
+		ModList modList = ModList.get();
+		if (modList == null) {
+			return Optional.empty();
+		}
+		return modList.getModContainerById(modId)
 			.map(container -> String.valueOf(container.getModInfo().getVersion()));
 	}
 }

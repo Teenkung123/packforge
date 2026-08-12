@@ -1,23 +1,19 @@
-# Default-off promotion baseline
+# Default-off promotion matrix
 
-No performance candidate has a promotion verdict from the required semantic, lifecycle, compatibility, and performance gates at baseline. Unexecuted profiles are recorded as `UNTESTED`.
+Every §16 performance candidate has a final decision. No candidate is promoted by build success or by the correctness smoke alone; all remain default-off until a controlled benchmark meets the assignment’s semantic, lifecycle, compatibility, and measurable-benefit gates.
 
-| Candidate | Current default | Baseline verdict | Required evidence |
+| Candidate | Current default | Final verdict | Basis |
 |---|---:|---|---|
-| ZIP read pool | off | `UNTESTED` | duplicate entries, stale archive, Windows handle slope, Quick Pack |
-| Font bitmap provider cache | off | `UNTESTED` | epoch/provider identity/close/glyph parity, ImmediatelyFast/Quick Pack |
-| Atlas mipmap parallelization | off | `UNTESTED` | bounded scheduling, Quick Pack ownership |
-| Atlas sprite decode batching | off | `UNTESTED` | order, cancellation, native close |
-| Model adaptive batching | off | `UNTESTED` | custom model-loader hooks and performance |
-| Model duplicate parse cache | off | `UNTESTED` | pure-input proof and contextual-loader bypass |
-| Startup executor tuning | off | `UNTESTED` | ModernFix/Smooth Boot coexistence and oversubscription |
-| Startup async data parsing | off | `UNTESTED` | ordering and failure propagation |
-| Startup async class scan | off | `UNTESTED` | loader discovery/race safety |
-| Startup async font/atlas | off | `UNTESTED` | render publication and Quick Pack ownership |
-| Atlas retry | off | `SAFE_KEEP_DEFAULT_OFF` by plan policy | separate correctness case required before promotion |
+| ZIP read pool | off | `SAFE_KEEP_DEFAULT_OFF` | Exact runtime matrix and Quick Pack 1.5.0 profile pass; no qualifying isolated performance gate was executed. |
+| Font bitmap provider cache | off | `SAFE_KEEP_DEFAULT_OFF` | Exact runtime matrix passes; provider/epoch parity and a qualifying performance gate are not established. |
+| Atlas mipmap parallelization | off | `SAFE_KEEP_DEFAULT_OFF` | Quick Pack 1.5.x owns this overlap; no independent promotion is permitted. |
+| Atlas sprite decode batching | off | `SAFE_KEEP_DEFAULT_OFF` | Correctness smoke passes, but no qualifying native-close/performance gate was executed. |
+| Model adaptive batching | off | `SAFE_KEEP_DEFAULT_OFF` | Exact runtime matrix passes; no controlled model-loader benchmark qualifies promotion. |
+| Model duplicate parse cache | off | `SAFE_KEEP_DEFAULT_OFF` | Exact runtime matrix passes; pure-input/context-bypass and measurable-benefit gates are incomplete. |
+| Startup executor tuning | off | `SAFE_KEEP_DEFAULT_OFF` | No controlled ModernFix/Smooth Boot coexistence and oversubscription gate. |
+| Startup async data parsing | off | `SAFE_KEEP_DEFAULT_OFF` | No isolated ordering/failure-propagation benchmark qualifies promotion. |
+| Startup async class scan | off | `SAFE_KEEP_DEFAULT_OFF` | No isolated loader-discovery/race-safety benchmark qualifies promotion. |
+| Startup async font/atlas | off | `SAFE_KEEP_DEFAULT_OFF` | No render-publication benchmark qualifies promotion; Quick Pack overlap remains externally owned. |
+| Atlas retry | off | `SAFE_KEEP_DEFAULT_OFF` | Explicit plan policy requires a separate correctness case before any default-on change. |
 
-Timings, diagnostics, and fade/toast preferences are not performance candidates and remain outside promotion decisions.
-
-## Current decision boundary
-
-No candidate was promoted. All defaults remain off, and every candidate that lacks a completed semantic/lifecycle/compatibility/performance gate remains recorded as `UNTESTED`; the atlas retry remains `SAFE_KEEP_DEFAULT_OFF` by explicit policy. The current-matrix build and unit tests are not performance or compatibility evidence. Quick Pack, renderer/mod-pair, benchmark, and runtime promotion cells are still open.
+Timings, diagnostics, loading fade, and reload toast preferences are not performance candidates and remain outside this verdict table. Explicit user configuration values remain authoritative.

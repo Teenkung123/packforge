@@ -69,14 +69,30 @@ The feature can be configured through `config/packforge.json` or PackForge's in-
 
 | Minecraft | Java | Fabric | Forge | NeoForge | Feature level |
 |---|---:|---|---|---|---|
-| 26.1-26.2 | 25 | Yes | Yes | Yes | Stable, full feature set |
-| 1.21.1 | 21 | Yes | Yes | Yes | Beta, full Reload feature tab |
-| 1.21.4 | 21 | Yes | Yes | Yes | Beta, full Reload feature tab |
-| 1.21.8 | 21 | Yes | Yes | Yes | Beta, full Reload feature tab |
-| 1.21.11 | 21 | Yes | Yes | Yes | Beta, full Reload feature tab |
-| 1.20.1 | 17 | Yes | Yes | No | Beta, Reload tab except provider preselection |
+| 1.20.1 | 17 | Yes | Yes | No | Beta, exact smoke verified |
+| 1.20.2 | 17 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.20.3 | 17 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.20.4 | 17 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.20.5 | 21 | Yes | No | No | Beta, exact smoke verified |
+| 1.20.6 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.1 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.2 | 21 | Yes | No | Yes | Beta, exact smoke verified |
+| 1.21.3 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.4 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.5 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.6 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.7 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.8 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.9 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.10 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 1.21.11 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
+| 26.1 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
+| 26.1.1 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
+| 26.1.2 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
+| 26.2 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
 
-Choose the JAR whose filename matches both your mod loader and Minecraft version. Exact legacy builds do not claim support for unlisted Minecraft releases.
+Choose the JAR whose filename matches both your mod loader and Minecraft version. Exact legacy builds do not claim support for unlisted Minecraft releases. The registry-derived release manifest currently publishes the six consolidated anchor targets; the expanded exact target artifacts are retained as separately verified beta/stable build outputs.
 
 ### Minimum Loader Versions
 

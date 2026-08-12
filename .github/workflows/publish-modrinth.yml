@@ -16,6 +16,27 @@ permissions:
   contents: read
 
 jobs:
+  matrix:
+    name: Generate publication smoke matrix
+    runs-on: ubuntu-latest
+    outputs:
+      smoke: ${{ steps.generate.outputs.smoke }}
+      publish: ${{ steps.generate.outputs.publish }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Mojang stable release ledger
+        shell: pwsh
+        run: ./scripts/Verify-Mojang-ReleaseSequence.ps1
+
+      - name: Generate published exact-release matrix from registry
+        id: generate
+        shell: bash
+        run: |
+          echo "smoke=$(python scripts/Generate-CiMatrix.py publish-smoke)" >> "$GITHUB_OUTPUT"
+          echo "publish=$(python scripts/Generate-CiMatrix.py publish)" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build all supported artifacts
     runs-on: ubuntu-latest
@@ -86,6 +107,9 @@ jobs:
             exit 1
           fi
 
+      - name: Generate registry-derived release manifest
+        run: python scripts/Generate-ReleaseManifest.py --artifacts-dir build/libs --output-dir build/libs/release
+
       - name: Upload verified artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -93,44 +117,18 @@ jobs:
           path: |
             build/libs/packforge-*.jar
             build/libs/SHA256SUMS
+            build/libs/release/manifest.json
+            build/libs/release/release-table.md
           if-no-files-found: error
 
   runtime-smoke:
-    name: Runtime smoke ${{ matrix.target }} / ${{ matrix.platform }} / ${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
-    needs: build
+    name: Runtime smoke ${{ matrix.release }} / ${{ matrix.platform }} / ${{ matrix.target }}
+    needs: [matrix, build]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { target: mc26_1_to_26_2, platform: fabric }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.1" }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.2" }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.2" }
-          - { target: mc26_1_to_26_2, platform: forge }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.1-63.0.2" }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.2-64.1.0" }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.2-65.1.0" }
-          - { target: mc26_1_to_26_2, platform: neoforge }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.1.15-beta" }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.2.94" }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.2.0.48-beta" }
-          - { target: mc1_21_1, platform: fabric }
-          - { target: mc1_21_1, platform: forge }
-          - { target: mc1_21_1, platform: neoforge }
-          - { target: mc1_21_4, platform: fabric }
-          - { target: mc1_21_4, platform: forge }
-          - { target: mc1_21_4, platform: neoforge }
-          - { target: mc1_21_8, platform: fabric }
-          - { target: mc1_21_8, platform: forge }
-          - { target: mc1_21_8, platform: neoforge }
-          - { target: mc1_21_11, platform: fabric }
-          - { target: mc1_21_11, platform: forge }
-          - { target: mc1_21_11, platform: neoforge }
-          - { target: mc1_20_1, platform: fabric }
-          - { target: mc1_20_1, platform: forge }
-          - { target: mc1_20_1, platform: forge, forge_version: "1.20.1-47.4.22" }
+      matrix: ${{ fromJSON(needs.matrix.outputs.smoke) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -156,12 +154,14 @@ jobs:
             cd build/libs
             sha256sum -c SHA256SUMS
           )
+          test -f build/libs/release/manifest.json
+          test -f build/libs/release/release-table.md
 
-      - name: Set up Java 25
+      - name: Set up target Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "25"
+          java-version: ${{ matrix.java_version }}
 
       - name: Install virtual display
         run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -177,17 +177,16 @@ jobs:
           restore-keys: |
             packforge-publish-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
 
-      - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
+      - name: Run exact published-release loader smoke
         env:
           PACKFORGE_FORGE_VERSION_OVERRIDE: ${{ matrix.forge_version }}
           PACKFORGE_MINECRAFT_VERSION_OVERRIDE: ${{ matrix.minecraft_version }}
           PACKFORGE_NEOFORGE_VERSION_OVERRIDE: ${{ matrix.neoforge_version }}
-          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.platform == 'neoforge' || (matrix.platform == 'fabric' && matrix.target == 'mc26_1_to_26_2') }}
+          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.artifact_smoke }}
           PACKFORGE_ARTIFACT_INPUT_DIR: build/libs
         run: |
-          # Packaged smoke is limited to official-mapped NeoForge and mc26 Fabric.
-          # Legacy Fabric and all Forge use source mode here; exact legacy Fabric
-          # final-JAR acceptance uses the production harness.
+          # Forge final-artifact acceptance remains in the Windows production
+          # harness because ForgeGradle's Mojmap run cannot load SRG jars.
           chmod +x gradlew scripts/smoke-client.sh
           ./scripts/smoke-client.sh "${{ matrix.platform }}" "${{ matrix.target }}" 900
 
@@ -247,31 +246,13 @@ jobs:
 
   publish:
     name: Publish ${{ matrix.loader }} ${{ matrix.minecraft }} (${{ matrix.release_type }})
-    needs: [build, runtime-smoke, benchmark]
+    needs: [matrix, build, runtime-smoke, benchmark]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: true
       max-parallel: 1
-      matrix:
-        include:
-          - { loader: fabric, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", version_suffix: "", release_type: release, featured: "true" }
-          - { loader: forge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", version_suffix: "", release_type: release, featured: "true" }
-          - { loader: neoforge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", version_suffix: "", release_type: release, featured: "true" }
-          - { loader: fabric, minecraft: 1.21.11, versions: "1.21.11", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.21.11, versions: "1.21.11", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: neoforge, minecraft: 1.21.11, versions: "1.21.11", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: fabric, minecraft: 1.21.8, versions: "1.21.8", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.21.8, versions: "1.21.8", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: neoforge, minecraft: 1.21.8, versions: "1.21.8", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: fabric, minecraft: 1.21.4, versions: "1.21.4", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.21.4, versions: "1.21.4", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: neoforge, minecraft: 1.21.4, versions: "1.21.4", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: fabric, minecraft: 1.21.1, versions: "1.21.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.21.1, versions: "1.21.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: neoforge, minecraft: 1.21.1, versions: "1.21.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: fabric, minecraft: 1.20.1, versions: "1.20.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.20.1, versions: "1.20.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
+      matrix: ${{ fromJSON(needs.matrix.outputs.publish) }}
 
     steps:
       - name: Download verified artifacts
@@ -295,6 +276,8 @@ jobs:
             cd build/libs
             sha256sum -c SHA256SUMS
           )
+          test -f build/libs/release/manifest.json
+          test -f build/libs/release/release-table.md
 
       - name: Prepare Modrinth version metadata
         id: release

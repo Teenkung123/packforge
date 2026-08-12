@@ -10,6 +10,11 @@ def registry = new JsonSlurper().parse(registryFile)
 if (registry.schemaVersion != 2) {
 	throw new GradleException("Unsupported PackForge target registry schema: ${registry.schemaVersion}")
 }
+if (!(registry.mojangStableReleaseManifest?.url instanceof String)
+	|| !(registry.mojangStableReleaseManifest?.sha256 instanceof String)
+	|| !(registry.mojangStableReleaseManifest.sha256 ==~ /[0-9a-fA-F]{64}/)) {
+	throw new GradleException("Registry must record the Mojang stable release manifest URL and SHA-256 provenance.")
+}
 
 def requiredStableReleaseSequence = [
 	"1.20.1", "1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6",
@@ -48,7 +53,8 @@ if (selectedTarget == null) {
 	throw new GradleException("Unknown PackForge target '${selectedTargetKey}'. Valid targets: ${targetKeys.join(', ')}")
 }
 
-def gradlew = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows") ? "gradlew.bat" : "./gradlew"
+def isWindows = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows")
+def gradlew = isWindows ? "gradlew.bat" : "./gradlew"
 def platformBuilds = [
 	[name: "Fabric", id: "fabric", path: "platform/fabric"],
 	[name: "NeoForge", id: "neoforge", path: "platform/neoforge"],
@@ -338,11 +344,40 @@ def inspectWrapOperationTargets = { byte[] classBytes ->
 	}
 }
 
+def artifactMixinConfigs = { target, platform ->
+	if (platform.id == "forge") {
+		def forgeJava17MixinTargets = ["mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_3"]
+		def forgeDirectReloadMixinTargets = ["mc1_20_3", "mc1_20_4"]
+		return [
+			main: target.key in forgeDirectReloadMixinTargets
+				? "packforge.forge.java17.legacy20_3_4.mixins.json"
+				: target.key in forgeJava17MixinTargets
+				? "packforge.forge.java17.mixins.json"
+				: target.mixinConfigs.main.toString(),
+			client: target.key in forgeJava17MixinTargets
+				? "packforge.forge.java17.client.mixins.json"
+				: target.mixinConfigs.client.toString()
+		]
+	}
+	[main: target.mixinConfigs.main.toString(), client: target.mixinConfigs.client.toString()]
+}
+
+def artifactMetadataDescriptor = { target, platform ->
+	if (platform.id == "neoforge" && target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
+		return "META-INF/mods.toml"
+	}
+	platform.id == "neoforge" ? "META-INF/neoforge.mods.toml" : "META-INF/mods.toml"
+}
+
 def verifyArtifact = { target, platform, File artifact ->
 	if (!artifact.isFile()) {
 		throw new GradleException("Expected PackForge artifact was not produced: ${artifact}")
 	}
 	def loader = target.platforms[platform.id]
+	def mixinConfigs = artifactMixinConfigs(target, platform)
+	def mainMixinConfig = mixinConfigs.main.toString()
+	def clientMixinConfig = mixinConfigs.client.toString()
+	def metadataDescriptor = artifactMetadataDescriptor(target, platform)
 	new ZipFile(artifact).withCloseable { archive ->
 		def names = archive.entries().toList().collect { it.name }
 		def duplicates = names.countBy { it }.findAll { name, count -> count > 1 }.keySet()
@@ -404,14 +439,14 @@ def verifyArtifact = { target, platform, File artifact ->
 			throw new GradleException("${artifact.name} contains stale target capability metadata.")
 		}
 
-		[target.mixinConfigs.main, target.mixinConfigs.client].each { mixinPath ->
+		[mainMixinConfig, clientMixinConfig].each { mixinPath ->
 			def mixin = new JsonSlurper().parseText(readZipText(archive, mixinPath.toString()))
 			if (mixin.compatibilityLevel != target.mixinCompatibility) {
 				throw new GradleException("${artifact.name} has an incorrect mixin compatibility level in ${mixinPath}.")
 			}
 		}
-		def clientMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.client.toString()))
-		def mainMixin = new JsonSlurper().parseText(readZipText(archive, target.mixinConfigs.main.toString()))
+		def clientMixin = new JsonSlurper().parseText(readZipText(archive, clientMixinConfig))
+		def mainMixin = new JsonSlurper().parseText(readZipText(archive, mainMixinConfig))
 		def expectedMainMixinPlugin = "com.teenkung.packforge.QuickPackMixinPlugin"
 		def expectedClientMixinPlugin = target.apiAdapter == "mc26"
 			? "com.teenkung.packforge.client.mixin.compat.GuiCompatMixinPlugin"
@@ -473,8 +508,8 @@ def verifyArtifact = { target, platform, File artifact ->
 			throw new GradleException("${artifact.name} does not register the resource-pack configuration button mixin.")
 		}
 		def configuredMixinClasses = [
-			[config: target.mixinConfigs.main.toString(), packageName: mainMixin.package, entries: mainMixin.mixins ?: []],
-			[config: target.mixinConfigs.client.toString(), packageName: clientMixin.package, entries: clientMixin.client ?: []]
+			[config: mainMixinConfig, packageName: mainMixin.package, entries: mainMixin.mixins ?: []],
+			[config: clientMixinConfig, packageName: clientMixin.package, entries: clientMixin.client ?: []]
 		]
 		configuredMixinClasses.each { mixinConfig ->
 			mixinConfig.entries.each { mixinName ->
@@ -563,14 +598,14 @@ def verifyArtifact = { target, platform, File artifact ->
 				throw new GradleException("${artifact.name} has access-widener header '${accessWidener.join(' ')}', expected namespace '${expectedNamespace}'.")
 			}
 		} else if (platform.id == "forge") {
-			def modsToml = readZipText(archive, "META-INF/mods.toml")
+			def modsToml = readZipText(archive, metadataDescriptor)
 			if (!modsToml.contains("versionRange=\"${loader.versionRange}\"")
 				|| !modsToml.contains("versionRange=\"${loader.minecraftVersionRange}\"")) {
 				throw new GradleException("${artifact.name} has incorrect Forge dependency ranges.")
 			}
 			if (target.minecraftVersion == "1.20.1") {
 				def legacyRefmaps = []
-				[target.mixinConfigs.main, target.mixinConfigs.client].each { mixinPath ->
+				[mainMixinConfig, clientMixinConfig].each { mixinPath ->
 					def mixin = new JsonSlurper().parseText(readZipText(archive, mixinPath.toString()))
 					if (!(mixin.refmap instanceof String) || mixin.refmap.isBlank() || archive.getEntry(mixin.refmap) == null) {
 						throw new GradleException("${artifact.name} is missing the generated legacy Forge Mixin refmap for ${mixinPath}.")
@@ -603,7 +638,7 @@ def verifyArtifact = { target, platform, File artifact ->
 				}
 			}
 		} else if (platform.id == "neoforge") {
-			def modsToml = readZipText(archive, "META-INF/neoforge.mods.toml")
+			def modsToml = readZipText(archive, metadataDescriptor)
 			if (!modsToml.contains("versionRange=\"${loader.versionRange}\"")
 				|| !modsToml.contains("versionRange=\"${loader.minecraftVersionRange}\"")) {
 				throw new GradleException("${artifact.name} has incorrect NeoForge dependency ranges.")
@@ -612,7 +647,11 @@ def verifyArtifact = { target, platform, File artifact ->
 	}
 }
 def nestedCommand = { platform, target, taskName ->
-	[gradlew, "-p", platform.path, "-Ppackforge_target=${target.key}", taskName]
+	def usesNeoForgeWrapper = platform.id == "neoforge"
+	def launcher = usesNeoForgeWrapper
+		? (isWindows ? ["platform/neoforge/gradlew.bat"] : ["bash", "platform/neoforge/gradlew"])
+		: [gradlew]
+	launcher + ["-p", platform.path, "-Ppackforge_target=${target.key}", taskName]
 }
 
 tasks.register("validateTargetRegistry") {
@@ -895,6 +934,15 @@ tasks.register("validateTargetRegistry") {
 			}
 		}
 	}
+}
+
+def stonecutterValidationPreparationTasks = subprojects.collectMany { childProject ->
+	["stonecutterPrepare", "stonecutterPrepareTest"].collect { taskName ->
+		"${childProject.path}:${taskName}"
+	}
+}
+tasks.named("validateTargetRegistry") {
+	dependsOn stonecutterValidationPreparationTasks
 }
 
 tasks.register("printResolvedMatrix") {

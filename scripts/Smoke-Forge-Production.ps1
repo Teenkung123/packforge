@@ -3,6 +3,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $ForgeClientRoot,
 
+    [ValidateSet('forge', 'neoforge')]
+    [string] $Loader = 'forge',
+
     [Parameter(Mandatory = $true)]
     [string] $VersionName,
 
@@ -165,6 +168,9 @@ function Expand-Arguments {
 function Get-LibraryPath {
     param($Library, [string] $LibrariesRoot, [string] $FallbackRoot)
 
+    if ([string] (Get-ObjectProperty -Object $Library -Name 'name') -match ':natives-windows-(?:arm64|aarch64|x86)$') {
+        return $null
+    }
     if (-not (Test-RuleSet -Rules (Get-ObjectProperty -Object $Library -Name 'rules'))) { return $null }
     $includeInClasspath = Get-ObjectProperty -Object $Library -Name 'include_in_classpath'
     if ($null -ne $includeInClasspath -and -not [bool] $includeInClasspath) { return $null }
@@ -251,12 +257,13 @@ function ConvertTo-WindowsCommandLineArgument {
     return $builder.ToString()
 }
 
-$clientRoot = Resolve-RequiredPath -Path $ForgeClientRoot -Description 'Forge client root' -Directory
+$loaderDisplay = if ($Loader -eq 'neoforge') { 'NeoForge' } else { 'Forge' }
+$clientRoot = Resolve-RequiredPath -Path $ForgeClientRoot -Description "$loaderDisplay client root" -Directory
 $artifact = Resolve-RequiredPath -Path $ArtifactPath -Description 'PackForge production artifact'
 $assets = Resolve-RequiredPath -Path $AssetsRoot -Description 'Minecraft assets root' -Directory
 $natives = Resolve-RequiredPath -Path $NativesRoot -Description 'Minecraft natives root' -Directory
 $java = Resolve-RequiredPath -Path $JavaPath -Description 'Java executable'
-$libraries = Resolve-RequiredPath -Path (Join-Path $clientRoot 'libraries') -Description 'Forge libraries root' -Directory
+$libraries = Resolve-RequiredPath -Path (Join-Path $clientRoot 'libraries') -Description "$loaderDisplay libraries root" -Directory
 $fallbackLibraries = $FallbackLibrariesRoot
 if ([string]::IsNullOrWhiteSpace($fallbackLibraries)) {
     $inferredFallback = Join-Path (Split-Path -Parent $assets) 'libraries'
@@ -266,27 +273,31 @@ if ([string]::IsNullOrWhiteSpace($fallbackLibraries)) {
 }
 
 if ([IO.Path]::GetPathRoot($clientRoot).TrimEnd('\') -eq $clientRoot.TrimEnd('\')) {
-    throw 'ForgeClientRoot must not be a drive root.'
+    throw 'ClientRoot must not be a drive root.'
 }
-if ($VersionName -notmatch '^[0-9][0-9A-Za-z.+_-]*$') {
-    throw "Unexpected Forge production version name: $VersionName"
+if ($VersionName -notmatch '^[A-Za-z0-9][0-9A-Za-z.+_-]*$') {
+    throw "Unexpected $loaderDisplay production version name: $VersionName"
 }
-$artifactMatch = [regex]::Match([IO.Path]::GetFileName($artifact), '^packforge-forge-.+-mc([0-9.]+(?:-[0-9.]+)?)\.jar$')
+$artifactMatch = [regex]::Match([IO.Path]::GetFileName($artifact), '^packforge-(forge|neoforge)-.+-mc([0-9.]+(?:-[0-9.]+)?)\.jar$')
 if (-not $artifactMatch.Success) {
-    throw "Artifact is not a PackForge Forge production JAR: $artifact"
+    throw "Artifact is not a PackForge $loaderDisplay production JAR: $artifact"
 }
-$artifactMinecraft = $artifactMatch.Groups[1].Value
+$artifactLoader = $artifactMatch.Groups[1].Value
+if ($artifactLoader -ne $Loader) {
+    throw "PackForge artifact loader '$artifactLoader' does not match requested loader '$Loader'."
+}
+$artifactMinecraft = $artifactMatch.Groups[2].Value
 $targetMarker = 'mc' + $artifactMinecraft.Replace('.', '_').Replace('-', '_to_')
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $resourcePackSource = $ResourcePackPath
 if ([string]::IsNullOrWhiteSpace($resourcePackSource)) {
-    $resourcePackSource = Join-Path $repositoryRoot "platform\forge\run\$targetMarker\resourcepacks\deterministic-large-pack.zip"
+    $resourcePackSource = Join-Path $repositoryRoot "platform\$Loader\run\$targetMarker\resourcepacks\deterministic-large-pack.zip"
 }
 
-$childJsonPath = Resolve-RequiredPath -Path (Join-Path $clientRoot "versions\$VersionName\$VersionName.json") -Description 'Forge version metadata'
+$childJsonPath = Resolve-RequiredPath -Path (Join-Path $clientRoot "versions\$VersionName\$VersionName.json") -Description "$loaderDisplay version metadata"
 $child = Get-Content -LiteralPath $childJsonPath -Raw | ConvertFrom-Json
 if ([string] $child.id -ne $VersionName) {
-    throw "Forge metadata identity mismatch in $childJsonPath"
+    throw "$loaderDisplay metadata identity mismatch in $childJsonPath"
 }
 
 $parentName = [string] (Get-ObjectProperty -Object $child -Name 'inheritsFrom')
@@ -385,6 +396,7 @@ $javaArguments = [Collections.Generic.List[string]]::new()
 $javaArguments.Add('-Xms512m')
 $javaArguments.Add('-Xmx2048m')
 $javaArguments.Add("-Djava.library.path=$natives")
+$javaArguments.Add("-DlibraryDirectory=$libraries")
 foreach ($argument in (Expand-Arguments -Arguments $allJvmArguments)) {
     $expandedArgument = Expand-Token -Value $argument
     if ($expandedArgument.StartsWith('-DignoreList=', [StringComparison]::Ordinal) -and
@@ -394,6 +406,12 @@ foreach ($argument in (Expand-Arguments -Arguments $allJvmArguments)) {
     $javaArguments.Add($expandedArgument)
 }
 $javaArguments.Add([string] $child.mainClass)
+if ($Loader -eq 'neoforge') {
+    # FML consumes --mods before the launch target; arguments appended after it
+    # are forwarded to Minecraft's main class instead of being loaded.
+    $javaArguments.Add('--mods')
+    $javaArguments.Add($stagedArtifact)
+}
 foreach ($argument in (Expand-Arguments -Arguments $allGameArguments)) {
     $javaArguments.Add((Expand-Token -Value $argument))
 }
@@ -544,8 +562,8 @@ try {
     }
 }
 
-if (-not $passed) { throw 'Production Forge smoke failed.' }
+if (-not $passed) { throw "Production $loaderDisplay smoke failed." }
 $finalText = Get-RunText -GameRoot $gameRoot -Paths @($latestLog, $stdoutPath, $stderrPath)
 Assert-NoFatalLog -Text $finalText -Context 'production shutdown'
 $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash
-Write-Output "PASS Forge production smoke: version=$VersionName artifact=$([IO.Path]::GetFileName($artifact)) sha256=$hash reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot"
+Write-Output "PASS $loaderDisplay production smoke: version=$VersionName artifact=$([IO.Path]::GetFileName($artifact)) sha256=$hash reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot"

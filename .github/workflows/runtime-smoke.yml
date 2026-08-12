@@ -12,15 +12,40 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build exact smoke artifact bundle
+  matrix:
+    name: Generate registry matrices
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    outputs:
+      targets: ${{ steps.generate.outputs.targets }}
+      smoke: ${{ steps.generate.outputs.smoke }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Java 25
+      - name: Verify Mojang stable release ledger
+        shell: pwsh
+        run: ./scripts/Verify-Mojang-ReleaseSequence.ps1
+
+      - name: Generate build and exact-release matrices from registry
+        id: generate
+        shell: bash
+        run: |
+          echo "targets=$(python scripts/Generate-CiMatrix.py build)" >> "$GITHUB_OUTPUT"
+          echo "smoke=$(python scripts/Generate-CiMatrix.py smoke)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.target }} artifact bundle
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.targets) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up build Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -37,107 +62,52 @@ jobs:
           restore-keys: |
             packforge-runtime-smoke-${{ runner.os }}-all-
 
-      - name: Build and verify all artifacts
+      - name: Build and verify target artifacts
         run: |
           chmod +x gradlew
-          ./gradlew buildAllSupported verifyAllArtifacts --no-daemon --stacktrace
+          ./gradlew buildTarget -Ppackforge_target=${{ matrix.target }} --no-daemon --stacktrace
 
-      - name: Write exact release SHA256SUMS
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 release artifacts, found ${#artifacts[@]}."
-            printf '%s\n' "${artifacts[@]}"
-            exit 1
-          fi
-          (
-            cd build/libs
-            sha256sum "${artifacts[@]}" > SHA256SUMS
-          )
-          checksum_count="$(wc -l < build/libs/SHA256SUMS)"
-          if [[ "$checksum_count" -ne 17 ]]; then
-            echo "Expected 17 checksum rows, found $checksum_count."
-            exit 1
-          fi
-
-      - name: Upload verified artifact bundle
+      - name: Upload verified target artifact bundle
         uses: actions/upload-artifact@v4
         with:
-          name: packforge-all-supported
-          path: |
-            build/libs/packforge-*.jar
-            build/libs/SHA256SUMS
+          name: packforge-${{ matrix.target }}
+          path: build/libs/packforge-*.jar
           if-no-files-found: error
 
   smoke:
-    name: ${{ matrix.target }} / ${{ matrix.platform }} / ${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
-    needs: build
+    name: ${{ matrix.release }} / ${{ matrix.platform }} / ${{ matrix.target }}
+    needs: [matrix, build]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { target: mc26_1_to_26_2, platform: fabric }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.1" }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.2" }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.2" }
-          - { target: mc26_1_to_26_2, platform: forge }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.1-63.0.2" }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.2-64.1.0" }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.2-65.1.0" }
-          - { target: mc26_1_to_26_2, platform: neoforge }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.1.15-beta" }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.2.94" }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.2.0.48-beta" }
-          - { target: mc1_21_1, platform: fabric }
-          - { target: mc1_21_1, platform: forge }
-          - { target: mc1_21_1, platform: neoforge }
-          - { target: mc1_21_4, platform: fabric }
-          - { target: mc1_21_4, platform: forge }
-          - { target: mc1_21_4, platform: neoforge }
-          - { target: mc1_21_8, platform: fabric }
-          - { target: mc1_21_8, platform: forge }
-          - { target: mc1_21_8, platform: neoforge }
-          - { target: mc1_21_11, platform: fabric }
-          - { target: mc1_21_11, platform: forge }
-          - { target: mc1_21_11, platform: neoforge }
-          - { target: mc1_20_1, platform: fabric }
-          - { target: mc1_20_1, platform: forge }
-          - { target: mc1_20_1, platform: forge, forge_version: "1.20.1-47.4.22" }
+      matrix: ${{ fromJSON(needs.matrix.outputs.smoke) }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download verified artifact bundle
+      - name: Download verified target artifact bundle
         uses: actions/download-artifact@v4
         with:
-          name: packforge-all-supported
+          name: packforge-${{ matrix.target }}
           path: build/libs
 
-      - name: Verify exact release SHA256SUMS
+      - name: Verify target artifact bundle
         shell: bash
         run: |
           set -euo pipefail
-          test -f build/libs/SHA256SUMS
           mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 downloaded artifacts, found ${#artifacts[@]}."
+          if [[ "${#artifacts[@]}" -lt 1 ]]; then
+            echo "No downloaded artifacts found for ${{ matrix.target }}."
             printf '%s\n' "${artifacts[@]}"
             exit 1
           fi
-          (
-            cd build/libs
-            sha256sum -c SHA256SUMS
-          )
 
-      - name: Set up Java 25
+      - name: Set up target Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "25"
+          java-version: ${{ matrix.java_version }}
 
       - name: Install virtual display
         run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -153,17 +123,17 @@ jobs:
           restore-keys: |
             packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
 
-      - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
+      - name: Run exact-release loader smoke
         env:
           PACKFORGE_FORGE_VERSION_OVERRIDE: ${{ matrix.forge_version }}
           PACKFORGE_MINECRAFT_VERSION_OVERRIDE: ${{ matrix.minecraft_version }}
           PACKFORGE_NEOFORGE_VERSION_OVERRIDE: ${{ matrix.neoforge_version }}
-          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.platform == 'neoforge' || (matrix.platform == 'fabric' && matrix.target == 'mc26_1_to_26_2') }}
+          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.artifact_smoke }}
           PACKFORGE_ARTIFACT_INPUT_DIR: build/libs
         run: |
-          # Packaged smoke is limited to official-mapped NeoForge and mc26 Fabric.
-          # Legacy Fabric and all Forge use source mode here; exact legacy Fabric
-          # final-JAR acceptance uses the production harness.
+          # ForgeGradle cannot load the final SRG artifact in its Mojmap userdev
+          # runtime; its final-artifact acceptance is kept in the Windows
+          # production harness and the exact source smoke remains required here.
           chmod +x gradlew scripts/smoke-client.sh
           ./scripts/smoke-client.sh "${{ matrix.platform }}" "${{ matrix.target }}" 900
 

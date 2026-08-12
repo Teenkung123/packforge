@@ -1,6 +1,7 @@
 plugins {
 	id "java"
-	id "net.neoforged.moddev" version "2.0.141"
+	id "net.neoforged.moddev" version "2.0.143" apply false
+	id "net.neoforged.gradle.userdev" version "7.1.38" apply false
 }
 
 ext.packforgePlatformId = "neoforge"
@@ -10,6 +11,10 @@ version = packforgeModVersion
 group = packforgeMavenGroup
 
 def target = packforgeTarget
+def legacyNeoGradle = target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]
+def neoGradleModern = target.key == "mc26_1_to_26_2"
+def usesNeoGradle = legacyNeoGradle || neoGradleModern
+apply plugin: usesNeoGradle ? "net.neoforged.gradle.userdev" : "net.neoforged.moddev"
 def loaderConfig = packforgePlatform
 def javaTarget = target.javaVersion as int
 def mainMixinConfig = target.mixinConfigs.main.toString()
@@ -17,6 +22,7 @@ def clientMixinConfig = target.mixinConfigs.client.toString()
 def artifactSmoke = providers.gradleProperty("packforge_artifact_smoke").map(Boolean::parseBoolean).orElse(false).get()
 def neoForgeRuntimeVersionOverride = providers.gradleProperty("packforge_neoforge_version_override").orNull
 def neoForgeDependencyVersion = neoForgeRuntimeVersionOverride ?: loaderConfig.version.toString()
+def metadataDescriptor = legacyNeoGradle ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml"
 
 layout.buildDirectory.set(file("build/${target.key}"))
 
@@ -216,23 +222,38 @@ tasks.named("compileTestJava", JavaCompile) {
 	setSource(files(testJavaSources))
 }
 
-neoForge {
-	version = neoForgeDependencyVersion
-	validateAccessTransformers = false
-
+if (usesNeoGradle) {
 	runs {
+		configureEach {
+			workingDirectory = project.file("run/${target.key}")
+			systemProperty "forge.logging.console.level", "debug"
+			if (!artifactSmoke) {
+				modSource sourceSets.main
+			}
+		}
 		client {
 			client()
-			gameDirectory = project.file("run/${target.key}")
-			systemProperty "forge.logging.console.level", "debug"
-			ideName = "NeoForge ${target.minecraftVersion} Client"
 		}
 	}
+} else {
+	neoForge {
+		version = neoForgeDependencyVersion
+		validateAccessTransformers = false
 
-	if (!artifactSmoke) {
-		mods {
-			packforge {
-				sourceSet sourceSets.main
+		runs {
+			client {
+				client()
+				gameDirectory = project.file("run/${target.key}")
+				systemProperty "forge.logging.console.level", "debug"
+				ideName = "NeoForge ${target.minecraftVersion} Client"
+			}
+		}
+
+		if (!artifactSmoke) {
+			mods {
+				packforge {
+					sourceSet sourceSets.main
+				}
 			}
 		}
 	}
@@ -243,6 +264,9 @@ repositories {
 }
 
 dependencies {
+	if (usesNeoGradle) {
+		implementation "net.neoforged:neoforge:${neoForgeDependencyVersion}"
+	}
 	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${packforgeMixinExtrasVersion}"))
 	jarJar(implementation("io.github.llamalad7:mixinextras-neoforge:${packforgeMixinExtrasVersion}")) {
 		version {
@@ -272,7 +296,12 @@ processResources {
 		"mixin_compatibility": target.mixinCompatibility
 	]
 	inputs.properties properties
-	filesMatching("META-INF/neoforge.mods.toml") {
+	if (legacyNeoGradle) {
+		exclude "META-INF/neoforge.mods.toml"
+	} else {
+		exclude "META-INF/mods.toml"
+	}
+	filesMatching(metadataDescriptor) {
 		expand properties
 	}
 	filesMatching([mainMixinConfig, clientMixinConfig]) {
@@ -286,6 +315,15 @@ processResources {
 jar {
 	duplicatesStrategy = DuplicatesStrategy.FAIL
 	archiveFileName = "packforge-neoforge-${project.version}-mc${target.artifactMinecraft}.jar"
+}
+
+if (usesNeoGradle) {
+	tasks.named("jar") {
+		archiveFileName = "packforge-neoforge-${project.version}-mc${target.artifactMinecraft}-slim.jar"
+	}
+	tasks.named("jarJar") {
+		archiveFileName = "packforge-neoforge-${project.version}-mc${target.artifactMinecraft}.jar"
+	}
 }
 
 tasks.named("sourcesJar") {
