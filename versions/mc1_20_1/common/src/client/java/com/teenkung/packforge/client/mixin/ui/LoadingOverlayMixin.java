@@ -1,6 +1,5 @@
 package com.teenkung.packforge.client.mixin.ui;
 
-import com.teenkung.packforge.client.ui.ReloadSummaryToast;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.loader.ReloadStatus;
 import net.minecraft.client.Minecraft;
@@ -31,7 +30,6 @@ public abstract class LoadingOverlayMixin {
 			graphics.drawCenteredString(this.minecraft.font, ReloadStatus.line(ReloadStatus.displayProgress(this.reload.getActualProgress())), centerX, titleY, 0xEBFFFFFF);
 			graphics.drawCenteredString(this.minecraft.font, ReloadStatus.detailLine(), centerX, titleY + this.minecraft.font.lineHeight + 2, 0xBEFFFFFF);
 		}
-		ReloadSummaryToast.showPending();
 	}
 
 	@Redirect(

@@ -1,6 +1,7 @@
 package com.teenkung.packforge.config;
 
 import com.teenkung.packforge.PackForge;
+import com.teenkung.packforge.platform.OptionalModPresence;
 import com.teenkung.packforge.platform.PackForgeServices;
 
 import java.util.EnumSet;
@@ -43,11 +44,11 @@ public final class QuickPackCompatibility {
 
 		Profile detected;
 		try {
-			var platform = PackForgeServices.platform();
-			if (!platform.isModLoaded(MOD_ID)) {
+			OptionalModPresence optionalMods = PackForgeServices.platform();
+			if (!optionalMods.isModLoaded(MOD_ID)) {
 				detected = Profile.absent();
 			} else {
-				detected = classify(platform.modVersion(MOD_ID));
+				detected = classify(optionalMods.modVersion(MOD_ID));
 			}
 		} catch (RuntimeException exception) {
 			detected = Profile.detectionFailed();

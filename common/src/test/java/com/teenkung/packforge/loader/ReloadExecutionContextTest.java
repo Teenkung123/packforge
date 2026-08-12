@@ -194,6 +194,26 @@ class ReloadExecutionContextTest {
 		assertEquals(1L, newer.metrics().counters().getResourceCalls());
 	}
 
+	@Test
+	void observedVanillaScansKeepTimingWithoutClaimingIndexSavings() {
+		ReloadExecutionContext context = ReloadExecutionContext.startForTesting(snapshot(true, false, Set.of(), 1));
+
+		LoaderTimings.recordGetResource(context);
+		LoaderTimings.recordGetNamespaces(context, false);
+		LoaderTimings.recordListResources(context, false);
+
+		ReloadMetrics.CounterSnapshot observed = context.metrics().counters();
+		assertEquals(1L, observed.getResourceCalls());
+		assertEquals(1L, observed.getNamespacesCalls());
+		assertEquals(1L, observed.listResourcesCalls());
+		assertEquals(0L, observed.fullScansAvoided());
+
+		LoaderTimings.recordGetNamespaces(context, true);
+		LoaderTimings.recordListResources(context, true);
+
+		assertEquals(2L, context.metrics().counters().fullScansAvoided());
+	}
+
 	private static ReloadFeatureSnapshot snapshot(boolean listenerTimings, boolean summary, Set<String> exclusions, int workers) {
 		return new ReloadFeatureSnapshot(
 			true, true, true, false, true, listenerTimings, true, true, false, summary,

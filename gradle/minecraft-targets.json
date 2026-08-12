@@ -98,6 +98,18 @@
       "targets": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5"]
     },
     {
+      "id": "loading-overlay-toast-1.20.5-through-1.21.5",
+      "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java",
+      "sourceSet": "client",
+      "targets": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5"]
+    },
+    {
+      "id": "loading-overlay-toast-1.21.6-through-1.21.11",
+      "path": "versions/shared/modern/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java",
+      "sourceSet": "client",
+      "targets": ["mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
+    },
+    {
       "id": "options-1.20.5-through-1.21.5",
       "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/options/OptionsMixin.java",
       "sourceSet": "client",
@@ -108,7 +120,7 @@
       "path": "versions/shared/common/src/main/java/com/teenkung/packforge/forge/ForgeModListCompat.java",
       "sourceSet": "main",
       "platforms": ["forge"],
-      "targets": ["mc1_20_1", "mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_3", "mc1_21_4", "mc1_21_5"]
+      "targets": ["mc1_20_1", "mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
     },
     {
       "id": "bounded-sprite-decode-pre-26",
@@ -151,13 +163,6 @@
       "id": "options-1.21.6-through-1.21.11",
       "path": "versions/shared/modern/src/client/java/com/teenkung/packforge/client/mixin/options/OptionsMixin.java",
       "sourceSet": "client",
-      "targets": ["mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
-    },
-    {
-      "id": "forge-mod-list-1.21.6-through-1.21.11",
-      "path": "versions/shared/modern/src/main/java/com/teenkung/packforge/forge/ForgeModListCompat.java",
-      "sourceSet": "main",
-      "platforms": ["forge"],
       "targets": ["mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
     },
     {
@@ -373,7 +378,7 @@
           "minecraftVersionRange": "[1.20.6,1.21.2)",
           "artifactMinecraft": "1.20.6-1.21.1",
           "mixinCompatibility": "JAVA_17",
-          "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.client.mixins.json"},
+          "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.font-selection.client.mixins.json"},
           "rangeCompileAnchor": true
         },
         "neoforge": {
@@ -490,7 +495,7 @@
           "versionRange": "[51.0.17,52)",
           "minecraftVersionRange": "[1.21]",
           "mixinCompatibility": "JAVA_17",
-          "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.client.mixins.json"}
+          "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.font-selection.client.mixins.json"}
         },
         "neoforge": {
           "maturity": "beta",
@@ -706,7 +711,7 @@
           "versionRange": "[53.1.12,54)",
           "minecraftVersionRange": "[1.21.3]",
           "mixinCompatibility": "JAVA_17",
-          "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.client.mixins.json"}
+          "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.font-selection.client.mixins.json"}
         },
         "neoforge": {
           "maturity": "beta",
@@ -798,7 +803,7 @@
           "minecraftVersionRange": "[1.21.3,1.21.5)",
           "artifactMinecraft": "1.21.3-1.21.4",
           "mixinCompatibility": "JAVA_17",
-          "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.client.mixins.json"},
+          "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.font-selection.client.mixins.json"},
           "rangeCompileAnchor": true
         },
         "neoforge": {
@@ -1561,6 +1566,7 @@
         "client.mixin.font.BitmapProviderDefinitionMixin": "1.21.11",
         "client.mixin.font.FontManagerMixin": "1.21.11",
         "client.mixin.font.FontManagerPreparationAccessor": "1.21.11",
+        "client.mixin.font.FontProviderSelectionMixin": "1.21.11",
         "client.mixin.font.FontSetMixin": "1.21.11",
         "client.mixin.model.ModelManagerMixin": "1.21.11"
       },

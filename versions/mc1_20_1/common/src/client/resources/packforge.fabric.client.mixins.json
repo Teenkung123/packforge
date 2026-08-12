@@ -13,7 +13,8 @@
 		"font.FontSetMixin",
 		"model.ModelManagerMixin",
 		"options.OptionsMixin",
-		"ui.LoadingOverlayMixin"
+		"ui.LoadingOverlayMixin",
+		"ui.LoadingOverlayToastMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -1,7 +1,6 @@
 package com.teenkung.packforge;
 
 import com.teenkung.packforge.compat.VersionedMixinGate;
-import com.teenkung.packforge.forge.ForgeModListCompat;
 import net.minecraftforge.fml.loading.FMLLoader;
 import net.minecraftforge.fml.loading.VersionInfo;
 import org.objectweb.asm.tree.ClassNode;
@@ -11,21 +10,11 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import java.util.List;
 import java.util.Set;
 
-/** Suppresses overlap-bearing PackForge mixins before Mixin applies them. */
+/** Applies only version-dependent Mixin selection during early bootstrap. */
 public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
-	private static final String QUICK_PACK = "quick-pack";
 	private static final String RELOAD_OBSERVER_MIXIN = "mixin.observe.ReloadableResourceManagerMixin";
 	private static final String FORGE_LEGACY_RELOAD_OBSERVER_MIXIN =
 		"mixin.observe.ForgeLegacyReloadableResourceManagerMixin";
-	private static final Set<String> QUICK_PACK_OWNED_MIXINS = Set.of(
-		"mixin.loader.FilePackResourcesMixin",
-		"mixin.loader.SharedZipFileAccessAccessor",
-		"mixin.loader.SharedZipFileAccessMixin",
-		"client.mixin.font.FontManagerMixin",
-		"client.mixin.font.FontSetMixin",
-		"client.mixin.ui.LoadingOverlayMixin",
-		"client.mixin.ui.LoadingOverlayToastMixin"
-	);
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
@@ -37,8 +26,7 @@ public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
 			&& !shouldApplyReloadObserver(mixinClassName, minecraftVersion)) {
 			return false;
 		}
-		return !ForgeModListCompat.isLoaded(QUICK_PACK)
-			|| QUICK_PACK_OWNED_MIXINS.stream().noneMatch(mixinClassName::endsWith);
+		return true;
 	}
 
 	static boolean shouldApplyReloadObserver(String mixinClassName, String minecraftVersion) {

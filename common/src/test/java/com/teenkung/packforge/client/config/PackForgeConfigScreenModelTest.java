@@ -3,6 +3,7 @@ package com.teenkung.packforge.client.config;
 import com.teenkung.packforge.config.PackForgeCapability;
 import com.teenkung.packforge.config.PackForgeConfig;
 import com.teenkung.packforge.config.QuickPackCompatibility;
+import com.teenkung.packforge.compat.RuntimeMinecraftVersion;
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
@@ -16,6 +17,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PackForgeConfigScreenModelTest {
+	private static final EnumSet<PackForgeCapability> QUICK_PACK_OWNED = EnumSet.of(
+		PackForgeCapability.RESOURCE_PACK_INDEX,
+		PackForgeCapability.ZIP_READ_POOL,
+		PackForgeCapability.FONT_PROVIDER_PRESELECTION,
+		PackForgeCapability.ATLAS_MIP_PARALLEL,
+		PackForgeCapability.LOADING_FADE_CONTROL,
+		PackForgeCapability.LOADING_STATUS_OVERLAY
+	);
 	private static final EnumSet<PackForgeCapability> LEGACY = EnumSet.of(
 		PackForgeCapability.RESOURCE_PACK_INDEX,
 		PackForgeCapability.ZIP_READ_POOL,
@@ -150,5 +159,79 @@ class PackForgeConfigScreenModelTest {
 		assertEquals("quick-pack", state.externalOwner());
 		assertEquals("on", option.defaultValue());
 		assertTrue(config.loaderIndexEnabled);
+	}
+
+	@Test
+	void quickPackOwnsOnlyOverlapOptionsAndNotTheirMasterOrDiagnostics() {
+		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
+		config.reloadOptimizerEnabled = true;
+		config.largeAtlasFixerEnabled = true;
+		config.loaderZipPoolEnabled = true;
+		config.loadingScreenFadeOutDisabled = true;
+		config.atlasMipParallelEnabled = true;
+		config.loaderTimingsEnabled = true;
+		config.reloadSummaryToastEnabled = true;
+		config.fontReloadDiagnosticsEnabled = true;
+		config.fontBitmapProviderCacheEnabled = true;
+		config.atlasDecodeBatchingEnabled = true;
+		config.immediatelyFastFontAtlasCompatEnabled = true;
+		config.modelParseBatchingEnabled = true;
+		QuickPackCompatibility.Profile quickPack = new QuickPackCompatibility.Profile(
+			QuickPackCompatibility.Status.MODULE_HANDOFF,
+			Optional.of("1.5.7"),
+			QUICK_PACK_OWNED
+		);
+
+		String previousRuntime = RuntimeMinecraftVersion.current();
+		RuntimeMinecraftVersion.configure("26.2");
+		try {
+			for (String id : List.of(
+				"loader_index",
+				"loader_zip_pool",
+				"loading_status_overlay",
+				"loading_fade_out_disabled",
+				"font_provider_selection",
+				"atlas_mip_parallel",
+				"atlas_mip_batch_size"
+			)) {
+				PackForgeConfigScreenModel.EffectiveState state = PackForgeConfigScreenModel.effectiveState(
+					option(id),
+					config,
+					quickPack
+				);
+				assertFalse(state.effective(), id);
+				assertEquals("quick-pack", state.externalOwner(), id);
+				assertFalse(state.disabledReason().isBlank(), id);
+			}
+
+			for (String id : List.of(
+				"reload_optimizer",
+				"loader_timings",
+				"reload_summary_toast",
+				"font_reload_diagnostics",
+				"font_bitmap_cache",
+				"atlas_decode_batching",
+				"immediatelyfast_font_guard",
+				"model_parse_batching"
+			)) {
+				PackForgeConfigScreenModel.EffectiveState state = PackForgeConfigScreenModel.effectiveState(
+					option(id),
+					config,
+					quickPack
+				);
+				assertTrue(state.effective(), id);
+				assertEquals("", state.externalOwner(), id);
+				assertEquals("", state.disabledReason(), id);
+			}
+		} finally {
+			RuntimeMinecraftVersion.configure(previousRuntime);
+		}
+	}
+
+	private static PackForgeConfigScreenModel.OptionSpec option(String id) {
+		return PackForgeConfigScreenModel.allOptions().stream()
+			.filter(candidate -> candidate.id().equals(id))
+			.findFirst()
+			.orElseThrow();
 	}
 }

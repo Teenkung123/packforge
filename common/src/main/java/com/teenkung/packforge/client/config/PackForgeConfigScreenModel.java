@@ -262,6 +262,15 @@ public final class PackForgeConfigScreenModel {
 	}
 
 	private static final PackForgeConfig.Cfg DEFAULTS = new PackForgeConfig.Cfg();
+	private static final Set<String> QUICK_PACK_OWNED_OPTION_IDS = Set.of(
+		"loader_index",
+		"loader_zip_pool",
+		"font_provider_selection",
+		"atlas_mip_parallel",
+		"atlas_mip_batch_size",
+		"loading_fade_out_disabled",
+		"loading_status_overlay"
+	);
 	private static final List<OptionSpec> OPTIONS = buildOptions();
 
 	public static List<OptionSpec> allOptions() {
@@ -307,8 +316,9 @@ public final class PackForgeConfigScreenModel {
 	private static EffectiveState resolveState(OptionSpec option, PackForgeConfig.Cfg config, FeaturePolicy policy) {
 		String configured = configuredValue(config, option);
 		boolean effective = effectiveEnabled(option, config, policy);
-		String externalOwner = policy.quickPackOwns(option.capability()) ? "quick-pack" : "";
-		String reason = policy.quickPackDisabledReason(option.capability());
+		boolean quickPackOwned = quickPackOwns(option, policy);
+		String externalOwner = quickPackOwned ? "quick-pack" : "";
+		String reason = quickPackOwned ? policy.quickPackDisabledReason(option.capability()) : "";
 		String warning = !effective && externalOwner.isEmpty()
 			? "Configured but inactive because a prerequisite or capability is disabled"
 			: "";
@@ -319,7 +329,7 @@ public final class PackForgeConfigScreenModel {
 	}
 
 	private static boolean effectiveEnabled(OptionSpec option, PackForgeConfig.Cfg config, FeaturePolicy policy) {
-		if (policy.quickPackOwns(option.capability())) {
+		if (quickPackOwns(option, policy)) {
 			return false;
 		}
 		if (option instanceof BooleanOption booleanOption && !booleanOption.get(config)) {
@@ -360,6 +370,11 @@ public final class PackForgeConfigScreenModel {
 			case "startup_async_font_atlas" -> policy.startupAsyncFontAtlasEnabled();
 			default -> true;
 		};
+	}
+
+	private static boolean quickPackOwns(OptionSpec option, FeaturePolicy policy) {
+		return QUICK_PACK_OWNED_OPTION_IDS.contains(option.id())
+			&& policy.quickPackOwns(option.capability());
 	}
 
 	private static String configuredValue(PackForgeConfig.Cfg config, OptionSpec option) {

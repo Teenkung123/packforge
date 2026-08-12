@@ -1,6 +1,5 @@
 package com.teenkung.packforge.client.mixin.compat;
 
-import net.fabricmc.loader.api.FabricLoader;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -10,34 +9,31 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
-/** Combines 26.x GUI selection with early Quick Pack ownership suppression. */
+/** Selects the compatible 26.x GUI hook from the target class shape. */
 public final class GuiCompatMixinPlugin implements IMixinConfigPlugin {
-	private static final String QUICK_PACK = "quick-pack";
 	private static final String MINECRAFT_MIXIN = "com.teenkung.packforge.client.mixin.compat.MinecraftGui26_1Mixin";
 	private static final String GUI_MIXIN = "com.teenkung.packforge.client.mixin.compat.Gui26_2Mixin";
 	private static final String SET_SCREEN_DESCRIPTOR = "(Lnet/minecraft/client/gui/screens/Screen;)V";
-	private static final Set<String> QUICK_PACK_OWNED_MIXINS = Set.of(
-		"client.mixin.font.FontManagerMixin",
-		"client.mixin.font.FontSetMixin",
-		"client.mixin.ui.LoadingOverlayMixin"
-	);
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		if ((MINECRAFT_MIXIN.equals(mixinClassName) || GUI_MIXIN.equals(mixinClassName))
+		if (mixinClassName.equals(MINECRAFT_MIXIN)
+			&& hasMethod(targetClassName, "setScreen", SET_SCREEN_DESCRIPTOR)) {
+			return false;
+		}
+		if (mixinClassName.equals(GUI_MIXIN)
 			&& !hasMethod(targetClassName, "setScreen", SET_SCREEN_DESCRIPTOR)) {
 			return false;
 		}
-		return !FabricLoader.getInstance().isModLoaded(QUICK_PACK)
-			|| QUICK_PACK_OWNED_MIXINS.stream().noneMatch(mixinClassName::endsWith);
+		return true;
 	}
 
 	private static boolean hasMethod(String targetClassName, String name, String descriptor) {
 		try {
-			ClassNode target = MixinService.getService().getBytecodeProvider().getClassNode(targetClassName);
-			return target.methods.stream().anyMatch(method -> name.equals(method.name) && descriptor.equals(method.desc));
+			ClassNode node = MixinService.getService().getBytecodeProvider().getClassNode(targetClassName);
+			return node.methods.stream().anyMatch(method -> method.name.equals(name) && method.desc.equals(descriptor));
 		} catch (ClassNotFoundException | IOException exception) {
-			throw new IllegalStateException("Could not inspect PackForge GUI mixin target " + targetClassName, exception);
+			return false;
 		}
 	}
 

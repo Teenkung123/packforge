@@ -94,7 +94,7 @@ def capabilityContract = [
 	SHADER_STALL_DIAGNOSTICS: [classes: ["com/teenkung/packforge/loader/ReloadListenerTelemetry.class"], mainMixins: ["observe.SimpleReloadInstanceMixin"]],
 	LOADING_STATUS_OVERLAY: [classes: ["com/teenkung/packforge/loader/ReloadStatus.class"], clientMixins: ["ui.LoadingOverlayMixin"]],
 	LOADING_FADE_CONTROL: [classes: ["com/teenkung/packforge/loader/ReloadStatus.class"], clientMixins: ["ui.LoadingOverlayMixin"]],
-	RELOAD_SUMMARY_TOAST: [anyClientMixins: ["ui.LoadingOverlayMixin", "ui.LoadingOverlayToastMixin"]],
+	RELOAD_SUMMARY_TOAST: [clientMixins: ["ui.LoadingOverlayToastMixin"]],
 	IMMEDIATELY_FAST_FONT_ATLAS_COMPAT: [
 		classes: ["com/teenkung/packforge/client/compat/ImmediatelyFastFontAtlasCompat.class"],
 		anyClientMixins: ["compat.ShaderManagerCompatMixin", "options.OptionsMixin"]
@@ -111,7 +111,7 @@ def capabilityContract = [
 			"com/teenkung/packforge/client/font/FontSelectionRegistry.class",
 			"com/teenkung/packforge/client/font/FontOptimizationState.class"
 		],
-		clientMixins: ["font.FontManagerMixin", "font.FontSetMixin"]
+		clientMixins: ["font.FontProviderSelectionMixin", "font.FontSetMixin"]
 	],
 	FONT_BITMAP_CACHE: [classes: ["com/teenkung/packforge/client/font/FontBitmapProviderCache.class"], clientMixins: ["font.BitmapProviderDefinitionMixin"]],
 	MODEL_PARSE_BATCHING: [
@@ -465,13 +465,34 @@ def verifyArtifact = { target, platform, File artifact ->
 			? "com.teenkung.packforge.client.mixin.compat.GuiCompatMixinPlugin"
 			: expectedMainMixinPlugin
 		if (mainMixin.plugin != expectedMainMixinPlugin || clientMixin.plugin != expectedClientMixinPlugin) {
-			throw new GradleException("${artifact.name} is missing the expected early compatibility mixin plugins.")
+			throw new GradleException("${artifact.name} is missing the expected version-selection mixin plugins.")
 		}
+		def forbiddenPluginConstants = [
+			"quick-pack",
+			"me/drex/quickpack/",
+			"net/minecraftforge/fml/ModList",
+			"net/neoforged/fml/ModList",
+			"ForgeModListCompat"
+		]
 		[expectedMainMixinPlugin, expectedClientMixinPlugin].unique().each { pluginClass ->
 			def pluginPath = pluginClass.replace('.', '/') + ".class"
 			if (!names.contains(pluginPath)) {
-				throw new GradleException("${artifact.name} is missing early compatibility plugin ${pluginClass}.")
+				throw new GradleException("${artifact.name} is missing version-selection plugin ${pluginClass}.")
 			}
+			def pluginConstants = new String(readZipBytes(archive, pluginPath), java.nio.charset.StandardCharsets.ISO_8859_1)
+			def forbiddenPluginConstant = forbiddenPluginConstants.find { pluginConstants.contains(it) }
+			if (forbiddenPluginConstant != null) {
+				throw new GradleException("${artifact.name} plugin ${pluginClass} performs forbidden optional-mod detection through '${forbiddenPluginConstant}'.")
+			}
+		}
+		def quickPackInternalReference = names.find { path ->
+			path.startsWith("com/teenkung/packforge/")
+				&& path.endsWith(".class")
+				&& new String(readZipBytes(archive, path), java.nio.charset.StandardCharsets.ISO_8859_1)
+					.contains("me/drex/quickpack/")
+		}
+		if (quickPackInternalReference != null) {
+			throw new GradleException("${artifact.name} references a Quick Pack implementation class from ${quickPackInternalReference}.")
 		}
 		if ((mainMixin.mixins ?: []).contains("loader.CompositePackResourcesMixin")
 			|| names.contains("com/teenkung/packforge/mixin/loader/CompositePackResourcesMixin.class")) {
@@ -543,6 +564,10 @@ def verifyArtifact = { target, platform, File artifact ->
 			}
 		}
 		if (target.apiAdapter == "mc26") {
+			if (target.capabilities.contains("STARTUP_STATUS_OVERLAY")
+				&& !(clientMixin.client ?: []).contains("ui.LoadingOverlayStartupStatusMixin")) {
+				throw new GradleException("${artifact.name} does not isolate the mc26 startup-status loading hook from Quick Pack-owned status behavior.")
+			}
 			def atlasInvocationClass = "com/teenkung/packforge/client/atlas/AtlasLoadInvocation.class"
 			if (!names.contains(atlasInvocationClass)) {
 				throw new GradleException("${artifact.name} is missing the external mc26 atlas invocation state class.")
@@ -749,6 +774,13 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 			.findAll { group -> group.size() > 1 }
 			.collect { group -> group.sort { left, right -> left.path <=> right.path } }
 			.sort { left, right -> left.first().path <=> right.first().path }
+		def quickPackInternalReferencePaths = rows
+			.findAll { row ->
+				def source = file(row.path)
+				def text = source.getText("UTF-8")
+				text.contains("me.drex.quickpack") || text.contains("me/drex/quickpack")
+			}
+			.collect { row -> row.path }
 		def versionRows = rows.findAll { row -> row.normalizedHash != null }
 		def duplicateGroups = versionRows
 			.groupBy { row -> row.normalizedHash }
@@ -927,6 +959,9 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 				conditionalBlocks: conditionalBlocks,
 				maxConditionalBlockLines: maxConditionalBlockLines
 			],
+			compatibility: [
+				quickPackInternalReferencePaths: quickPackInternalReferencePaths
+			],
 			capabilityOwnership: capabilityOwnership
 		]
 
@@ -947,10 +982,10 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 		}.join("\n")
 		def exactDuplicateRows = exactDuplicateGroups.isEmpty()
 			? "None."
-			: exactDuplicateGroups.collectWithIndex { group, index -> "${index + 1}. " + group.collect { "`${it.path}`" }.join(", ") }.join("\n")
+			: (0..<exactDuplicateGroups.size()).collect { index -> "${index + 1}. " + exactDuplicateGroups[index].collect { "`${it.path}`" }.join(", ") }.join("\n")
 		def normalizedDuplicateRows = duplicateGroups.isEmpty()
 			? "None."
-			: duplicateGroups.collectWithIndex { group, index -> "${index + 1}. " + group.collect { "`${it.path}`" }.join(", ") }.join("\n")
+			: (0..<duplicateGroups.size()).collect { index -> "${index + 1}. " + duplicateGroups[index].collect { "`${it.path}`" }.join(", ") }.join("\n")
 		def humanReport = """# Current source metrics
 
 Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-in copy is refreshed only with `updateSourceMetricsCheckpoint` at a verified stable checkpoint. Tests, generated sources, build output, documentation, and vendored third-party code are excluded.
@@ -972,6 +1007,7 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 | Exact loader cells | ${exactLoaderCells} |
 | Registered build targets | ${targets.size()} |
 | Publication artifacts | ${expectedArtifactNames.size()} |
+| Quick Pack implementation references | ${quickPackInternalReferencePaths.size()} |
 
 ## Source layers
 
@@ -1026,6 +1062,7 @@ ${capabilityRows}
 		println("targetVersionReferences=${targetVersionReferences}")
 		println("targetConditionalLines=${targetBranchLines}")
 		println("versionSpecificConfigRenderers=${configScreenRenderers.size()}")
+		println("quickPackInternalReferences=${quickPackInternalReferencePaths.size()}")
 		println("productionLocPerSupportedTarget=${locPerTarget}")
 		println("stonecutterConditionalBlocks=${conditionalBlocks}")
 		println("maxStonecutterConditionalBlockLines=${maxConditionalBlockLines}")
@@ -1035,6 +1072,9 @@ ${capabilityRows}
 		if (!exactDuplicateGroups.isEmpty()) {
 			def details = exactDuplicateGroups.collect { group -> group.collect { row -> row.path }.join(", ") }.join("; ")
 			throw new GradleException("Byte-identical production source files remain: ${details}")
+		}
+		if (!quickPackInternalReferencePaths.isEmpty()) {
+			throw new GradleException("Production code must not reference Quick Pack implementation classes: ${quickPackInternalReferencePaths.join(', ')}")
 		}
 		if (!duplicateGroups.isEmpty()) {
 			def details = duplicateGroups.collect { group -> group.collect { row -> row.path }.join(", ") }.join("; ")

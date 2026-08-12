@@ -11,12 +11,12 @@
         "generatedPolicy": "All build/generated/Stonecutter output lies outside handwritten source roots."
     },
     "production": {
-        "files": 202,
-        "nonblankLoc": 16209,
-        "bridgeFiles": 99,
-        "bridgeLoc": 5426,
-        "bridgePercent": 33.48,
-        "locPerExactRelease": 736.77,
+        "files": 207,
+        "nonblankLoc": 16129,
+        "bridgeFiles": 103,
+        "bridgeLoc": 5303,
+        "bridgePercent": 32.88,
+        "locPerExactRelease": 733.14,
         "layerPrecedence": [
             "neutralCommon",
             "loaderCommon",
@@ -26,20 +26,20 @@
         "aggregateBridgePolicy": "Bridge totals include loader-owned bridge/compat files plus non-loader exact-version bridges.",
         "layers": {
             "neutralCommon": {
-                "files": 60,
-                "loc": 5929
+                "files": 61,
+                "loc": 5972
             },
             "versionCommon": {
                 "files": 46,
                 "loc": 4959
             },
             "loaderCommon": {
-                "files": 18,
-                "loc": 671
+                "files": 15,
+                "loc": 480
             },
             "exactVersionBridge": {
-                "files": 78,
-                "loc": 4650
+                "files": 85,
+                "loc": 4718
             }
         }
     },
@@ -58,7 +58,7 @@
         "targetKeyReferences": 129,
         "platformTargetKeyReferences": 80,
         "targetVersionReferences": 10,
-        "targetKeyLiteralReferences": 337,
+        "targetKeyLiteralReferences": 338,
         "targetConditionalLines": 84
     },
     "configuration": {
@@ -101,6 +101,10 @@
     "stonecutter": {
         "conditionalBlocks": 0,
         "maxConditionalBlockLines": 0
+    },
+    "compatibility": {
+        "quickPackInternalReferencePaths": [
+        ]
     },
     "capabilityOwnership": {
         "ATLAS_CAP": {
@@ -167,7 +171,7 @@
                 "com/teenkung/packforge/client/font/FontSelectionRegistry.class"
             ],
             "mixinHooks": [
-                "client:font.FontManagerMixin",
+                "client:font.FontProviderSelectionMixin",
                 "client:font.FontSetMixin"
             ]
         },
@@ -281,8 +285,7 @@
             "implementationClasses": [
             ],
             "mixinHooks": [
-                "client-any:ui.LoadingOverlayMixin",
-                "client-any:ui.LoadingOverlayToastMixin"
+                "client:ui.LoadingOverlayToastMixin"
             ]
         },
         "RESOURCE_PACK_INDEX": {

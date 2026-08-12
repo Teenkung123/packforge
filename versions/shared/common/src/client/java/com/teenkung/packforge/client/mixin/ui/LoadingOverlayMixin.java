@@ -1,6 +1,5 @@
 package com.teenkung.packforge.client.mixin.ui;
 
-import com.teenkung.packforge.client.ui.ReloadSummaryToast;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.loader.ReloadStatus;
 import net.minecraft.client.Minecraft;
@@ -50,7 +49,6 @@ public abstract class LoadingOverlayMixin {
 				0xBEFFFFFF
 			);
 		}
-		ReloadSummaryToast.showPending();
 	}
 
 	@Redirect(

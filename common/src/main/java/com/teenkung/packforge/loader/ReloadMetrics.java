@@ -131,17 +131,21 @@ public final class ReloadMetrics {
 		}
 	}
 
-	void recordGetNamespaces() {
+	void recordGetNamespaces(boolean fullScanAvoided) {
 		if (!complete.get()) {
 			getNamespacesCalls.increment();
-			fullScansAvoided.increment();
+			if (fullScanAvoided) {
+				fullScansAvoided.increment();
+			}
 		}
 	}
 
-	void recordListResources() {
+	void recordListResources(boolean fullScanAvoided) {
 		if (!complete.get()) {
 			listResourcesCalls.increment();
-			fullScansAvoided.increment();
+			if (fullScanAvoided) {
+				fullScansAvoided.increment();
+			}
 		}
 	}
 

@@ -2,7 +2,6 @@ package com.teenkung.packforge;
 
 import com.teenkung.packforge.compat.VersionedMixinGate;
 import com.teenkung.packforge.neoforge.NeoForgeMinecraftVersion;
-import net.neoforged.fml.ModList;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -10,36 +9,11 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import java.util.List;
 import java.util.Set;
 
-/** Suppresses overlap-bearing PackForge mixins before Mixin applies them. */
+/** Applies only version-dependent Mixin selection during early bootstrap. */
 public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
-	private static final String QUICK_PACK = "quick-pack";
-	private static final Set<String> QUICK_PACK_OWNED_MIXINS = Set.of(
-		"mixin.loader.FilePackResourcesMixin",
-		"mixin.loader.SharedZipFileAccessAccessor",
-		"mixin.loader.SharedZipFileAccessMixin",
-		"client.mixin.font.FontManagerMixin",
-		"client.mixin.font.FontSetMixin",
-		"client.mixin.ui.LoadingOverlayMixin",
-		"client.mixin.ui.LoadingOverlayToastMixin"
-	);
-
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		if (!VersionedMixinGate.shouldApply(mixinClassName, NeoForgeMinecraftVersion.current())) {
-			return false;
-		}
-		return !quickPackLoaded()
-			|| QUICK_PACK_OWNED_MIXINS.stream().noneMatch(mixinClassName::endsWith);
-	}
-
-	private static boolean quickPackLoaded() {
-		try {
-			ModList modList = ModList.get();
-			return modList != null && modList.isLoaded(QUICK_PACK);
-		} catch (NullPointerException ignored) {
-			// NeoForge may invoke Mixin plugins before its indexed mod list is ready.
-			return false;
-		}
+		return VersionedMixinGate.shouldApply(mixinClassName, NeoForgeMinecraftVersion.current());
 	}
 
 	@Override public void onLoad(String mixinPackage) {}

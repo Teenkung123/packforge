@@ -120,11 +120,11 @@ public abstract class FilePackResourcesMixin {
 		String path,
 		Operation<ZipEntry> original
 	) {
+		LoaderTimings.recordGetResource();
 		PackIndex index = this.packforge$index(zipFile);
 		if (index == null) {
 			return original.call(zipFile, path);
 		}
-		LoaderTimings.recordGetResource();
 		return index.entryFor(path);
 	}
 
@@ -156,10 +156,10 @@ public abstract class FilePackResourcesMixin {
 		@Local(argsOnly = true) PackType type
 	) {
 		PackIndex index = this.packforge$index(zipFile);
+		LoaderTimings.recordGetNamespaces(index != null);
 		if (index == null) {
 			return original.call(zipFile);
 		}
-		LoaderTimings.recordGetNamespaces();
 		return index.entriesWithPrefix(type.getDirectory() + "/");
 	}
 
@@ -178,11 +178,11 @@ public abstract class FilePackResourcesMixin {
 		@Local(argsOnly = true, ordinal = 1) String directory
 	) {
 		PackIndex index = this.packforge$index(zipFile);
+		LoaderTimings.recordListResources(index != null);
 		if (index == null) {
 			return original.call(zipFile);
 		}
 		String root = type.getDirectory() + "/" + namespace + "/";
-		LoaderTimings.recordListResources();
 		return index.entriesWithPrefix(root + directory + "/");
 	}
 

@@ -123,7 +123,7 @@ def mainJavaSources = mainJavaDirs.collect { root ->
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCache.java"
 			exclude "com/teenkung/packforge/client/font/FontPreparedSelection.java"
-			exclude "com/teenkung/packforge/client/mixin/font/FontManagerMixin.java"
+			exclude "com/teenkung/packforge/client/mixin/font/FontProviderSelectionMixin.java"
 			exclude "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
 		}
 	}
@@ -201,7 +201,7 @@ def clientJavaSources = clientJavaDirs.collect { root ->
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCache.java"
 			exclude "com/teenkung/packforge/client/font/FontPreparedSelection.java"
-			exclude "com/teenkung/packforge/client/mixin/font/FontManagerMixin.java"
+			exclude "com/teenkung/packforge/client/mixin/font/FontProviderSelectionMixin.java"
 			exclude "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
 		}
 	}

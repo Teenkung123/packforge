@@ -25,22 +25,46 @@ public final class LoaderTimings {
 	}
 
 	public static void recordGetNamespaces() {
-		recordGetNamespaces(ReloadExecutionContext.current());
+		recordGetNamespaces(ReloadExecutionContext.current(), true);
 	}
 
 	public static void recordGetNamespaces(ReloadExecutionContext context) {
+		recordGetNamespaces(context, true);
+	}
+
+	/**
+	 * Records a namespace lookup independently from whether PackForge avoided
+	 * Minecraft's full ZIP enumeration for that lookup.
+	 */
+	public static void recordGetNamespaces(boolean fullScanAvoided) {
+		recordGetNamespaces(ReloadExecutionContext.current(), fullScanAvoided);
+	}
+
+	public static void recordGetNamespaces(ReloadExecutionContext context, boolean fullScanAvoided) {
 		if (loaderTimingsEnabled(context)) {
-			context.metrics().recordGetNamespaces();
+			context.metrics().recordGetNamespaces(fullScanAvoided);
 		}
 	}
 
 	public static void recordListResources() {
-		recordListResources(ReloadExecutionContext.current());
+		recordListResources(ReloadExecutionContext.current(), true);
 	}
 
 	public static void recordListResources(ReloadExecutionContext context) {
+		recordListResources(context, true);
+	}
+
+	/**
+	 * Records a resource-list lookup independently from whether PackForge
+	 * avoided Minecraft's full ZIP enumeration for that lookup.
+	 */
+	public static void recordListResources(boolean fullScanAvoided) {
+		recordListResources(ReloadExecutionContext.current(), fullScanAvoided);
+	}
+
+	public static void recordListResources(ReloadExecutionContext context, boolean fullScanAvoided) {
 		if (loaderTimingsEnabled(context)) {
-			context.metrics().recordListResources();
+			context.metrics().recordListResources(fullScanAvoided);
 		}
 	}
 

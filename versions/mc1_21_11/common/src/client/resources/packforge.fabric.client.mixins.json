@@ -10,10 +10,12 @@
 		"font.BitmapProviderDefinitionMixin",
 		"font.FontManagerMixin",
 		"font.FontManagerPreparationAccessor",
+		"font.FontProviderSelectionMixin",
 		"font.FontSetMixin",
 		"model.ModelManagerMixin",
 		"options.OptionsMixin",
-		"ui.LoadingOverlayMixin"
+		"ui.LoadingOverlayMixin",
+		"ui.LoadingOverlayToastMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

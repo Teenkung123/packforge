@@ -14,6 +14,7 @@
 		"font.BitmapProviderDefinitionMixin",
 		"font.FontManagerPreparationAccessor",
 		"font.FontManagerMixin",
+		"font.FontProviderSelectionMixin",
 		"font.FontSetMixin",
 		"model.FaceBakeryMixin",
 		"model.ModelManagerMixin",
@@ -21,7 +22,9 @@
 		"startup.GuiStartupMixin",
 		"startup.MainStartupMixin",
 		"startup.MinecraftStartupMixin",
-		"ui.LoadingOverlayMixin"
+		"ui.LoadingOverlayMixin",
+		"ui.LoadingOverlayToastMixin",
+		"ui.LoadingOverlayStartupStatusMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
