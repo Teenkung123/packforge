@@ -180,3 +180,17 @@
 - Compatibility: all 1.21/1.21.2/1.21.3 production startup, deterministic reload, semantic-hash, Quick Pack, and clean-exit cells remain `UNTESTED`; no cell enters published aggregation.
 - Rollback point: `71de8fe`.
 - Next mandatory phase: exact 1.21.5/1.21.6/1.21.7 cells, then 1.21.9/1.21.10 and exact hotfix evidence for 26.1.1/26.1.2.
+
+## Phase 12 — exact matrix wiring and toolchain repair
+
+- Date: 2026-08-12
+- Commit SHA: `b71e281dc7f4318c872982d6dcdf9e5e74508116`; parent `a17d2ca6d5f0926746b9b2d721bec9f572b67db5`
+- Status: `FOCUSED_VERIFIED`; final artifact-range publication remains open.
+- Files changed: registry-derived CI/publication generators and workflows, Mojang manifest guard, production smoke wrappers, Forge Java17 mixin descriptors/bridge, legacy NeoForge wrapper and descriptor, modern NeoForge JarJar packaging, and current evidence docs.
+- Commands/results: `scripts/Verify-Mojang-ReleaseSequence.ps1` PASS with 22 IDs and SHA-256 `380769b566afa9e768c82e1337fa3af3052aea47c7a9fe09d2c5a96edcef2e6c`; `gradlew.bat validateTargetRegistry printResolvedMatrix --no-daemon --console plain --stacktrace` PASS; matrix counts `build=19`, `smoke=62`, `publish-smoke=26`, `publish=17`; `gradlew.bat build --no-daemon --console plain --stacktrace` PASS in 4m22s (`87 actionable tasks: 24 executed, 63 up-to-date`); release manifest generation PASS with 17 artifacts.
+- Artifact evidence: current 17 public hashes are in `artifact-consolidation.md`; the current modern NeoForge 26.x all-in-one artifact contains MixinExtras exactly once and passes `verifyMc26_1To26_2Artifacts`.
+- Compatibility evidence: recorded exact final-artifact runtime evidence covers all 62 officially available loader cells; Quick Pack 1.5.0 Fabric passes ten reloads and clean exit; unrelated optimization/render-mod pairwise profiles remain `UNTESTED`.
+- Architecture decision: keep exact release rows and exact build/smoke matrix registry-driven, but do not promote pre-26 rows until one final binary passes every exact release declared by its publication range. This preserves metadata honesty while range proof is unfinished.
+- Deviation/blocker: 13 non-anchor pre-26 release rows remain `planned-verified`; current rebuilt modern NeoForge 26.x production smoke has not yet been rerun after the JarJar packaging repair.
+- Rollback point: `git revert b71e281dc7f4318c872982d6dcdf9e5e74508116`.
+- Next mandatory phase: range-proof/publication consolidation, current modern NeoForge 26.x production smoke, and final full-matrix evidence.

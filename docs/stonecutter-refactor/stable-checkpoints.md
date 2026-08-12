@@ -154,3 +154,17 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Verification: `validateTargetRegistry` PASS; 1.21 all-loader `buildMc1_21` plus `verifyMc1_21Artifacts` PASS; 1.21.2 Fabric/NeoForge `buildMc1_21_2` plus `verifyMc1_21_2Artifacts` PASS; 1.21.3 all-loader `buildMc1_21_3` plus `verifyMc1_21_3Artifacts` PASS
 - Status: `FOCUSED_VERIFIED` for build/package scope; all three exact releases remain planned pending production startup, deterministic reload, semantic hash, Quick Pack, and clean-exit evidence
 - Rollback: revert `71de8fe` to remove the exact 1.21-family cells while retaining the Java21 source-family checkpoint
+
+## Phase 12 — exact matrix wiring and toolchain repair
+
+- Date: 2026-08-12
+- Commit SHA: `b71e281dc7f4318c872982d6dcdf9e5e74508116`
+- Parent stable checkpoint: `a17d2ca6d5f0926746b9b2d721bec9f572b67db5`
+- Status: `FOCUSED_VERIFIED`; final artifact-range publication remains open
+- Scope: registry-derived CI and release-manifest generators, official Mojang release-sequence provenance guard, production smoke wrappers, Forge Java17 descriptor/resource repair, legacy NeoForge wrapper/toolchain path, and modern NeoForge JarJar packaging
+- Commands: `scripts/Verify-Mojang-ReleaseSequence.ps1`; `gradlew.bat validateTargetRegistry printResolvedMatrix --no-daemon --console plain --stacktrace`; `gradlew.bat build --no-daemon --console plain --stacktrace`; `python scripts/Generate-CiMatrix.py` for build/smoke/publish-smoke/publish; `python scripts/Generate-ReleaseManifest.py --artifacts-dir build/libs --output-dir build/libs/release`
+- Results: Mojang guard PASS for all 22 release IDs and recorded SHA-256; registry PASS; matrix counts 19/62/26/17; root build PASS in 4m22s with `87 actionable tasks: 24 executed, 63 up-to-date`; current public 17-artifact verifier PASS; modern NeoForge 26.x all-in-one contains MixinExtras exactly once; release manifest regenerated with 17 artifacts
+- Compatibility: recorded exact runtime evidence covers 62 officially available loader cells and the real Quick Pack 1.5.0 Fabric profile passes ten reloads; unrelated third-party pairwise profiles remain `UNTESTED`
+- Deviation: 13 non-anchor pre-26 release rows remain `planned-verified`; they are not promoted by status-only change because no same-binary range proof is recorded for their public artifact metadata. A fresh production smoke of the rebuilt modern NeoForge 26.x artifact remains open.
+- Rollback: `git revert b71e281dc7f4318c872982d6dcdf9e5e74508116` restores the previous target-specific build/publication wiring while retaining earlier version-family commits.
+- Next mandatory phase: same-binary pre-26 range proofs, bounded artifact consolidation/publication, current rebuilt NeoForge 26.x production smoke, then final full-matrix evidence commit.
