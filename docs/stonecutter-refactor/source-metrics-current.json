@@ -1,0 +1,384 @@
+{
+    "schemaVersion": 1,
+    "generatedBy": "reportSourceMetrics",
+    "exclusions": {
+        "tests": true,
+        "generatedSources": true,
+        "buildOutput": true,
+        "documentation": true,
+        "vendoredThirdParty": true,
+        "generatedLoc": 0,
+        "generatedPolicy": "All build/generated/Stonecutter output lies outside handwritten source roots."
+    },
+    "production": {
+        "files": 202,
+        "nonblankLoc": 16209,
+        "bridgeFiles": 99,
+        "bridgeLoc": 5426,
+        "bridgePercent": 33.48,
+        "locPerExactRelease": 736.77,
+        "layerPrecedence": [
+            "neutralCommon",
+            "loaderCommon",
+            "exactVersionBridge",
+            "versionCommon"
+        ],
+        "aggregateBridgePolicy": "Bridge totals include loader-owned bridge/compat files plus non-loader exact-version bridges.",
+        "layers": {
+            "neutralCommon": {
+                "files": 60,
+                "loc": 5929
+            },
+            "versionCommon": {
+                "files": 46,
+                "loc": 4959
+            },
+            "loaderCommon": {
+                "files": 18,
+                "loc": 671
+            },
+            "exactVersionBridge": {
+                "files": 78,
+                "loc": 4650
+            }
+        }
+    },
+    "duplicates": {
+        "exactGroups": [
+        ],
+        "normalizedVersionGroups": [
+        ],
+        "normalizedFiles": 0,
+        "normalizedSurplusLoc": 0,
+        "baselineNormalizedGroups": 20,
+        "baselineNormalizedSurplusLoc": 2375,
+        "normalizedGroupReductionPercent": 100.00
+    },
+    "buildBranches": {
+        "targetKeyReferences": 129,
+        "platformTargetKeyReferences": 80,
+        "targetVersionReferences": 10,
+        "targetKeyLiteralReferences": 337,
+        "targetConditionalLines": 84
+    },
+    "configuration": {
+        "versionSpecificRendererCount": 4,
+        "versionSpecificRenderers": [
+            "versions/mc1_20_1/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java",
+            "versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java",
+            "versions/mc26/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java",
+            "versions/shared/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java"
+        ]
+    },
+    "matrix": {
+        "exactReleaseCells": 22,
+        "exactLoaderCells": 62,
+        "registeredBuildTargets": 19,
+        "publicationArtifacts": 20,
+        "publicationArtifactNames": [
+            "packforge-fabric-1.3.4-beta.2-mc1.20.1.jar",
+            "packforge-fabric-1.3.4-beta.2-mc1.20.5-1.21.1.jar",
+            "packforge-fabric-1.3.4-beta.2-mc1.21.2-1.21.4.jar",
+            "packforge-fabric-1.3.4-beta.2-mc1.21.5-1.21.8.jar",
+            "packforge-fabric-1.3.4-beta.2-mc1.21.9-1.21.11.jar",
+            "packforge-fabric-1.3.4-beta.3-mc1.20.2-1.20.4.jar",
+            "packforge-fabric-1.3.4-mc26.1-26.2.jar",
+            "packforge-forge-1.3.4-beta.2-mc1.20.1.jar",
+            "packforge-forge-1.3.4-beta.2-mc1.20.6-1.21.1.jar",
+            "packforge-forge-1.3.4-beta.2-mc1.21.3-1.21.4.jar",
+            "packforge-forge-1.3.4-beta.2-mc1.21.5-1.21.8.jar",
+            "packforge-forge-1.3.4-beta.2-mc1.21.9-1.21.11.jar",
+            "packforge-forge-1.3.4-beta.3-mc1.20.2-1.20.4.jar",
+            "packforge-forge-1.3.4-mc26.1-26.2.jar",
+            "packforge-neoforge-1.3.4-beta.2-mc1.20.6-1.21.1.jar",
+            "packforge-neoforge-1.3.4-beta.2-mc1.21.2-1.21.4.jar",
+            "packforge-neoforge-1.3.4-beta.2-mc1.21.5-1.21.8.jar",
+            "packforge-neoforge-1.3.4-beta.2-mc1.21.9-1.21.11.jar",
+            "packforge-neoforge-1.3.4-beta.3-mc1.20.2-1.20.4.jar",
+            "packforge-neoforge-1.3.4-mc26.1-26.2.jar"
+        ]
+    },
+    "stonecutter": {
+        "conditionalBlocks": 0,
+        "maxConditionalBlockLines": 0
+    },
+    "capabilityOwnership": {
+        "ATLAS_CAP": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/atlas/CappedSpriteResourceLoader.class",
+                "com/teenkung/packforge/client/atlas/SpriteCap.class"
+            ],
+            "mixinHooks": [
+                "client:atlas.SpriteLoaderMixin",
+                "client:atlas.TextureAtlasMixin"
+            ]
+        },
+        "ATLAS_DECODE_BATCHING": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/atlas/AtlasTimings.class"
+            ],
+            "mixinHooks": [
+                "client:atlas.SpriteLoaderMixin"
+            ]
+        },
+        "ATLAS_MIP_PARALLEL": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/atlas/AtlasTimings.class"
+            ],
+            "mixinHooks": [
+                "client:atlas.SpriteLoaderMixin"
+            ]
+        },
+        "ATLAS_PHASE_TIMINGS": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/atlas/AtlasTimings.class"
+            ],
+            "mixinHooks": [
+                "client:atlas.SpriteLoaderMixin",
+                "client:atlas.TextureAtlasMixin"
+            ]
+        },
+        "ATLAS_RETRY": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/atlas/AtlasRetry.class"
+            ],
+            "mixinHooks": [
+                "client:atlas.SpriteLoaderMixin"
+            ]
+        },
+        "FONT_BITMAP_CACHE": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+            ],
+            "mixinHooks": [
+                "client:font.BitmapProviderDefinitionMixin"
+            ]
+        },
+        "FONT_PROVIDER_PRESELECTION": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/font/FontOptimizationState.class",
+                "com/teenkung/packforge/client/font/FontSelectionRegistry.class"
+            ],
+            "mixinHooks": [
+                "client:font.FontManagerMixin",
+                "client:font.FontSetMixin"
+            ]
+        },
+        "FONT_RELOAD_DIAGNOSTICS": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/font/FontOptimizationState.class",
+                "com/teenkung/packforge/client/font/FontReloadDiagnostics.class"
+            ],
+            "mixinHooks": [
+                "client:font.FontManagerMixin"
+            ]
+        },
+        "IMMEDIATELY_FAST_FONT_ATLAS_COMPAT": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/compat/ImmediatelyFastFontAtlasCompat.class"
+            ],
+            "mixinHooks": [
+                "client-any:compat.ShaderManagerCompatMixin",
+                "client-any:options.OptionsMixin"
+            ]
+        },
+        "LOADER_TIMINGS": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/loader/LoaderTimings.class"
+            ],
+            "mixinHooks": [
+                "main:observe.ReloadableResourceManagerMixin"
+            ]
+        },
+        "LOADING_FADE_CONTROL": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/loader/ReloadStatus.class"
+            ],
+            "mixinHooks": [
+                "client:ui.LoadingOverlayMixin"
+            ]
+        },
+        "LOADING_STATUS_OVERLAY": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/loader/ReloadStatus.class"
+            ],
+            "mixinHooks": [
+                "client:ui.LoadingOverlayMixin"
+            ]
+        },
+        "MODEL_ADAPTIVE_BATCHING": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/model/ModelBatchPlan.class",
+                "com/teenkung/packforge/client/model/ModelParseOptimizer.class"
+            ],
+            "mixinHooks": [
+                "client:model.ModelManagerMixin"
+            ]
+        },
+        "MODEL_DUPLICATE_CACHE": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/model/ModelBatchPlan.class",
+                "com/teenkung/packforge/client/model/ModelParseOptimizer.class"
+            ],
+            "mixinHooks": [
+                "client:model.ModelManagerMixin"
+            ]
+        },
+        "MODEL_PARSE_BATCHING": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/model/ModelBatchPlan.class",
+                "com/teenkung/packforge/client/model/ModelParseOptimizer.class"
+            ],
+            "mixinHooks": [
+                "client:model.ModelManagerMixin"
+            ]
+        },
+        "MODEL_PARSE_TIMINGS": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/model/ModelParseOptimizer.class",
+                "com/teenkung/packforge/client/model/ModelParseTimings.class"
+            ],
+            "mixinHooks": [
+                "client:model.ModelManagerMixin"
+            ]
+        },
+        "MODEL_UV_TRANSPARENCY_CLAMP": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/client/atlas/SpriteCap.class"
+            ],
+            "mixinHooks": [
+                "client:model.FaceBakeryMixin"
+            ]
+        },
+        "RELOAD_LISTENER_TIMINGS": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/loader/ReloadListenerTelemetry.class"
+            ],
+            "mixinHooks": [
+                "main:observe.SimpleReloadInstanceMixin"
+            ]
+        },
+        "RELOAD_SUMMARY_TOAST": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+            ],
+            "mixinHooks": [
+                "client-any:ui.LoadingOverlayMixin",
+                "client-any:ui.LoadingOverlayToastMixin"
+            ]
+        },
+        "RESOURCE_PACK_INDEX": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/loader/PackIndex.class",
+                "com/teenkung/packforge/loader/PackIndexCache.class"
+            ],
+            "mixinHooks": [
+                "main:loader.FilePackResourcesMixin"
+            ]
+        },
+        "SHADER_STALL_DIAGNOSTICS": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/loader/ReloadListenerTelemetry.class"
+            ],
+            "mixinHooks": [
+                "main:observe.SimpleReloadInstanceMixin"
+            ]
+        },
+        "STARTUP_ASYNC_CLASS_SCAN": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/startup/StartupAsyncFeatures.class"
+            ],
+            "mixinHooks": [
+                "client:startup.MainStartupMixin"
+            ]
+        },
+        "STARTUP_ASYNC_DATA": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/startup/StartupAsyncFeatures.class"
+            ],
+            "mixinHooks": [
+                "client:startup.MinecraftStartupMixin"
+            ]
+        },
+        "STARTUP_ASYNC_FONT_ATLAS": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/startup/StartupAsyncFeatures.class"
+            ],
+            "mixinHooks": [
+                "client:startup.MinecraftStartupMixin"
+            ]
+        },
+        "STARTUP_EXECUTOR_TUNING": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/startup/StartupExecutorTuner.class"
+            ],
+            "mixinHooks": [
+                "main:startup.UtilExecutorMixin"
+            ]
+        },
+        "STARTUP_OPTIMIZER": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/startup/StartupEarlyConfig.class"
+            ],
+            "mixinHooks": [
+                "client:startup.MainStartupMixin",
+                "client:startup.MinecraftStartupMixin",
+                "main:startup.UtilExecutorMixin"
+            ]
+        },
+        "STARTUP_STATUS_OVERLAY": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/startup/StartupStatus.class"
+            ],
+            "mixinHooks": [
+                "client:startup.GuiStartupMixin"
+            ]
+        },
+        "STARTUP_TIMINGS": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/startup/StartupTimings.class"
+            ],
+            "mixinHooks": [
+                "client:startup.MainStartupMixin",
+                "client:startup.MinecraftStartupMixin"
+            ]
+        },
+        "ZIP_READ_POOL": {
+            "policyOwner": "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+            "implementationClasses": [
+                "com/teenkung/packforge/loader/ZipFilePools.class",
+                "com/teenkung/packforge/loader/ZipReadPool.class"
+            ],
+            "mixinHooks": [
+                "main:loader.FilePackResourcesMixin"
+            ]
+        }
+    }
+}

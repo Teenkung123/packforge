@@ -681,10 +681,15 @@ def handwrittenProductionJava = files(
 		include "**/src/client/java/**/*.java"
 	}
 )
+def sourceMetricsBuildJson = layout.buildDirectory.file("reports/source-metrics/source-metrics.json")
+def sourceMetricsBuildMarkdown = layout.buildDirectory.file("reports/source-metrics/source-metrics.md")
+def sourceMetricsCheckpointJson = file("docs/stonecutter-refactor/source-metrics-current.json")
+def sourceMetricsCheckpointMarkdown = file("docs/stonecutter-refactor/source-metrics-current.md")
 def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 	group = "verification"
-	description = "Reports deterministic handwritten-source metrics and rejects duplicate adapter classes."
+	description = "Reports deterministic handwritten-source, ownership, build-branch, renderer, and publication metrics."
 	inputs.file(registryFile)
+	outputs.files(sourceMetricsBuildJson, sourceMetricsBuildMarkdown)
 	outputs.upToDateWhen { false }
 
 	doLast {
@@ -703,6 +708,19 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 				.encodeHex()
 				.toString()
 		}
+		def sourceLayer = { String relativePath, boolean bridge ->
+			if (relativePath.startsWith("common/")) {
+				return "neutralCommon"
+			}
+			if (relativePath.startsWith("platform/")
+				|| relativePath.matches("versions/[^/]+/(?:fabric|forge|neoforge)/src/.*")) {
+				return "loaderCommon"
+			}
+			if (bridge) {
+				return "exactVersionBridge"
+			}
+			return "versionCommon"
+		}
 		def rows = handwrittenProductionJava.files
 			.collect { source ->
 				def relativePath = project.relativePath(source).replace('\\', '/')
@@ -716,13 +734,21 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 					path: relativePath,
 					loc: countLoc(source),
 					bridge: bridge,
+					rawHash: hashText(source.getText("UTF-8")),
 					normalizedHash: relativePath.startsWith("versions/")
 						? hashText(normalizeJavaBlock(source))
-						: null
+						: null,
+					layer: sourceLayer(relativePath, bridge)
 				]
 			}
 			.sort { left, right -> left.path <=> right.path }
 
+		def exactDuplicateGroups = rows
+			.groupBy { row -> row.rawHash }
+			.values()
+			.findAll { group -> group.size() > 1 }
+			.collect { group -> group.sort { left, right -> left.path <=> right.path } }
+			.sort { left, right -> left.first().path <=> right.first().path }
 		def versionRows = rows.findAll { row -> row.normalizedHash != null }
 		def duplicateGroups = versionRows
 			.groupBy { row -> row.normalizedHash }
@@ -744,6 +770,69 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 		def bridgePercent = productionLoc == 0
 			? BigDecimal.ZERO
 			: (bridgeLoc * 100 / productionLoc).setScale(2, BigDecimal.ROUND_HALF_UP)
+		def sourceLayers = ["neutralCommon", "versionCommon", "loaderCommon", "exactVersionBridge"]
+			.collectEntries { layer ->
+				def layerRows = rows.findAll { row -> row.layer == layer }
+				[(layer): [
+					files: layerRows.size(),
+					loc: layerRows.sum(0) { row -> row.loc }
+				]]
+			}
+
+		def buildScriptFiles = files(
+			file("build.gradle"),
+			file("settings.gradle"),
+			file("stonecutter.gradle"),
+			file("stonecutter-build.gradle"),
+			fileTree("gradle") { include "**/*.gradle" },
+			fileTree("platform") { include "*/build.gradle" }
+		).files.findAll { it.isFile() }.sort { left, right ->
+			project.relativePath(left) <=> project.relativePath(right)
+		}
+		int targetKeyReferences = 0
+		int targetVersionReferences = 0
+		int targetKeyLiteralReferences = 0
+		int targetBranchLines = 0
+		int platformTargetKeyReferences = 0
+		def targetLiteralPattern = ~/\bmc(?:1_[0-9_]+|26(?:_[0-9_]+)?)\b/
+		buildScriptFiles.each { script ->
+			boolean platformScript = project.relativePath(script).replace('\\', '/').startsWith("platform/")
+			script.readLines("UTF-8").each { line ->
+				int lineTargetKeyReferences = (line =~ /\btarget\.key\b/).findAll().size()
+				int lineTargetVersionReferences = (line =~ /\btarget\.(?:minecraftVersion|id)\b/).findAll().size()
+				int lineTargetKeyLiteralReferences = (line =~ targetLiteralPattern).findAll().size()
+				targetKeyReferences += lineTargetKeyReferences
+				targetVersionReferences += lineTargetVersionReferences
+				targetKeyLiteralReferences += lineTargetKeyLiteralReferences
+				if (platformScript) {
+					platformTargetKeyReferences += lineTargetKeyReferences
+				}
+				if ((lineTargetKeyReferences > 0 || lineTargetVersionReferences > 0 || lineTargetKeyLiteralReferences > 0)
+					&& line ==~ /.*(?:\bif\b|\bswitch\b|\bcase\b|\?.*:).*/) {
+					targetBranchLines++
+				}
+			}
+		}
+
+		def configScreenRenderers = rows
+			.findAll { row -> row.path.matches("versions/[^/]+/common/src/client/java/.+/PackForgeConfigScreen\\.java") }
+			.collect { row -> row.path }
+		def exactLoaderCells = registry.releaseCells.sum(0) { cell -> cell.loaderAvailability.size() }
+		def capabilityOwnership = capabilityContract.keySet().collect { it.toString() }.sort().collectEntries { capability ->
+			def contract = capabilityContract[capability]
+			def implementationClasses = []
+			implementationClasses.addAll((contract.classes ?: []).collect { it.toString() })
+			implementationClasses.addAll((contract.anyClasses ?: []).collect { it.toString() })
+			def mixinHooks = []
+			mixinHooks.addAll((contract.mainMixins ?: []).collect { "main:${it}" })
+			mixinHooks.addAll((contract.clientMixins ?: []).collect { "client:${it}" })
+			mixinHooks.addAll((contract.anyClientMixins ?: []).collect { "client-any:${it}" })
+			[(capability): [
+				policyOwner: "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+				implementationClasses: implementationClasses.sort(),
+				mixinHooks: mixinHooks.sort()
+			]]
+		}
 
 		int conditionalBlocks = 0
 		int maxConditionalBlockLines = 0
@@ -781,26 +870,172 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 			}
 		}
 
+		def duplicateReductionPercent = duplicateGroups.isEmpty()
+			? new BigDecimal("100.00")
+			: ((20 - duplicateGroups.size()) * 100 / 20).setScale(2, BigDecimal.ROUND_HALF_UP)
+		def metrics = [
+			schemaVersion: 1,
+			generatedBy: "reportSourceMetrics",
+			exclusions: [
+				tests: true,
+				generatedSources: true,
+				buildOutput: true,
+				documentation: true,
+				vendoredThirdParty: true,
+				generatedLoc: 0,
+				generatedPolicy: "All build/generated/Stonecutter output lies outside handwritten source roots."
+			],
+			production: [
+				files: rows.size(),
+				nonblankLoc: productionLoc,
+				bridgeFiles: bridgeFiles,
+				bridgeLoc: bridgeLoc,
+				bridgePercent: bridgePercent,
+				locPerExactRelease: locPerTarget,
+				layerPrecedence: ["neutralCommon", "loaderCommon", "exactVersionBridge", "versionCommon"],
+				aggregateBridgePolicy: "Bridge totals include loader-owned bridge/compat files plus non-loader exact-version bridges.",
+				layers: sourceLayers
+			],
+			duplicates: [
+				exactGroups: exactDuplicateGroups.collect { group -> group.collect { row -> row.path } },
+				normalizedVersionGroups: duplicateGroups.collect { group -> group.collect { row -> row.path } },
+				normalizedFiles: duplicateFiles,
+				normalizedSurplusLoc: duplicateSurplusLoc,
+				baselineNormalizedGroups: 20,
+				baselineNormalizedSurplusLoc: 2375,
+				normalizedGroupReductionPercent: duplicateReductionPercent
+			],
+			buildBranches: [
+				targetKeyReferences: targetKeyReferences,
+				platformTargetKeyReferences: platformTargetKeyReferences,
+				targetVersionReferences: targetVersionReferences,
+				targetKeyLiteralReferences: targetKeyLiteralReferences,
+				targetConditionalLines: targetBranchLines
+			],
+			configuration: [
+				versionSpecificRendererCount: configScreenRenderers.size(),
+				versionSpecificRenderers: configScreenRenderers
+			],
+			matrix: [
+				exactReleaseCells: supportedExactTargets,
+				exactLoaderCells: exactLoaderCells,
+				registeredBuildTargets: targets.size(),
+				publicationArtifacts: expectedArtifactNames.size(),
+				publicationArtifactNames: expectedArtifactNames
+			],
+			stonecutter: [
+				conditionalBlocks: conditionalBlocks,
+				maxConditionalBlockLines: maxConditionalBlockLines
+			],
+			capabilityOwnership: capabilityOwnership
+		]
+
+		def metricsJson = sourceMetricsBuildJson.get().asFile
+		def metricsMarkdown = sourceMetricsBuildMarkdown.get().asFile
+		def metricsDirectory = metricsJson.parentFile
+		metricsDirectory.mkdirs()
+		def metricsJsonText = JsonOutput.prettyPrint(JsonOutput.toJson(metrics))
+			.readLines()
+			.findAll { !it.trim().isEmpty() }
+			.join("\n")
+		metricsJson.setText(metricsJsonText + "\n", "UTF-8")
+		def layerRows = sourceLayers.collect { layer, counts -> "| `${layer}` | ${counts.files} | ${counts.loc} |" }.join("\n")
+		def capabilityRows = capabilityOwnership.collect { capability, ownership ->
+			def classes = ownership.implementationClasses.isEmpty() ? "None" : ownership.implementationClasses.collect { "`${it}`" }.join("<br>")
+			def mixins = ownership.mixinHooks.isEmpty() ? "None" : ownership.mixinHooks.collect { "`${it}`" }.join("<br>")
+			"| `${capability}` | `${ownership.policyOwner}` | ${classes} | ${mixins} |"
+		}.join("\n")
+		def exactDuplicateRows = exactDuplicateGroups.isEmpty()
+			? "None."
+			: exactDuplicateGroups.collectWithIndex { group, index -> "${index + 1}. " + group.collect { "`${it.path}`" }.join(", ") }.join("\n")
+		def normalizedDuplicateRows = duplicateGroups.isEmpty()
+			? "None."
+			: duplicateGroups.collectWithIndex { group, index -> "${index + 1}. " + group.collect { "`${it.path}`" }.join(", ") }.join("\n")
+		def humanReport = """# Current source metrics
+
+Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-in copy is refreshed only with `updateSourceMetricsCheckpoint` at a verified stable checkpoint. Tests, generated sources, build output, documentation, and vendored third-party code are excluded.
+
+## Summary
+
+| Metric | Value |
+|---|---:|
+| Production Java files | ${rows.size()} |
+| Production nonblank LOC | ${productionLoc} |
+| Bridge files | ${bridgeFiles} |
+| Bridge LOC | ${bridgeLoc} (${bridgePercent}%) |
+| Exact duplicate groups | ${exactDuplicateGroups.size()} |
+| Normalized version duplicate groups | ${duplicateGroups.size()} |
+| Platform `target.key` references | ${platformTargetKeyReferences} |
+| Target-key/version conditional lines | ${targetBranchLines} |
+| Version-specific configuration renderers | ${configScreenRenderers.size()} |
+| Exact release cells | ${supportedExactTargets} |
+| Exact loader cells | ${exactLoaderCells} |
+| Registered build targets | ${targets.size()} |
+| Publication artifacts | ${expectedArtifactNames.size()} |
+
+## Source layers
+
+| Layer | Files | Nonblank LOC |
+|---|---:|---:|
+${layerRows}
+
+Classification is exclusive and precedence-ordered: root `common` is neutral common; platform and version-loader directories are loader common; remaining version-local mixin/bridge/compat paths are exact-version bridges; all other Minecraft-facing version source is version common. Aggregate bridge files/LOC include loader-owned bridge/compat files as well as the non-loader `exactVersionBridge` layer.
+
+## Duplicate groups
+
+### Exact
+
+${exactDuplicateRows}
+
+### Comment/whitespace-normalized version files
+
+${normalizedDuplicateRows}
+
+## Version-specific configuration renderers
+
+${configScreenRenderers.isEmpty() ? "None." : configScreenRenderers.collect { "- `${it}`" }.join("\n")}
+
+## Capability ownership
+
+| Capability | Policy owner | Implementation proof classes | Mixin hooks |
+|---|---|---|---|
+${capabilityRows}
+"""
+		metricsMarkdown.setText(humanReport.stripIndent().replace("\r\n", "\n").replace("\r", "\n"), "UTF-8")
+
 		println("PackForge source metrics")
 		println("productionFiles=${rows.size()}")
 		println("productionLoc=${productionLoc}")
 		println("bridgeFiles=${bridgeFiles}")
 		println("bridgeLoc=${bridgeLoc}")
 		println("bridgePercent=${bridgePercent}")
+		println("exactDuplicateGroups=${exactDuplicateGroups.size()}")
 		println("normalizedDuplicateBlocks=${duplicateGroups.size()}")
 		println("normalizedDuplicateFiles=${duplicateFiles}")
 		println("normalizedDuplicateSurplusLoc=${duplicateSurplusLoc}")
 		println("baselineNormalizedDuplicateBlocks=20")
 		println("baselineNormalizedDuplicateSurplusLoc=2375")
-		println("normalizedDuplicateBlockReductionPercent=${duplicateGroups.isEmpty() ? '100.00' : ((20 - duplicateGroups.size()) * 100 / 20).setScale(2, BigDecimal.ROUND_HALF_UP)}")
+		println("normalizedDuplicateBlockReductionPercent=${duplicateReductionPercent}")
 		println("generatedLocExcluded=0")
 		println("generatedExclusionPolicy=all build/generated/Stonecutter output lies outside handwritten source roots")
 		println("supportedExactTargetCount=${supportedExactTargets}")
+		println("exactLoaderCellCount=${exactLoaderCells}")
 		println("registeredBuildTargetCount=${targets.size()}")
+		println("publicationArtifactCount=${expectedArtifactNames.size()}")
+		println("platformTargetKeyReferences=${platformTargetKeyReferences}")
+		println("targetVersionReferences=${targetVersionReferences}")
+		println("targetConditionalLines=${targetBranchLines}")
+		println("versionSpecificConfigRenderers=${configScreenRenderers.size()}")
 		println("productionLocPerSupportedTarget=${locPerTarget}")
 		println("stonecutterConditionalBlocks=${conditionalBlocks}")
 		println("maxStonecutterConditionalBlockLines=${maxConditionalBlockLines}")
+		println("metricsJson=${project.relativePath(metricsJson)}")
+		println("metricsReport=${project.relativePath(metricsMarkdown)}")
 
+		if (!exactDuplicateGroups.isEmpty()) {
+			def details = exactDuplicateGroups.collect { group -> group.collect { row -> row.path }.join(", ") }.join("; ")
+			throw new GradleException("Byte-identical production source files remain: ${details}")
+		}
 		if (!duplicateGroups.isEmpty()) {
 			def details = duplicateGroups.collect { group -> group.collect { row -> row.path }.join(", ") }.join("; ")
 			throw new GradleException("Normalized duplicate production classes remain across version families: ${details}")
@@ -811,6 +1046,21 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 		if (!oversizedConditionalBlocks.isEmpty()) {
 			throw new GradleException("Stonecutter conditional blocks exceed 40 lines: ${oversizedConditionalBlocks.join(', ')}")
 		}
+	}
+}
+
+tasks.register("updateSourceMetricsCheckpoint") {
+	group = "verification"
+	description = "Refreshes the checked-in source-metrics snapshot at a verified stable checkpoint."
+	dependsOn reportSourceMetrics
+	inputs.files(sourceMetricsBuildJson, sourceMetricsBuildMarkdown)
+	outputs.files(sourceMetricsCheckpointJson, sourceMetricsCheckpointMarkdown)
+	doLast {
+		sourceMetricsCheckpointJson.parentFile.mkdirs()
+		sourceMetricsCheckpointJson.setText(sourceMetricsBuildJson.get().asFile.getText("UTF-8"), "UTF-8")
+		sourceMetricsCheckpointMarkdown.setText(sourceMetricsBuildMarkdown.get().asFile.getText("UTF-8"), "UTF-8")
+		println("sourceMetricsCheckpoint=${project.relativePath(sourceMetricsCheckpointJson)}")
+		println("sourceMetricsCheckpointReport=${project.relativePath(sourceMetricsCheckpointMarkdown)}")
 	}
 }
 
