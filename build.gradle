@@ -165,9 +165,13 @@ def capabilityContract = [
 	STARTUP_STATUS_OVERLAY: [classes: ["com/teenkung/packforge/startup/StartupStatus.class"], clientMixins: ["startup.GuiStartupMixin"]],
 	STARTUP_TIMINGS: [classes: ["com/teenkung/packforge/startup/StartupTimings.class"], clientMixins: ["startup.MainStartupMixin", "startup.MinecraftStartupMixin"]]
 ]
+def artifactMinecraftFor = { target, platform ->
+	def loader = target.platforms[platform.id]
+	(loader.artifactMinecraft ?: target.artifactMinecraft).toString()
+}
 def artifactName = { target, platform ->
 	def loader = target.platforms[platform.id]
-	"packforge-${platform.id}-${project.version}${loader.versionSuffix}-mc${target.artifactMinecraft}.jar"
+	"packforge-${platform.id}-${project.version}${loader.versionSuffix}-mc${artifactMinecraftFor(target, platform)}.jar"
 }
 def expectedArtifactNames = publishedTargets.collectMany { target ->
 	platformBuilds.findAll { targetSupports(target, it) }.collect { platform -> artifactName(target, platform) }
@@ -349,7 +353,9 @@ def artifactMixinConfigs = { target, platform ->
 		def forgeJava17MixinTargets = ["mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_3"]
 		def forgeDirectReloadMixinTargets = ["mc1_20_3", "mc1_20_4"]
 		return [
-			main: target.key in forgeDirectReloadMixinTargets
+			main: target.key == "mc1_20_2"
+				? "packforge.forge.java17.range20_2_4.mixins.json"
+				: target.key in forgeDirectReloadMixinTargets
 				? "packforge.forge.java17.legacy20_3_4.mixins.json"
 				: target.key in forgeJava17MixinTargets
 				? "packforge.forge.java17.mixins.json"
@@ -419,6 +425,13 @@ def verifyArtifact = { target, platform, File artifact ->
 			if ((packMetadata.pack_format as int) != (target.packMetadata.packFormat as int)) {
 				throw new GradleException("${artifact.name} has the wrong resource-pack format.")
 			}
+		} else if (target.packMetadata.schema == "supported-range") {
+			def actualRange = packMetadata.supported_formats.collect { it as int }
+			def expectedRange = [target.packMetadata.minFormat, target.packMetadata.maxFormat].collect { it as int }
+			if ((packMetadata.pack_format as int) != (target.packMetadata.packFormat as int)
+				|| actualRange != expectedRange) {
+				throw new GradleException("${artifact.name} has the wrong legacy resource-pack format range.")
+			}
 		} else {
 			def actualMin = packMetadata.min_format.collect { it as int }
 			def actualMax = packMetadata.max_format.collect { it as int }
@@ -432,7 +445,7 @@ def verifyArtifact = { target, platform, File artifact ->
 		def capabilities = new Properties()
 		archive.getInputStream(archive.getEntry("packforge-capabilities.properties")).withCloseable { capabilities.load(it) }
 		if (capabilities.getProperty("target") != target.key
-			|| capabilities.getProperty("minecraft") != target.artifactMinecraft
+			|| capabilities.getProperty("minecraft") != artifactMinecraftFor(target, platform)
 			|| capabilities.getProperty("maturity") != loader.maturity
 			|| capabilities.getProperty("beta") != (loader.maturity == "beta").toString()
 			|| capabilities.getProperty("capabilities") != target.capabilities.join(",")) {
@@ -774,7 +787,7 @@ tasks.register("validateTargetRegistry") {
 					throw new GradleException("PackForge target '${target.key}' declares unknown platform '${platformId}'.")
 				}
 			}
-			if (!(target.packMetadata.schema in ["single", "range"])) {
+			if (!(target.packMetadata.schema in ["single", "supported-range", "range"])) {
 				throw new GradleException("PackForge target '${target.key}' has unsupported pack metadata schema '${target.packMetadata.schema}'.")
 			}
 			target.platforms.each { platformId, loader ->
@@ -792,10 +805,11 @@ tasks.register("validateTargetRegistry") {
 				if (loader.maturity == "stable" && !loader.versionSuffix.toString().isEmpty()) {
 					throw new GradleException("Stable target '${target.key}' platform '${platformId}' must not use a prerelease suffix.")
 				}
-				if (target.legacyApi && platformId == "fabric" && loader.minecraftDependency != "=${target.minecraftVersion}") {
+				def exactLegacyTarget = target.legacyApi && target.requiredExactSmokeVersions.size() == 1
+				if (exactLegacyTarget && platformId == "fabric" && loader.minecraftDependency != "=${target.minecraftVersion}") {
 					throw new GradleException("Legacy Fabric target '${target.key}' must declare exact Minecraft compatibility.")
 				}
-				if (target.legacyApi && platformId in ["forge", "neoforge"] && loader.minecraftVersionRange != "[${target.minecraftVersion}]") {
+				if (exactLegacyTarget && platformId in ["forge", "neoforge"] && loader.minecraftVersionRange != "[${target.minecraftVersion}]") {
 					throw new GradleException("Legacy ${platformId} target '${target.key}' must declare an exact singleton Minecraft range.")
 				}
 				if (platformId == "fabric" && loader.loaderDependency != ">=${loader.loaderVersion}") {
@@ -961,7 +975,11 @@ tasks.register("printResolvedMatrix") {
 				javaVersion: target.javaVersion,
 				requiredExactSmokeVersions: target.requiredExactSmokeVersions,
 				platforms: target.platforms.collectEntries { platformId, loader ->
-					[(platformId): [maturity: loader.maturity, artifactMinecraft: target.artifactMinecraft, versionSuffix: loader.versionSuffix]]
+					[(platformId): [
+						maturity: loader.maturity,
+						artifactMinecraft: (loader.artifactMinecraft ?: target.artifactMinecraft).toString(),
+						versionSuffix: loader.versionSuffix
+					]]
 				}
 			]
 		}

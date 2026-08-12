@@ -38,6 +38,10 @@ def exact_loader_version(target: dict[str, Any], release: str, loader: str) -> s
     return str(value)
 
 
+def artifact_minecraft(target: dict[str, Any], loader: str) -> str:
+    return str(target["platforms"][loader].get("artifactMinecraft", target["artifactMinecraft"]))
+
+
 def build_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     rows = []
     for target in registry["targets"]:
@@ -71,7 +75,7 @@ def exact_smoke_matrix(registry: dict[str, Any], published_only: bool = False) -
                 "release": release,
                 "java_version": str(target["javaVersion"]),
                 "maturity": str(cell["maturity"]),
-                "artifact_minecraft": str(target["artifactMinecraft"]),
+                "artifact_minecraft": artifact_minecraft(target, loader),
                 "artifact_smoke": "false" if loader == "forge" else "true",
                 "production_harness": "required",
             }
@@ -100,12 +104,15 @@ def publication_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any
             platform = target["platforms"].get(loader)
             if platform is None:
                 raise SystemExit(f"published target {target_key} is missing platform metadata for {loader}")
+            loader_cells = [cell for cell in cells if loader in cell["loaderAvailability"]]
+            if not loader_cells:
+                continue
             rows.append(
                 {
                     "target": target_key,
                     "loader": str(loader),
-                    "minecraft": str(target["artifactMinecraft"]),
-                    "versions": "\n".join(str(cell["id"]) for cell in cells),
+                    "minecraft": artifact_minecraft(target, str(loader)),
+                    "versions": "\n".join(str(cell["id"]) for cell in loader_cells),
                     "version_suffix": str(platform.get("versionSuffix", "")),
                     "release_type": "release" if str(target["maturity"]) == "stable" else "beta",
                     "featured": "true" if str(target["maturity"]) == "stable" else "false",

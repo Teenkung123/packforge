@@ -35,6 +35,7 @@ project.ext.packforgeRegistryFile = registryFile
 project.ext.packforgeRegistry = registry
 project.ext.packforgeTarget = target
 project.ext.packforgePlatform = platform
+project.ext.packforgeArtifactMinecraft = (platform.artifactMinecraft ?: target.artifactMinecraft).toString()
 project.ext.packforgeMixinExtrasVersion = registry.mixinExtrasVersion
 project.ext.packforgeModVersion = rootProperties.getProperty("mod_version") + platform.versionSuffix.toString()
 project.ext.packforgeMavenGroup = rootProperties.getProperty("maven_group")
@@ -53,6 +54,16 @@ project.ext.packforgeBuildPackMetadata = { boolean fixture ->
 				max_inclusive: target.packMetadata.packFormat
 			]
 		}
+	} else if (target.packMetadata.schema == "supported-range") {
+		packSection.pack_format = target.packMetadata.packFormat
+		packSection.supported_formats = [
+			target.packMetadata.minFormat,
+			target.packMetadata.maxFormat
+		]
+		overlayFormats = [
+			min_inclusive: target.packMetadata.minFormat,
+			max_inclusive: target.packMetadata.maxFormat
+		]
 	} else if (target.packMetadata.schema == "range") {
 		packSection.min_format = target.packMetadata.minFormat
 		packSection.max_format = target.packMetadata.maxFormat
@@ -80,7 +91,7 @@ project.ext.packforgeWriteGeneratedResources = { File outputDirectory ->
 	def capabilities = target.capabilities.collect { it.toString() }.join(",")
 	def capabilityProperties = [
 		"target=${target.key}",
-		"minecraft=${target.artifactMinecraft}",
+		"minecraft=${packforgeArtifactMinecraft}",
 		"maturity=${platform.maturity}",
 		"beta=${platform.maturity == 'beta'}",
 		"capabilities=${capabilities}"

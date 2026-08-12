@@ -116,7 +116,8 @@ for line in (root / "gradle.properties").read_text(encoding="utf-8").splitlines(
         key, value = line.split("=", 1)
         properties[key.strip()] = value.strip()
 version = properties["mod_version"] + target["platforms"][platform]["versionSuffix"]
-print(f"packforge-{platform}-{version}-mc{target['artifactMinecraft']}.jar")
+artifact_minecraft = target["platforms"][platform].get("artifactMinecraft", target["artifactMinecraft"])
+print(f"packforge-{platform}-{version}-mc{artifact_minecraft}.jar")
 PY
 )"
 

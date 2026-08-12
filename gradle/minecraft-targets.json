@@ -1703,29 +1703,31 @@
       "key": "mc1_20_2",
       "id": "mc1_20_2",
       "minecraftAnchor": "1.20.2",
-      "minecraftRange": "=1.20.2",
+      "minecraftRange": ">=1.20.2 <=1.20.4",
       "sourceFamily": "mc1_20_2",
       "artifactFamily": "mc1_20_2-beta",
       "mappingMode": {"fabric":"named","forge":"official","neoforge":"official"},
-      "packFormatRange": {"min":[18,0],"max":[18,0]},
+      "packFormatRange": {"min":[18,0],"max":[22,0]},
       "loaderAvailability": ["fabric","forge","neoforge"],
       "loaderBuildVersions": {"fabric":"0.15.11","forge":"1.20.2-48.1.0","neoforge":"20.2.93"},
       "maturity": "beta",
       "supportGuarantee": "beta",
-      "requiredExactSmokeVersions": ["1.20.2"],
-      "artifactMetadataRange": "=1.20.2",
+      "requiredExactSmokeVersions": ["1.20.2","1.20.3","1.20.4"],
+      "artifactMetadataRange": ">=1.20.2 <=1.20.4",
       "quickPack": {"profile":"strict-ownership","availability":"unverified"},
       "compatibilityProfiles": ["base","quick-pack","renderer"],
       "taskSuffix": "Mc1_20_2",
       "minecraftVersion": "1.20.2",
-      "artifactMinecraft": "1.20.2",
+      "artifactMinecraft": "1.20.2-1.20.4",
       "apiAdapter": "mc1_20_1",
       "javaVersion": 17,
       "mixinCompatibility": "JAVA_17",
       "legacyApi": true,
       "packMetadata": {
-        "schema": "single",
-        "packFormat": 18
+        "schema": "supported-range",
+        "packFormat": 18,
+        "minFormat": 18,
+        "maxFormat": 22
       },
       "mixinConfigs": {
         "main": "packforge.fabric.mixins.mc1_20_2.json",
@@ -1758,7 +1760,7 @@
           "loaderVersion": "0.15.11",
           "loaderDependency": ">=0.15.11",
           "fabricApiVersion": "0.91.6+1.20.2",
-          "minecraftDependency": "=1.20.2",
+          "minecraftDependency": ">=1.20.2 <=1.20.4",
           "mappingMode": "named",
           "accessWidener": "versions/mc1_20_2/fabric/src/main/resources/packforge.accesswidener",
           "modMenuVersion": "8.0.1",
@@ -1768,15 +1770,15 @@
           "maturity": "beta",
           "versionSuffix": "-beta.3",
           "version": "1.20.2-48.1.0",
-          "versionRange": "[48.1.0,49)",
-          "minecraftVersionRange": "[1.20.2]"
+          "versionRange": "[48.1.0,50)",
+          "minecraftVersionRange": "[1.20.2,1.20.5)"
         },
         "neoforge": {
           "maturity": "beta",
           "versionSuffix": "-beta.3",
           "version": "20.2.93",
-          "versionRange": "[20.2.93,20.3)",
-          "minecraftVersionRange": "[1.20.2]"
+          "versionRange": "[20.2.93,20.5)",
+          "minecraftVersionRange": "[1.20.2,1.20.5)"
         }
       }
     },

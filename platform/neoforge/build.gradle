@@ -314,15 +314,15 @@ processResources {
 
 jar {
 	duplicatesStrategy = DuplicatesStrategy.FAIL
-	archiveFileName = "packforge-neoforge-${project.version}-mc${target.artifactMinecraft}.jar"
+	archiveFileName = "packforge-neoforge-${project.version}-mc${packforgeArtifactMinecraft}.jar"
 }
 
 if (usesNeoGradle) {
 	tasks.named("jar") {
-		archiveFileName = "packforge-neoforge-${project.version}-mc${target.artifactMinecraft}-slim.jar"
+		archiveFileName = "packforge-neoforge-${project.version}-mc${packforgeArtifactMinecraft}-slim.jar"
 	}
 	tasks.named("jarJar") {
-		archiveFileName = "packforge-neoforge-${project.version}-mc${target.artifactMinecraft}.jar"
+		archiveFileName = "packforge-neoforge-${project.version}-mc${packforgeArtifactMinecraft}.jar"
 	}
 }
 
@@ -332,5 +332,5 @@ tasks.named("sourcesJar") {
 	} else {
 		duplicatesStrategy = DuplicatesStrategy.FAIL
 	}
-	archiveFileName = "packforge-neoforge-${project.version}-mc${target.artifactMinecraft}-sources.jar"
+	archiveFileName = "packforge-neoforge-${project.version}-mc${packforgeArtifactMinecraft}-sources.jar"
 }

@@ -17,7 +17,9 @@ def javaTarget = target.javaVersion as int
 def forgeJava17MixinTargets = ["mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_3"]
 def forgeDirectReloadMixinTargets = ["mc1_20_3", "mc1_20_4"]
 def usesForgeSpecificMixinConfigs = target.key in forgeJava17MixinTargets
-def mainMixinConfig = target.key in forgeDirectReloadMixinTargets
+def mainMixinConfig = target.key == "mc1_20_2"
+	? "packforge.forge.java17.range20_2_4.mixins.json"
+	: target.key in forgeDirectReloadMixinTargets
 	? "packforge.forge.java17.legacy20_3_4.mixins.json"
 	: target.key in forgeJava17MixinTargets
 	? "packforge.forge.java17.mixins.json"
@@ -328,7 +330,7 @@ processResources {
 
 jar {
 	duplicatesStrategy = DuplicatesStrategy.FAIL
-	archiveFileName = "packforge-forge-${project.version}-mc${target.artifactMinecraft}-slim.jar"
+	archiveFileName = "packforge-forge-${project.version}-mc${packforgeArtifactMinecraft}-slim.jar"
 	manifest {
 		attributes(["MixinConfigs": "${mainMixinConfig},${clientMixinConfig}"])
 	}
@@ -337,8 +339,8 @@ jar {
 tasks.named("jarJar") {
 	duplicatesStrategy = DuplicatesStrategy.FAIL
 	archiveFileName = needsLegacyRuntimeRemap
-		? "packforge-forge-${project.version}-mc${target.artifactMinecraft}-named.jar"
-		: "packforge-forge-${project.version}-mc${target.artifactMinecraft}.jar"
+		? "packforge-forge-${project.version}-mc${packforgeArtifactMinecraft}-named.jar"
+		: "packforge-forge-${project.version}-mc${packforgeArtifactMinecraft}.jar"
 }
 
 if (needsLegacyRuntimeRemap) {
@@ -350,7 +352,7 @@ if (needsLegacyRuntimeRemap) {
 	renamer.mappings(minecraft.dependency.toSrg)
 	def renamePackForgeJar = renamer.classes("renamePackForgeJar", tasks.named("jarJar", Jar)) {
 		mappings renamer.mixin.generatedMappings
-		output.set(layout.buildDirectory.file("libs/packforge-forge-${project.version}-mc${target.artifactMinecraft}.jar"))
+		output.set(layout.buildDirectory.file("libs/packforge-forge-${project.version}-mc${packforgeArtifactMinecraft}.jar"))
 	}
 	tasks.named("assemble") {
 		dependsOn renamePackForgeJar
@@ -363,5 +365,5 @@ tasks.named("sourcesJar") {
 	} else {
 		duplicatesStrategy = DuplicatesStrategy.FAIL
 	}
-	archiveFileName = "packforge-forge-${project.version}-mc${target.artifactMinecraft}-sources.jar"
+	archiveFileName = "packforge-forge-${project.version}-mc${packforgeArtifactMinecraft}-sources.jar"
 }

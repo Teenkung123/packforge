@@ -420,7 +420,7 @@ java {
 jar {
 	inputs.property "projectName", project.name
 	duplicatesStrategy = DuplicatesStrategy.FAIL
-	archiveFileName = "packforge-fabric-${project.version}-mc${target.artifactMinecraft}.jar"
+	archiveFileName = "packforge-fabric-${project.version}-mc${packforgeArtifactMinecraft}.jar"
 
 	from("../../LICENSE") {
 		rename { "${it}_${project.name}" }
@@ -433,15 +433,15 @@ tasks.named("sourcesJar") {
 	} else {
 		duplicatesStrategy = DuplicatesStrategy.FAIL
 	}
-	archiveFileName = "packforge-fabric-${project.version}-mc${target.artifactMinecraft}-sources.jar"
+	archiveFileName = "packforge-fabric-${project.version}-mc${packforgeArtifactMinecraft}-sources.jar"
 }
 
 if (loaderConfig.mappingMode == "named") {
 	tasks.named("remapJar") {
-		archiveFileName = "packforge-fabric-${project.version}-mc${target.artifactMinecraft}.jar"
+		archiveFileName = "packforge-fabric-${project.version}-mc${packforgeArtifactMinecraft}.jar"
 	}
 	tasks.named("remapSourcesJar") {
-		archiveFileName = "packforge-fabric-${project.version}-mc${target.artifactMinecraft}-sources.jar"
+		archiveFileName = "packforge-fabric-${project.version}-mc${packforgeArtifactMinecraft}-sources.jar"
 	}
 }
 

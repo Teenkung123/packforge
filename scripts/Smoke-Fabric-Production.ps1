@@ -570,14 +570,45 @@ function Write-Utf8NoBom {
     [IO.File]::WriteAllText($Path, $Contents, $encoding)
 }
 
-function Get-ExpectedTargetMarker {
-    param([string] $ArtifactMinecraft)
+function Compare-NumericVersion {
+    param([string] $Left, [string] $Right)
 
-    $parts = $ArtifactMinecraft.Split('-', 2)
-    if ($parts.Count -eq 2) {
-        return "mc$($parts[0].Replace('.', '_'))_to_$($parts[1].Replace('.', '_'))"
+    $leftParts = @($Left.Split('.') | ForEach-Object { [int] $_ })
+    $rightParts = @($Right.Split('.') | ForEach-Object { [int] $_ })
+    $count = [Math]::Max($leftParts.Count, $rightParts.Count)
+    for ($index = 0; $index -lt $count; $index++) {
+        $leftPart = if ($index -lt $leftParts.Count) { $leftParts[$index] } else { 0 }
+        $rightPart = if ($index -lt $rightParts.Count) { $rightParts[$index] } else { 0 }
+        if ($leftPart -lt $rightPart) { return -1 }
+        if ($leftPart -gt $rightPart) { return 1 }
     }
-    return "mc$($ArtifactMinecraft.Replace('.', '_'))"
+    return 0
+}
+
+function Test-ArtifactMinecraftCoverage {
+    param([string] $ArtifactMinecraft, [string] $MinecraftVersion)
+
+    $parts = @($ArtifactMinecraft.Split('-', 2))
+    if ($parts.Count -eq 1) { return $parts[0] -ieq $MinecraftVersion }
+    return (Compare-NumericVersion -Left $MinecraftVersion -Right $parts[0]) -ge 0 `
+        -and (Compare-NumericVersion -Left $MinecraftVersion -Right $parts[1]) -le 0
+}
+
+function Get-ArtifactTargetMarker {
+    param([string] $ArtifactPath)
+
+    $archive = [IO.Compression.ZipFile]::OpenRead($ArtifactPath)
+    try {
+        $entry = $archive.GetEntry('packforge-capabilities.properties')
+        if ($null -eq $entry) { throw 'Artifact is missing packforge-capabilities.properties.' }
+        $reader = [IO.StreamReader]::new($entry.Open(), [Text.Encoding]::UTF8, $true)
+        try { $contents = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        $match = [regex]::Match($contents, '(?m)^target=(?<target>mc[0-9A-Za-z_]+)\s*$')
+        if (-not $match.Success) { throw 'Artifact capability metadata is missing a valid target marker.' }
+        return $match.Groups['target'].Value
+    } finally {
+        $archive.Dispose()
+    }
 }
 
 $clientRoot = Resolve-RequiredPath -Path $FabricClientRoot -Description 'Fabric client metadata root' -Directory
@@ -611,16 +642,10 @@ if (-not $artifactMatch.Success) {
     throw "Artifact is not a final PackForge Fabric JAR: $artifactName"
 }
 $artifactMinecraft = [string] $artifactMatch.Groups['minecraft'].Value
-$artifactVersionParts = $artifactMinecraft.Split('-')
-if ($artifactVersionParts.Count -gt 1) {
-    $matchesMinecraft = @($artifactVersionParts | Where-Object { $_ -ieq $MinecraftVersion }).Count -gt 0
-} else {
-    $matchesMinecraft = $artifactMinecraft -ieq $MinecraftVersion
-}
-if (-not $matchesMinecraft) {
+if (-not (Test-ArtifactMinecraftCoverage -ArtifactMinecraft $artifactMinecraft -MinecraftVersion $MinecraftVersion)) {
     throw "Artifact Minecraft segment '$artifactMinecraft' does not cover '$MinecraftVersion'."
 }
-$targetMarker = Get-ExpectedTargetMarker -ArtifactMinecraft $artifactMinecraft
+$targetMarker = Get-ArtifactTargetMarker -ArtifactPath $artifact
 
 $versionDirectory = Resolve-SafeRelativePath `
     -Root $clientRoot `

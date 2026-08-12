@@ -609,10 +609,29 @@ if ($platformProperty.Count -ne 1) {
     throw "PackForge target '$Target' does not support platform '$Platform'."
 }
 $platformConfig = $platformProperty[0].Value
+$artifactMinecraftProperty = @(
+    $platformConfig.PSObject.Properties | Where-Object { $_.Name -eq 'artifactMinecraft' }
+)
+$artifactMinecraft = if ($artifactMinecraftProperty.Count -eq 1) {
+    [string] $artifactMinecraftProperty[0].Value
+} else {
+    [string] $targetConfig.artifactMinecraft
+}
+$platformExactVersions = @(
+    $registry.releaseCells |
+        Where-Object {
+            [string] $_.targetKey -eq $Target -and
+            @($_.loaderAvailability | ForEach-Object { [string] $_ }) -contains $Platform
+        } |
+        ForEach-Object { [string] $_.id }
+)
+if ($platformExactVersions.Count -eq 0) {
+    $platformExactVersions = @($targetConfig.requiredExactSmokeVersions | ForEach-Object { [string] $_ })
+}
 
 $modVersion = [string] $properties['mod_version']
 $artifactVersion = $modVersion + [string] $platformConfig.versionSuffix
-$artifactName = "packforge-$Platform-$artifactVersion-mc$([string] $targetConfig.artifactMinecraft).jar"
+$artifactName = "packforge-$Platform-$artifactVersion-mc$artifactMinecraft.jar"
 
 $forgeOverride = ''
 $requestedForgeOverride = $ForgeVersionOverride
@@ -630,11 +649,7 @@ if (-not [string]::IsNullOrWhiteSpace($requestedForgeOverride)) {
     }
 
     $minecraftVersion = [string] $targetConfig.minecraftVersion
-    $supportedMinecraftVersions = @($minecraftVersion)
-    $artifactMinecraft = [string] $targetConfig.artifactMinecraft
-    if ($artifactMinecraft -match '^([0-9]+\.[0-9]+)-([0-9]+\.[0-9]+)$') {
-        $supportedMinecraftVersions = @($Matches[1], $Matches[2])
-    }
+    $supportedMinecraftVersions = @($platformExactVersions)
     $targetForgePrefix = "$minecraftVersion-"
     if ($requestedForgeOverride.Contains('-')) {
         $matchesSupportedVersion = $false
@@ -670,7 +685,7 @@ if (-not [string]::IsNullOrWhiteSpace($requestedMinecraftOverride)) {
     if ($requestedMinecraftOverride -notmatch '^[0-9]+\.[0-9]+(?:\.[0-9]+)?$') {
         throw 'MinecraftVersionOverride must be a stable Minecraft version such as 26.1.1.'
     }
-    $requiredExactVersions = @($targetConfig.requiredExactSmokeVersions | ForEach-Object { [string] $_ })
+    $requiredExactVersions = @($platformExactVersions)
     if ($requiredExactVersions -notcontains $requestedMinecraftOverride) {
         throw "MinecraftVersionOverride must target one of: $($requiredExactVersions -join ', ')."
     }

@@ -45,8 +45,10 @@ def published_targets(registry: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def artifact_name(version: str, target: dict[str, Any], loader: str) -> str:
-    suffix = str(target["platforms"][loader].get("versionSuffix", ""))
-    return f"packforge-{loader}-{version}{suffix}-mc{target['artifactMinecraft']}.jar"
+    platform = target["platforms"][loader]
+    suffix = str(platform.get("versionSuffix", ""))
+    artifact_minecraft = str(platform.get("artifactMinecraft", target["artifactMinecraft"]))
+    return f"packforge-{loader}-{version}{suffix}-mc{artifact_minecraft}.jar"
 
 
 def main() -> None:
@@ -70,13 +72,17 @@ def main() -> None:
         target_key = str(target["key"])
         cells = cells_by_target[target_key]
         for loader in target["loaderAvailability"]:
+            loader_cells = [cell for cell in cells if loader in cell["loaderAvailability"]]
+            if not loader_cells:
+                continue
             filename = artifact_name(version, target, str(loader))
+            platform = target["platforms"][loader]
             entry: dict[str, Any] = {
                 "filename": filename,
                 "loader": str(loader),
                 "target": target_key,
-                "minecraft": str(target["artifactMinecraft"]),
-                "gameVersions": [str(cell["id"]) for cell in cells],
+                "minecraft": str(platform.get("artifactMinecraft", target["artifactMinecraft"])),
+                "gameVersions": [str(cell["id"]) for cell in loader_cells],
                 "maturity": str(target["maturity"]),
                 "releaseType": "release" if str(target["maturity"]) == "stable" else "beta",
             }

@@ -275,6 +275,47 @@ if ([string]::IsNullOrWhiteSpace($fallbackLibraries)) {
 if ([IO.Path]::GetPathRoot($clientRoot).TrimEnd('\') -eq $clientRoot.TrimEnd('\')) {
     throw 'ClientRoot must not be a drive root.'
 }
+
+function Compare-NumericVersion {
+    param([string] $Left, [string] $Right)
+
+    $leftParts = @($Left.Split('.') | ForEach-Object { [int] $_ })
+    $rightParts = @($Right.Split('.') | ForEach-Object { [int] $_ })
+    $count = [Math]::Max($leftParts.Count, $rightParts.Count)
+    for ($index = 0; $index -lt $count; $index++) {
+        $leftPart = if ($index -lt $leftParts.Count) { $leftParts[$index] } else { 0 }
+        $rightPart = if ($index -lt $rightParts.Count) { $rightParts[$index] } else { 0 }
+        if ($leftPart -lt $rightPart) { return -1 }
+        if ($leftPart -gt $rightPart) { return 1 }
+    }
+    return 0
+}
+
+function Test-ArtifactMinecraftCoverage {
+    param([string] $ArtifactMinecraft, [string] $MinecraftVersion)
+
+    $parts = @($ArtifactMinecraft.Split('-', 2))
+    if ($parts.Count -eq 1) { return $parts[0] -ieq $MinecraftVersion }
+    return (Compare-NumericVersion -Left $MinecraftVersion -Right $parts[0]) -ge 0 `
+        -and (Compare-NumericVersion -Left $MinecraftVersion -Right $parts[1]) -le 0
+}
+
+function Get-ArtifactTargetMarker {
+    param([string] $ArtifactPath)
+
+    $archive = [IO.Compression.ZipFile]::OpenRead($ArtifactPath)
+    try {
+        $entry = $archive.GetEntry('packforge-capabilities.properties')
+        if ($null -eq $entry) { throw 'Artifact is missing packforge-capabilities.properties.' }
+        $reader = [IO.StreamReader]::new($entry.Open(), [Text.Encoding]::UTF8, $true)
+        try { $contents = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        $match = [regex]::Match($contents, '(?m)^target=(?<target>mc[0-9A-Za-z_]+)\s*$')
+        if (-not $match.Success) { throw 'Artifact capability metadata is missing a valid target marker.' }
+        return $match.Groups['target'].Value
+    } finally {
+        $archive.Dispose()
+    }
+}
 if ($VersionName -notmatch '^[A-Za-z0-9][0-9A-Za-z.+_-]*$') {
     throw "Unexpected $loaderDisplay production version name: $VersionName"
 }
@@ -287,7 +328,7 @@ if ($artifactLoader -ne $Loader) {
     throw "PackForge artifact loader '$artifactLoader' does not match requested loader '$Loader'."
 }
 $artifactMinecraft = $artifactMatch.Groups[2].Value
-$targetMarker = 'mc' + $artifactMinecraft.Replace('.', '_').Replace('-', '_to_')
+$targetMarker = Get-ArtifactTargetMarker -ArtifactPath $artifact
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $resourcePackSource = $ResourcePackPath
 if ([string]::IsNullOrWhiteSpace($resourcePackSource)) {
@@ -301,6 +342,10 @@ if ([string] $child.id -ne $VersionName) {
 }
 
 $parentName = [string] (Get-ObjectProperty -Object $child -Name 'inheritsFrom')
+$minecraftVersion = if ([string]::IsNullOrWhiteSpace($parentName)) { $VersionName } else { $parentName }
+if (-not (Test-ArtifactMinecraftCoverage -ArtifactMinecraft $artifactMinecraft -MinecraftVersion $minecraftVersion)) {
+    throw "Artifact Minecraft segment '$artifactMinecraft' does not cover '$minecraftVersion'."
+}
 $parent = $null
 if ([string]::IsNullOrWhiteSpace($parentName)) {
     $clientJar = Resolve-RequiredPath -Path (Join-Path $clientRoot "versions\$VersionName\$VersionName.jar") -Description 'Minecraft client JAR'
