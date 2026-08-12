@@ -1075,7 +1075,22 @@ try {
             }
         }
     } elseif ($ReloadCount -gt 0) {
-        throw 'The Minecraft window disappeared before the requested reloads completed.'
+        $exitGraceDeadline = [datetime]::UtcNow.AddSeconds(15)
+        if ($exitGraceDeadline -gt $deadline) { $exitGraceDeadline = $deadline }
+        while ([datetime]::UtcNow -lt $exitGraceDeadline) {
+            $process.Refresh()
+            if ($process.HasExited) { break }
+            Start-Sleep -Milliseconds 500
+        }
+        $process.Refresh()
+        if (-not $process.HasExited) {
+            throw 'The Minecraft window disappeared after the requested reloads, but the client did not complete shutdown.'
+        }
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            throw "Fabric client window disappeared during shutdown with exit code $($process.ExitCode)."
+        }
+        $cleanExit = $true
     } elseif ($AllowControlledTermination) {
         Stop-OwnedProcessTree -Process $process
         $controlledTermination = $true

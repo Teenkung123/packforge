@@ -14,19 +14,9 @@ group = packforgeMavenGroup
 def target = packforgeTarget
 def loaderConfig = packforgePlatform
 def javaTarget = target.javaVersion as int
-def forgeJava17MixinTargets = ["mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_3"]
-def forgeDirectReloadMixinTargets = ["mc1_20_3", "mc1_20_4"]
-def usesForgeSpecificMixinConfigs = target.key in forgeJava17MixinTargets
-def mainMixinConfig = target.key == "mc1_20_2"
-	? "packforge.forge.java17.range20_2_4.mixins.json"
-	: target.key in forgeDirectReloadMixinTargets
-	? "packforge.forge.java17.legacy20_3_4.mixins.json"
-	: target.key in forgeJava17MixinTargets
-	? "packforge.forge.java17.mixins.json"
-	: target.mixinConfigs.main.toString()
-def clientMixinConfig = target.key in forgeJava17MixinTargets
-	? "packforge.forge.java17.client.mixins.json"
-	: target.mixinConfigs.client.toString()
+def usesPlatformMixinConfigs = loaderConfig.mixinConfigs != null
+def mainMixinConfig = packforgeMixinConfigs.main.toString()
+def clientMixinConfig = packforgeMixinConfigs.client.toString()
 def needsLegacyRuntimeRemap = target.minecraftVersion in ["1.20.1", "1.20.2", "1.20.3", "1.20.4"]
 def needsLegacyJoptSimpleModule = target.key in ["mc1_21_1", "mc1_21_4"]
 def legacyMixinRefmap = "packforge.refmap.json"
@@ -241,7 +231,7 @@ sourceSets {
 		resources {
 			setSrcDirs(mainResourceDirs)
 			exclude "fabric.mod.json"
-			if (usesForgeSpecificMixinConfigs) {
+			if (usesPlatformMixinConfigs) {
 				exclude "packforge.fabric*.json"
 			}
 			exclude "packforge.accesswidener"
@@ -295,7 +285,7 @@ if (needsLegacyJoptSimpleModule) {
 processResources {
 	duplicatesStrategy = DuplicatesStrategy.FAIL
 	exclude "pack.mcmeta"
-	if (usesForgeSpecificMixinConfigs) {
+	if (usesPlatformMixinConfigs) {
 		exclude "packforge.fabric*.json"
 	}
 	inputs.file packforgeRegistryFile
@@ -306,7 +296,7 @@ processResources {
 		"forge_version_range": loaderConfig.versionRange,
 		"main_mixin_config": mainMixinConfig,
 		"client_mixin_config": clientMixinConfig,
-		"mixin_compatibility": target.mixinCompatibility
+		"mixin_compatibility": packforgeMixinCompatibility
 	]
 	inputs.properties properties
 	filesMatching("META-INF/mods.toml") {

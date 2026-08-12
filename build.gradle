@@ -349,23 +349,9 @@ def inspectWrapOperationTargets = { byte[] classBytes ->
 }
 
 def artifactMixinConfigs = { target, platform ->
-	if (platform.id == "forge") {
-		def forgeJava17MixinTargets = ["mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_3"]
-		def forgeDirectReloadMixinTargets = ["mc1_20_3", "mc1_20_4"]
-		return [
-			main: target.key == "mc1_20_2"
-				? "packforge.forge.java17.range20_2_4.mixins.json"
-				: target.key in forgeDirectReloadMixinTargets
-				? "packforge.forge.java17.legacy20_3_4.mixins.json"
-				: target.key in forgeJava17MixinTargets
-				? "packforge.forge.java17.mixins.json"
-				: target.mixinConfigs.main.toString(),
-			client: target.key in forgeJava17MixinTargets
-				? "packforge.forge.java17.client.mixins.json"
-				: target.mixinConfigs.client.toString()
-		]
-	}
-	[main: target.mixinConfigs.main.toString(), client: target.mixinConfigs.client.toString()]
+	def loader = target.platforms[platform.id]
+	def configs = loader.mixinConfigs ?: target.mixinConfigs
+	[main: configs.main.toString(), client: configs.client.toString()]
 }
 
 def artifactMetadataDescriptor = { target, platform ->
@@ -452,9 +438,10 @@ def verifyArtifact = { target, platform, File artifact ->
 			throw new GradleException("${artifact.name} contains stale target capability metadata.")
 		}
 
+		def expectedMixinCompatibility = (loader.mixinCompatibility ?: target.mixinCompatibility).toString()
 		[mainMixinConfig, clientMixinConfig].each { mixinPath ->
 			def mixin = new JsonSlurper().parseText(readZipText(archive, mixinPath.toString()))
-			if (mixin.compatibilityLevel != target.mixinCompatibility) {
+			if (mixin.compatibilityLevel != expectedMixinCompatibility) {
 				throw new GradleException("${artifact.name} has an incorrect mixin compatibility level in ${mixinPath}.")
 			}
 		}
@@ -809,6 +796,17 @@ tasks.register("validateTargetRegistry") {
 				if (exactLegacyTarget && platformId == "fabric" && loader.minecraftDependency != "=${target.minecraftVersion}") {
 					throw new GradleException("Legacy Fabric target '${target.key}' must declare exact Minecraft compatibility.")
 				}
+				if (loader.mixinCompatibility != null
+					&& !(loader.mixinCompatibility in ["JAVA_17", "JAVA_21", "JAVA_25"])) {
+					throw new GradleException("PackForge target '${target.key}' platform '${platformId}' has unsupported mixin compatibility '${loader.mixinCompatibility}'.")
+				}
+				if (loader.mixinConfigs != null) {
+					["main", "client"].each { field ->
+						if (loader.mixinConfigs[field] == null || loader.mixinConfigs[field].toString().isBlank()) {
+							throw new GradleException("PackForge target '${target.key}' platform '${platformId}' mixinConfigs is missing '${field}'.")
+						}
+					}
+				}
 				if (exactLegacyTarget && platformId in ["forge", "neoforge"] && loader.minecraftVersionRange != "[${target.minecraftVersion}]") {
 					throw new GradleException("Legacy ${platformId} target '${target.key}' must declare an exact singleton Minecraft range.")
 				}
@@ -821,11 +819,11 @@ tasks.register("validateTargetRegistry") {
 				}
 				if (platformId == "forge") {
 					def forgeBuildVersion = loader.version.toString().substring(loader.version.toString().lastIndexOf("-") + 1)
-					if (!loader.versionRange.toString().startsWith("[${forgeBuildVersion},")) {
+					if (loader.rangeCompileAnchor != true && !loader.versionRange.toString().startsWith("[${forgeBuildVersion},")) {
 						throw new GradleException("Forge target '${target.key}' must compile against the lower bound of its declared Forge range.")
 					}
 				}
-				if (platformId == "neoforge" && !loader.versionRange.toString().startsWith("[${loader.version},")) {
+				if (platformId == "neoforge" && loader.rangeCompileAnchor != true && !loader.versionRange.toString().startsWith("[${loader.version},")) {
 					throw new GradleException("NeoForge target '${target.key}' must compile against the lower bound of its declared NeoForge range.")
 				}
 				if (platformId == "fabric"
@@ -978,6 +976,7 @@ tasks.register("printResolvedMatrix") {
 					[(platformId): [
 						maturity: loader.maturity,
 						artifactMinecraft: (loader.artifactMinecraft ?: target.artifactMinecraft).toString(),
+						mixinCompatibility: (loader.mixinCompatibility ?: target.mixinCompatibility).toString(),
 						versionSuffix: loader.versionSuffix
 					]]
 				}

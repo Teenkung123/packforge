@@ -1,11 +1,11 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')]
+    [ValidatePattern('^[0-9]+\.[0-9]+(?:\.[0-9]+)?$')]
     [string] $MinecraftVersion,
 
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')]
+    [ValidatePattern('^[0-9]+\.[0-9]+(?:\.[0-9]+)?$')]
     [string] $LoaderVersion,
 
     [Parameter(Mandatory = $true)]

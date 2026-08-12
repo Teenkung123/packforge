@@ -7,8 +7,6 @@ import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static com.teenkung.packforge.config.PackForgeCapability.ATLAS_MIP_PARALLEL;
 import static com.teenkung.packforge.config.PackForgeCapability.FONT_PROVIDER_PRESELECTION;
@@ -21,7 +19,6 @@ import static com.teenkung.packforge.config.PackForgeCapability.ZIP_READ_POOL;
 public final class QuickPackCompatibility {
 	public static final String MOD_ID = "quick-pack";
 
-	private static final Pattern VERSION_PREFIX = Pattern.compile("^(\\d+)(?:\\.(\\d+))?(?:\\.(\\d+))?");
 	private static final AtomicReference<Profile> CACHED = new AtomicReference<>();
 
 	private QuickPackCompatibility() {}
@@ -75,29 +72,7 @@ public final class QuickPackCompatibility {
 	}
 
 	private static Profile classify(Optional<String> version) {
-		if (version.isEmpty() || version.get().isBlank()) {
-			return Profile.unknownVersion("");
-		}
-
-		String rawVersion = version.get().trim();
-		Matcher matcher = VERSION_PREFIX.matcher(rawVersion);
-		if (!matcher.find()) {
-			return Profile.unknownVersion(rawVersion);
-		}
-
-		try {
-			int major = Integer.parseInt(matcher.group(1));
-			int minor = matcher.group(2) == null ? -1 : Integer.parseInt(matcher.group(2));
-			if (major != 1) {
-				return Profile.unknownMajor(rawVersion);
-			}
-			if (minor != 5) {
-				return Profile.unsupportedOneMajor(rawVersion);
-			}
-			return Profile.verifiedOneFive(rawVersion);
-		} catch (NumberFormatException exception) {
-			return Profile.unknownVersion(rawVersion);
-		}
+		return Profile.moduleHandoff(version.orElse(""));
 	}
 
 	private static EnumSet<PackForgeCapability> ownershipCapabilities() {
@@ -113,16 +88,13 @@ public final class QuickPackCompatibility {
 
 	public enum Status {
 		ABSENT,
-		VERIFIED_1_5,
-		UNSUPPORTED_1_X,
-		UNKNOWN_VERSION,
-		UNKNOWN_MAJOR,
+		MODULE_HANDOFF,
 		DETECTION_FAILED
 	}
 
 	public record Profile(Status status, Optional<String> version, Set<PackForgeCapability> ownedCapabilities) {
 		public Profile {
-			status = status == null ? Status.UNKNOWN_VERSION : status;
+			status = status == null ? Status.MODULE_HANDOFF : status;
 			version = version == null ? Optional.empty() : version.flatMap(value -> {
 				String trimmed = value.trim();
 				return trimmed.isEmpty() ? Optional.empty() : Optional.of(trimmed);
@@ -136,20 +108,8 @@ public final class QuickPackCompatibility {
 			return new Profile(Status.ABSENT, Optional.empty(), Set.of());
 		}
 
-		static Profile verifiedOneFive(String version) {
-			return loaded(Status.VERIFIED_1_5, version);
-		}
-
-		static Profile unsupportedOneMajor(String version) {
-			return loaded(Status.UNSUPPORTED_1_X, version);
-		}
-
-		static Profile unknownVersion(String version) {
-			return loaded(Status.UNKNOWN_VERSION, version);
-		}
-
-		static Profile unknownMajor(String version) {
-			return loaded(Status.UNKNOWN_MAJOR, version);
+		static Profile moduleHandoff(String version) {
+			return loaded(Status.MODULE_HANDOFF, version);
 		}
 
 		static Profile detectionFailed() {
@@ -173,10 +133,7 @@ public final class QuickPackCompatibility {
 				return "";
 			}
 			return switch (status) {
-				case VERIFIED_1_5 -> "Quick Pack 1.5.x owns this path";
-				case UNSUPPORTED_1_X -> "Quick Pack version is not explicitly verified; overlap is disabled conservatively";
-				case UNKNOWN_VERSION -> "Quick Pack version is unavailable or unparsable; overlap is disabled conservatively";
-				case UNKNOWN_MAJOR -> "Quick Pack major version is unknown; overlap is disabled conservatively";
+				case MODULE_HANDOFF -> "Quick Pack owns this overlapping module";
 				case DETECTION_FAILED -> "Quick Pack metadata detection failed; overlap is disabled conservatively";
 				case ABSENT -> "";
 			};

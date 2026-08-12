@@ -66,14 +66,25 @@ class FeaturePolicyTest {
 		assertFalse(policy.loadingScreenFadeOutDisabled());
 		assertFalse(policy.loadingStatusOverlayEnabled());
 		assertTrue(policy.modelParseBatchingEnabled());
-		assertTrue(policy.quickPackDisabledReason(RESOURCE_PACK_INDEX).contains("1.5.x"));
+		assertTrue(policy.quickPackDisabledReason(RESOURCE_PACK_INDEX).contains("overlapping module"));
 	}
 
 	@Test
-	void unknownQuickPackVersionFailsClosedWithoutThrowing() {
+	void quickPackVersionMetadataIsInformationalOnly() {
+		for (String version : new String[] {"1.4.0", "1.5.0", "2.0.0", "12.4.1", "not-a-version", null}) {
+			QuickPackCompatibility.Profile profile = QuickPackCompatibility.forTesting(version);
+
+			assertEquals(QuickPackCompatibility.Status.MODULE_HANDOFF, profile.status());
+			assertTrue(profile.owns(RESOURCE_PACK_INDEX));
+			assertTrue(profile.disabledReason(RESOURCE_PACK_INDEX).contains("overlapping module"));
+		}
+	}
+
+	@Test
+	void unreadableQuickPackVersionStillHandsOffEveryOverlapModule() {
 		QuickPackCompatibility.Profile profile = QuickPackCompatibility.forTesting("not-a-version");
 
-		assertEquals(QuickPackCompatibility.Status.UNKNOWN_VERSION, profile.status());
+		assertEquals(QuickPackCompatibility.Status.MODULE_HANDOFF, profile.status());
 		assertTrue(profile.owns(RESOURCE_PACK_INDEX));
 		assertTrue(profile.owns(ZIP_READ_POOL));
 		assertTrue(profile.owns(FONT_PROVIDER_PRESELECTION));

@@ -137,7 +137,7 @@ class PackForgeConfigScreenModelTest {
 			.findFirst()
 			.orElseThrow();
 		QuickPackCompatibility.Profile quickPack = new QuickPackCompatibility.Profile(
-			QuickPackCompatibility.Status.VERIFIED_1_5,
+			QuickPackCompatibility.Status.MODULE_HANDOFF,
 			Optional.of("1.5.7"),
 			java.util.Set.of(PackForgeCapability.RESOURCE_PACK_INDEX)
 		);
