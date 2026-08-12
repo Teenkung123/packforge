@@ -21,15 +21,15 @@
     {"id":"1.20.6","minecraftAnchor":"1.20.6","sourceFamily":"mc1_20_5_6","artifactFamily":"mc1_20_5_1_21_1-beta","targetKey":"mc1_21_1","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
     {"id":"1.21","minecraftAnchor":"1.21.1","sourceFamily":"mc1_21_0_1","artifactFamily":"mc1_20_5_1_21_1-beta","targetKey":"mc1_21_1","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
     {"id":"1.21.1","minecraftAnchor":"1.21.1","sourceFamily":"mc1_21_0_1","artifactFamily":"mc1_20_5_1_21_1-beta","targetKey":"mc1_21_1","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
-    {"id":"1.21.2","minecraftAnchor":"1.21.3","sourceFamily":"mc1_21_2_3","artifactFamily":"mc1_21_2_4-beta","targetKey":"mc1_21_4","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","neoforge"],"buildStatus":"planned-verified"},
-    {"id":"1.21.3","minecraftAnchor":"1.21.3","sourceFamily":"mc1_21_2_3","artifactFamily":"mc1_21_2_4-beta","targetKey":"mc1_21_4","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned-verified"},
+    {"id":"1.21.2","minecraftAnchor":"1.21.3","sourceFamily":"mc1_21_2_3","artifactFamily":"mc1_21_2_4-beta","targetKey":"mc1_21_4","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","neoforge"],"buildStatus":"existing"},
+    {"id":"1.21.3","minecraftAnchor":"1.21.3","sourceFamily":"mc1_21_2_3","artifactFamily":"mc1_21_2_4-beta","targetKey":"mc1_21_4","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
     {"id":"1.21.4","minecraftAnchor":"1.21.4","sourceFamily":"mc1_21_4","artifactFamily":"mc1_21_2_4-beta","targetKey":"mc1_21_4","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
-    {"id":"1.21.5","minecraftAnchor":"1.21.5","sourceFamily":"mc1_21_5","artifactFamily":"mc1_21_5_8-beta","targetKey":"mc1_21_8","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned-verified"},
-    {"id":"1.21.6","minecraftAnchor":"1.21.6","sourceFamily":"mc1_21_6","artifactFamily":"mc1_21_5_8-beta","targetKey":"mc1_21_8","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned-verified"},
-    {"id":"1.21.7","minecraftAnchor":"1.21.8","sourceFamily":"mc1_21_7_8","artifactFamily":"mc1_21_5_8-beta","targetKey":"mc1_21_8","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned-verified"},
+    {"id":"1.21.5","minecraftAnchor":"1.21.5","sourceFamily":"mc1_21_5","artifactFamily":"mc1_21_5_8-beta","targetKey":"mc1_21_8","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
+    {"id":"1.21.6","minecraftAnchor":"1.21.6","sourceFamily":"mc1_21_6","artifactFamily":"mc1_21_5_8-beta","targetKey":"mc1_21_8","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
+    {"id":"1.21.7","minecraftAnchor":"1.21.8","sourceFamily":"mc1_21_7_8","artifactFamily":"mc1_21_5_8-beta","targetKey":"mc1_21_8","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
     {"id":"1.21.8","minecraftAnchor":"1.21.8","sourceFamily":"mc1_21_7_8","artifactFamily":"mc1_21_5_8-beta","targetKey":"mc1_21_8","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
-    {"id":"1.21.9","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11-beta","targetKey":"mc1_21_11","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned-verified"},
-    {"id":"1.21.10","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11-beta","targetKey":"mc1_21_11","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"planned-verified"},
+    {"id":"1.21.9","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11-beta","targetKey":"mc1_21_11","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
+    {"id":"1.21.10","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11-beta","targetKey":"mc1_21_11","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
     {"id":"1.21.11","minecraftAnchor":"1.21.11","sourceFamily":"mc1_21_9_11","artifactFamily":"mc1_21_9_11-beta","targetKey":"mc1_21_11","javaVersion":21,"maturity":"beta","supportGuarantee":"beta","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
     {"id":"26.1","minecraftAnchor":"26.1","sourceFamily":"mc26","artifactFamily":"mc26-stable","targetKey":"mc26_1_to_26_2","javaVersion":25,"maturity":"stable","supportGuarantee":"stable-primary","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
     {"id":"26.1.1","minecraftAnchor":"26.1","sourceFamily":"mc26","artifactFamily":"mc26-stable","targetKey":"mc26_1_to_26_2","javaVersion":25,"maturity":"stable","supportGuarantee":"stable-primary","loaderAvailability":["fabric","forge","neoforge"],"buildStatus":"existing"},
@@ -42,12 +42,12 @@
     {"id":"mc1_20_3_4","minecraftAnchor":"1.20.4","mandatoryExactReleases":["1.20.3","1.20.4"],"maturity":"beta","supportGuarantee":"beta","javaVersion":17,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_20_3","mc1_20_4"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-range-verified"},
     {"id":"mc1_20_5_6","minecraftAnchor":"1.20.6","mandatoryExactReleases":["1.20.5","1.20.6"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_20_5","mc1_20_6"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-range-verified"},
     {"id":"mc1_21_0_1","minecraftAnchor":"1.21.1","mandatoryExactReleases":["1.21","1.21.1"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21","mc1_21_1"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-range-verified"},
-    {"id":"mc1_21_2_3","minecraftAnchor":"1.21.3","mandatoryExactReleases":["1.21.2","1.21.3"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_2","mc1_21_3"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"planned-verified"},
-    {"id":"mc1_21_4","minecraftAnchor":"1.21.4","mandatoryExactReleases":["1.21.4"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_4"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing"},
-    {"id":"mc1_21_5","minecraftAnchor":"1.21.5","mandatoryExactReleases":["1.21.5"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_5"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"planned-verified"},
-    {"id":"mc1_21_6","minecraftAnchor":"1.21.6","mandatoryExactReleases":["1.21.6"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_6"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"planned-verified"},
-    {"id":"mc1_21_7_8","minecraftAnchor":"1.21.8","mandatoryExactReleases":["1.21.7","1.21.8"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_7","mc1_21_8"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"anchor-existing"},
-    {"id":"mc1_21_9_11","minecraftAnchor":"1.21.11","mandatoryExactReleases":["1.21.9","1.21.10","1.21.11"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_9","mc1_21_10","mc1_21_11"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"planned-verified"},
+    {"id":"mc1_21_2_3","minecraftAnchor":"1.21.3","mandatoryExactReleases":["1.21.2","1.21.3"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_2","mc1_21_3"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-range-verified"},
+    {"id":"mc1_21_4","minecraftAnchor":"1.21.4","mandatoryExactReleases":["1.21.4"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_4"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-range-verified"},
+    {"id":"mc1_21_5","minecraftAnchor":"1.21.5","mandatoryExactReleases":["1.21.5"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_5"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-range-verified"},
+    {"id":"mc1_21_6","minecraftAnchor":"1.21.6","mandatoryExactReleases":["1.21.6"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_6"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-range-verified"},
+    {"id":"mc1_21_7_8","minecraftAnchor":"1.21.8","mandatoryExactReleases":["1.21.7","1.21.8"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_7","mc1_21_8"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-range-verified"},
+    {"id":"mc1_21_9_11","minecraftAnchor":"1.21.11","mandatoryExactReleases":["1.21.9","1.21.10","1.21.11"],"maturity":"beta","supportGuarantee":"beta","javaVersion":21,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc1_21_9","mc1_21_10","mc1_21_11"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-range-verified"},
     {"id":"mc26","minecraftAnchor":"26.1","mandatoryExactReleases":["26.1","26.1.1","26.1.2","26.2"],"maturity":"stable","supportGuarantee":"stable-primary","javaVersion":25,"loaderAvailability":["fabric","forge","neoforge"],"targetKeys":["mc26_1_to_26_2"],"quickPackProfile":"strict-ownership","compatibilityProfiles":["base","quick-pack","renderer"],"buildStatus":"existing-exact-verified"}
   ],
   "registryPolicy": {
@@ -60,6 +60,138 @@
   "mixinExtrasFabricLoaderMinimum": "0.14.25",
   "fabricAsmVersion": "9.10.1",
   "fabricMixinVersion": "0.17.3+mixin.0.8.7",
+  "sharedJavaSources": [
+    {
+      "id": "runtime-resource-hash-pre-1.21.11",
+      "path": "versions/shared/common/src/main/java/com/teenkung/packforge/loader/RuntimeResourceHash.java",
+      "sourceSet": "main",
+      "targets": ["mc1_20_1", "mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]
+    },
+    {
+      "id": "reload-manager-pre-26",
+      "path": "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java",
+      "sourceSet": "main",
+      "targets": ["mc1_20_1", "mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
+    },
+    {
+      "id": "simple-reload-through-1.21.4",
+      "path": "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java",
+      "sourceSet": "main",
+      "targets": ["mc1_20_1", "mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4"]
+    },
+    {
+      "id": "config-screen-1.20.5-through-1.21.10",
+      "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java",
+      "sourceSet": "client",
+      "targets": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]
+    },
+    {
+      "id": "pack-selection-1.21-through-1.21.10",
+      "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java",
+      "sourceSet": "client",
+      "targets": ["mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]
+    },
+    {
+      "id": "loading-overlay-1.20.5-through-1.21.5",
+      "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayMixin.java",
+      "sourceSet": "client",
+      "targets": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5"]
+    },
+    {
+      "id": "options-1.20.5-through-1.21.5",
+      "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/options/OptionsMixin.java",
+      "sourceSet": "client",
+      "targets": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5"]
+    },
+    {
+      "id": "forge-mod-list-through-1.21.5",
+      "path": "versions/shared/common/src/main/java/com/teenkung/packforge/forge/ForgeModListCompat.java",
+      "sourceSet": "main",
+      "platforms": ["forge"],
+      "targets": ["mc1_20_1", "mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_3", "mc1_21_4", "mc1_21_5"]
+    },
+    {
+      "id": "bounded-sprite-decode-pre-26",
+      "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/atlas/BoundedSpriteDecode.java",
+      "sourceSet": "client",
+      "targets": ["mc1_20_1", "mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
+    },
+    {
+      "id": "bitmap-provider-definition-through-1.21.10",
+      "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java",
+      "sourceSet": "client",
+      "targets": ["mc1_20_1", "mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]
+    },
+    {
+      "id": "model-parse-optimizer-1.21.2-through-1.21.10",
+      "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/model/ModelParseOptimizer.java",
+      "sourceSet": "client",
+      "targets": ["mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]
+    },
+    {
+      "id": "shared-zip-access-1.20.2-through-1.21.11",
+      "path": "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java",
+      "sourceSet": "main",
+      "targets": ["mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
+    },
+    {
+      "id": "file-pack-archive-1.20.2-through-1.20.4",
+      "path": "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java",
+      "sourceSet": "main",
+      "targets": ["mc1_20_2", "mc1_20_3", "mc1_20_4"]
+    },
+    {
+      "id": "neoforge-entrypoint-1.20.2-through-1.20.4",
+      "path": "versions/shared/common/src/main/java/com/teenkung/packforge/neoforge/PackForgeNeoForge.java",
+      "sourceSet": "main",
+      "platforms": ["neoforge"],
+      "targets": ["mc1_20_2", "mc1_20_3", "mc1_20_4"]
+    },
+    {
+      "id": "options-1.21.6-through-1.21.11",
+      "path": "versions/shared/modern/src/client/java/com/teenkung/packforge/client/mixin/options/OptionsMixin.java",
+      "sourceSet": "client",
+      "targets": ["mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
+    },
+    {
+      "id": "forge-mod-list-1.21.6-through-1.21.11",
+      "path": "versions/shared/modern/src/main/java/com/teenkung/packforge/forge/ForgeModListCompat.java",
+      "sourceSet": "main",
+      "platforms": ["forge"],
+      "targets": ["mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
+    },
+    {
+      "id": "font-bitmap-cache-1.21.9-through-1.21.11",
+      "path": "versions/shared/modern/src/client/java/com/teenkung/packforge/client/font/FontBitmapProviderCache.java",
+      "sourceSet": "client",
+      "targets": ["mc1_21_9", "mc1_21_10", "mc1_21_11"]
+    },
+    {
+      "id": "file-pack-resources-1.21.11-plus",
+      "path": "versions/shared/modern/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.java",
+      "sourceSet": "main",
+      "targets": ["mc1_21_11", "mc26_1_to_26_2"]
+    },
+    {
+      "id": "font-provider-stack-key-1.21.11-plus",
+      "path": "versions/shared/modern/src/client/java/com/teenkung/packforge/client/font/FontProviderStackKey.java",
+      "sourceSet": "client",
+      "targets": ["mc1_21_11", "mc26_1_to_26_2"]
+    },
+    {
+      "id": "font-manager-preparation-accessor-1.21.11-plus",
+      "path": "versions/shared/modern/src/client/java/com/teenkung/packforge/client/mixin/font/FontManagerPreparationAccessor.java",
+      "sourceSet": "client",
+      "targets": ["mc1_21_11", "mc26_1_to_26_2"]
+    },
+    {
+      "id": "capped-sprite-loader-mc26-fabric-forge",
+      "path": "versions/shared/mc26/src/client/java/com/teenkung/packforge/client/atlas/CappedSpriteResourceLoader.java",
+      "sourceSet": "client",
+      "platforms": ["fabric", "forge"],
+      "targets": ["mc26_1_to_26_2"]
+    }
+  ],
   "targets": [
     {
       "key": "mc26_1_to_26_2",

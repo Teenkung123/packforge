@@ -114,7 +114,7 @@ $versionName = "$MinecraftVersion-fabric-$LoaderVersion"
 $versionDirectory = Join-Path $root "versions\$versionName"
 $librariesRoot = Join-Path $root 'libraries'
 $assetsRoot = Join-Path $root 'assets'
-$nativesRoot = Join-Path $root 'natives'
+$nativesRoot = Join-Path $root (Join-Path 'natives' $versionName)
 New-Item -ItemType Directory -Path $versionDirectory, $librariesRoot, (Join-Path $assetsRoot 'indexes'), (Join-Path $assetsRoot 'objects'), $nativesRoot, (Join-Path $root 'log_configs') -Force | Out-Null
 
 $manifest = Invoke-RestMethod -Uri 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'

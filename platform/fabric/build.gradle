@@ -146,6 +146,7 @@ if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
 		include "com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"
 	})
 }
+mainJavaSources.addAll(packforgeSharedMainJavaSources)
 def clientResourceDirs = [
 	new File(packforgeCommonRoot, "src/client/resources"),
 	new File(packforgeAdapterCommonRoot, "src/client/resources"),
@@ -218,6 +219,7 @@ if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
 		include "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
 	})
 }
+clientJavaSources.addAll(packforgeSharedClientJavaSources)
 
 sourceSets {
 	main {

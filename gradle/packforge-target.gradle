@@ -45,6 +45,16 @@ project.ext.packforgeCommonRoot = new File(repositoryRoot, "common")
 project.ext.packforgeAdapterCommonRoot = new File(repositoryRoot, "versions/${target.apiAdapter}/common")
 project.ext.packforgeAdapterPlatformRoot = new File(repositoryRoot, "versions/${target.apiAdapter}/${platformId}")
 
+def selectedSharedJavaSources = (registry.sharedJavaSources ?: []).findAll { source ->
+	target.key in source.targets && (source.platforms == null || platformId in source.platforms)
+}
+project.ext.packforgeSharedMainJavaSources = selectedSharedJavaSources
+	.findAll { source -> source.sourceSet == "main" }
+	.collect { source -> new File(repositoryRoot, source.path.toString()) }
+project.ext.packforgeSharedClientJavaSources = selectedSharedJavaSources
+	.findAll { source -> source.sourceSet == "client" }
+	.collect { source -> new File(repositoryRoot, source.path.toString()) }
+
 project.ext.packforgeBuildPackMetadata = { boolean fixture ->
 	def packSection = [description: "PackForge resources"]
 	def overlayFormats = null

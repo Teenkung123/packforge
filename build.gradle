@@ -1,5 +1,6 @@
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
+import java.security.MessageDigest
 import java.util.zip.ZipFile
 
 version = project.mod_version
@@ -666,9 +667,157 @@ def nestedCommand = { platform, target, taskName ->
 	launcher + ["-p", platform.path, "-Ppackforge_target=${target.key}", taskName]
 }
 
+def handwrittenProductionJava = files(
+	fileTree("common") {
+		include "src/main/java/**/*.java"
+		include "src/client/java/**/*.java"
+	},
+	fileTree("platform") {
+		include "*/src/main/java/**/*.java"
+		include "*/src/client/java/**/*.java"
+	},
+	fileTree("versions") {
+		include "**/src/main/java/**/*.java"
+		include "**/src/client/java/**/*.java"
+	}
+)
+def reportSourceMetrics = tasks.register("reportSourceMetrics") {
+	group = "verification"
+	description = "Reports deterministic handwritten-source metrics and rejects duplicate adapter classes."
+	inputs.file(registryFile)
+	outputs.upToDateWhen { false }
+
+	doLast {
+		def countLoc = { File source ->
+			source.readLines("UTF-8").count { line -> !line.trim().isEmpty() }
+		}
+		def normalizeJavaBlock = { File source ->
+			source.getText("UTF-8")
+				.replaceAll(/(?s)\/\*.*?\*\//, "")
+				.replaceAll(/(?m)\/\/.*$/, "")
+				.replaceAll(/\s+/, "")
+		}
+		def hashText = { String text ->
+			MessageDigest.getInstance("SHA-256")
+				.digest(text.getBytes("UTF-8"))
+				.encodeHex()
+				.toString()
+		}
+		def rows = handwrittenProductionJava.files
+			.collect { source ->
+				def relativePath = project.relativePath(source).replace('\\', '/')
+				def bridge = relativePath.startsWith("platform/")
+					|| (relativePath.startsWith("versions/") && relativePath.contains("/mixin/"))
+					|| relativePath.matches("versions/[^/]+/(?:fabric|forge|neoforge)/src/.*")
+					|| relativePath.matches(".*/com/teenkung/packforge/(?:fabric|forge|neoforge)/.*")
+					|| (source.name ==~ /.*(?:Bridge|Compat|Accessor|Invoker)\.java/)
+				[
+					file: source,
+					path: relativePath,
+					loc: countLoc(source),
+					bridge: bridge,
+					normalizedHash: relativePath.startsWith("versions/")
+						? hashText(normalizeJavaBlock(source))
+						: null
+				]
+			}
+			.sort { left, right -> left.path <=> right.path }
+
+		def versionRows = rows.findAll { row -> row.normalizedHash != null }
+		def duplicateGroups = versionRows
+			.groupBy { row -> row.normalizedHash }
+			.values()
+			.findAll { group -> group.size() > 1 }
+			.collect { group -> group.sort { left, right -> left.path <=> right.path } }
+			.sort { left, right -> left.first().path <=> right.first().path }
+		int duplicateFiles = duplicateGroups.sum(0) { group -> group.size() }
+		int duplicateSurplusLoc = duplicateGroups.sum(0) { group ->
+			group.drop(1).sum(0) { row -> row.loc }
+		}
+		int productionLoc = rows.sum(0) { row -> row.loc }
+		int bridgeLoc = rows.findAll { row -> row.bridge }.sum(0) { row -> row.loc }
+		int bridgeFiles = rows.count { row -> row.bridge }
+		int supportedExactTargets = registry.releaseCells.size()
+		def locPerTarget = supportedExactTargets == 0
+			? BigDecimal.ZERO
+			: (productionLoc / supportedExactTargets).setScale(2, BigDecimal.ROUND_HALF_UP)
+		def bridgePercent = productionLoc == 0
+			? BigDecimal.ZERO
+			: (bridgeLoc * 100 / productionLoc).setScale(2, BigDecimal.ROUND_HALF_UP)
+
+		int conditionalBlocks = 0
+		int maxConditionalBlockLines = 0
+		def oversizedConditionalBlocks = []
+		rows.each { row ->
+			int depth = 0
+			int blockLines = 0
+			int blockStart = 0
+			row.file.readLines("UTF-8").eachWithIndex { line, index ->
+				def trimmed = line.trim()
+				if (trimmed ==~ /\/\/\?\s*if\b.*/) {
+					if (depth == 0) {
+						conditionalBlocks++
+						blockLines = 0
+						blockStart = index + 1
+					}
+					depth++
+				} else if (trimmed ==~ /\/\/\?\s*}\s*/) {
+					depth--
+					if (depth < 0) {
+						throw new GradleException("${row.path}:${index + 1} closes a Stonecutter block that was not opened.")
+					}
+					if (depth == 0) {
+						maxConditionalBlockLines = Math.max(maxConditionalBlockLines, blockLines)
+						if (blockLines > 40) {
+							oversizedConditionalBlocks << "${row.path}:${blockStart} (${blockLines} lines)"
+						}
+					}
+				} else if (depth > 0) {
+					blockLines++
+				}
+			}
+			if (depth != 0) {
+				throw new GradleException("${row.path} contains an unclosed Stonecutter conditional block.")
+			}
+		}
+
+		println("PackForge source metrics")
+		println("productionFiles=${rows.size()}")
+		println("productionLoc=${productionLoc}")
+		println("bridgeFiles=${bridgeFiles}")
+		println("bridgeLoc=${bridgeLoc}")
+		println("bridgePercent=${bridgePercent}")
+		println("normalizedDuplicateBlocks=${duplicateGroups.size()}")
+		println("normalizedDuplicateFiles=${duplicateFiles}")
+		println("normalizedDuplicateSurplusLoc=${duplicateSurplusLoc}")
+		println("baselineNormalizedDuplicateBlocks=20")
+		println("baselineNormalizedDuplicateSurplusLoc=2375")
+		println("normalizedDuplicateBlockReductionPercent=${duplicateGroups.isEmpty() ? '100.00' : ((20 - duplicateGroups.size()) * 100 / 20).setScale(2, BigDecimal.ROUND_HALF_UP)}")
+		println("generatedLocExcluded=0")
+		println("generatedExclusionPolicy=all build/generated/Stonecutter output lies outside handwritten source roots")
+		println("supportedExactTargetCount=${supportedExactTargets}")
+		println("registeredBuildTargetCount=${targets.size()}")
+		println("productionLocPerSupportedTarget=${locPerTarget}")
+		println("stonecutterConditionalBlocks=${conditionalBlocks}")
+		println("maxStonecutterConditionalBlockLines=${maxConditionalBlockLines}")
+
+		if (!duplicateGroups.isEmpty()) {
+			def details = duplicateGroups.collect { group -> group.collect { row -> row.path }.join(", ") }.join("; ")
+			throw new GradleException("Normalized duplicate production classes remain across version families: ${details}")
+		}
+		if (bridgeLoc * 2 >= productionLoc) {
+			throw new GradleException("Version/loader bridges must remain a minority of handwritten production LOC.")
+		}
+		if (!oversizedConditionalBlocks.isEmpty()) {
+			throw new GradleException("Stonecutter conditional blocks exceed 40 lines: ${oversizedConditionalBlocks.join(', ')}")
+		}
+	}
+}
+
 tasks.register("validateTargetRegistry") {
 	group = "verification"
 	description = "Validates the PackForge target registry and adapter declarations."
+	dependsOn reportSourceMetrics
 	inputs.file registryFile
 	inputs.files(fileTree("versions") {
 		include "**/*Mixin.java"
@@ -690,6 +839,55 @@ tasks.register("validateTargetRegistry") {
 	if (!(registry.sourceFamilies instanceof List)
 		|| registry.sourceFamilies.collect { it.id } != requiredSourceFamilyIds) {
 		throw new GradleException("Registry sourceFamilies must contain the canonical twelve-family order.")
+	}
+	if (!(registry.sharedJavaSources instanceof List) || registry.sharedJavaSources.isEmpty()) {
+		throw new GradleException("Registry sharedJavaSources must declare canonical cross-family source ownership.")
+	}
+	def sharedSourceIds = registry.sharedJavaSources.collect { source -> source.id }
+	def sharedSourcePaths = registry.sharedJavaSources.collect { source -> source.path }
+	if (sharedSourceIds.any { it == null || it.toString().isBlank() }
+		|| sharedSourceIds.size() != sharedSourceIds.toSet().size()) {
+		throw new GradleException("Registry sharedJavaSources IDs must be present and unique.")
+	}
+	if (sharedSourcePaths.any { it == null || it.toString().isBlank() }
+		|| sharedSourcePaths.size() != sharedSourcePaths.toSet().size()) {
+		throw new GradleException("Registry sharedJavaSources paths must be present and unique.")
+	}
+	def canonicalSharedRoot = file("versions/shared").canonicalFile.toPath()
+	registry.sharedJavaSources.each { source ->
+		["id", "path", "sourceSet", "targets"].each { field ->
+			if (source[field] == null) {
+				throw new GradleException("Shared Java source '${source.id ?: '<unknown>'}' is missing '${field}'.")
+			}
+		}
+		if (!(source.sourceSet in ["main", "client"])) {
+			throw new GradleException("Shared Java source '${source.id}' has invalid sourceSet '${source.sourceSet}'.")
+		}
+		def sourcePath = source.path.toString().replace('\\', '/')
+		def sourceFile = file(sourcePath).canonicalFile
+		if (!sourceFile.toPath().startsWith(canonicalSharedRoot)
+			|| !sourcePath.contains("/src/${source.sourceSet}/java/")
+			|| !sourceFile.isFile()) {
+			throw new GradleException("Shared Java source '${source.id}' must be an existing ${source.sourceSet} Java file under versions/shared: ${source.path}")
+		}
+		if (!(source.targets instanceof List)
+			|| source.targets.isEmpty()
+			|| source.targets.any { targetKey -> !targetKeys.contains(targetKey.toString()) }) {
+			throw new GradleException("Shared Java source '${source.id}' references an undeclared target.")
+		}
+		if (source.platforms != null) {
+			if (!(source.platforms instanceof List)
+				|| source.platforms.isEmpty()
+				|| source.platforms.any { platformId -> !(platformId in ["fabric", "forge", "neoforge"]) }) {
+				throw new GradleException("Shared Java source '${source.id}' has invalid platform filters.")
+			}
+			source.targets.each { targetKey ->
+				def sharedTarget = targets.find { target -> target.key == targetKey }
+				if (source.platforms.any { platformId -> sharedTarget.platforms[platformId] == null }) {
+					throw new GradleException("Shared Java source '${source.id}' selects a loader unavailable on target '${targetKey}'.")
+				}
+			}
+		}
 	}
 	def declaredTargetKeys = targetKeys as Set
 	registry.sourceFamilies.each { family ->
@@ -920,14 +1118,23 @@ tasks.register("validateTargetRegistry") {
 			"ReloadableResourceManagerMixin.java": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"],
 			"SharedZipFileAccessMixin.java": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]
 		]
+		def registeredSharedSources = { target, fileName, sourceSet ->
+			registry.sharedJavaSources.findAll { source ->
+				target.key in source.targets
+					&& source.sourceSet == sourceSet
+					&& file(source.path.toString()).name == fileName
+			}.collect { source -> file(source.path.toString()) }
+		}
 		def effectiveTargetJavaSources = { target, fileName ->
 			def roots = [file("versions/${target.apiAdapter}")]
 			if (target.key in (sharedSourceTargets[fileName] ?: [])) {
 				roots << file("versions/mc1_21_shared/common/src/main/java")
 			}
-			roots.collectMany { root ->
+			def sources = roots.collectMany { root ->
 				fileTree(root) { include "**/${fileName}" }.files
-			}.unique { it.canonicalPath }
+			}
+			sources.addAll(registeredSharedSources(target, fileName, "main"))
+			sources.unique { it.canonicalPath }
 		}
 		def sharedClientTargets = ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]
 		def effectiveTargetClientSources = { target, fileName ->
@@ -935,9 +1142,11 @@ tasks.register("validateTargetRegistry") {
 			if (target.key in sharedClientTargets) {
 				roots << file("versions/mc1_21_shared/common/src/client/java")
 			}
-			roots.collectMany { root ->
+			def sources = roots.collectMany { root ->
 				fileTree(root) { include "**/${fileName}" }.files
-			}.unique { it.canonicalPath }
+			}
+			sources.addAll(registeredSharedSources(target, fileName, "client"))
+			sources.unique { it.canonicalPath }
 		}
 		sharedClientTargets.each { targetKey ->
 			def target = targets.find { it.key == targetKey }
@@ -1058,6 +1267,7 @@ tasks.register("printResolvedMatrix") {
 			releaseSequence: registry.releaseSequence,
 			releaseCells: registry.releaseCells,
 			sourceFamilies: registry.sourceFamilies,
+			sharedJavaSources: registry.sharedJavaSources,
 			targets: resolvedTargets
 		])))
 	}

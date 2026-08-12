@@ -154,6 +154,8 @@ if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
 		include "com/teenkung/packforge/neoforge/PackForgeNeoForge.java"
 	})
 }
+mainJavaSources.addAll(packforgeSharedMainJavaSources)
+mainJavaSources.addAll(packforgeSharedClientJavaSources)
 def mainResourceDirs = [
 	new File(packforgeCommonRoot, "src/main/resources"),
 	new File(packforgeCommonRoot, "src/client/resources"),
