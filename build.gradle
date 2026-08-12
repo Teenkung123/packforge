@@ -93,7 +93,7 @@ def capabilityContract = [
 	SHADER_STALL_DIAGNOSTICS: [classes: ["com/teenkung/packforge/loader/ReloadListenerTelemetry.class"], mainMixins: ["observe.SimpleReloadInstanceMixin"]],
 	LOADING_STATUS_OVERLAY: [classes: ["com/teenkung/packforge/loader/ReloadStatus.class"], clientMixins: ["ui.LoadingOverlayMixin"]],
 	LOADING_FADE_CONTROL: [classes: ["com/teenkung/packforge/loader/ReloadStatus.class"], clientMixins: ["ui.LoadingOverlayMixin"]],
-	RELOAD_SUMMARY_TOAST: [clientMixins: ["ui.LoadingOverlayMixin"]],
+	RELOAD_SUMMARY_TOAST: [anyClientMixins: ["ui.LoadingOverlayMixin", "ui.LoadingOverlayToastMixin"]],
 	IMMEDIATELY_FAST_FONT_ATLAS_COMPAT: [
 		classes: ["com/teenkung/packforge/client/compat/ImmediatelyFastFontAtlasCompat.class"],
 		anyClientMixins: ["compat.ShaderManagerCompatMixin", "options.OptionsMixin"]
@@ -430,11 +430,23 @@ def verifyArtifact = { target, platform, File artifact ->
 
 		def capabilities = new Properties()
 		archive.getInputStream(archive.getEntry("packforge-capabilities.properties")).withCloseable { capabilities.load(it) }
-		if (capabilities.getProperty("target") != target.key
-			|| capabilities.getProperty("minecraft") != artifactMinecraftFor(target, platform)
-			|| capabilities.getProperty("maturity") != loader.maturity
-			|| capabilities.getProperty("beta") != (loader.maturity == "beta").toString()
-			|| capabilities.getProperty("capabilities") != target.capabilities.join(",")) {
+		def expectedCapabilityProperties = [
+			target: target.key.toString(),
+			minecraft: artifactMinecraftFor(target, platform),
+			maturity: loader.maturity.toString(),
+			beta: (loader.maturity == "beta").toString(),
+			capabilities: target.capabilities.join(",")
+		]
+		(target.capabilityMinimumMinecraft ?: [:]).each { capability, minimum ->
+			expectedCapabilityProperties["capabilityFloor.${capability}".toString()] = minimum.toString()
+		}
+		(target.mixinMinimumMinecraft ?: [:]).each { mixin, minimum ->
+			expectedCapabilityProperties["mixinFloor.${mixin}".toString()] = minimum.toString()
+		}
+		def actualCapabilityProperties = capabilities.stringPropertyNames().collectEntries { key ->
+			[(key): capabilities.getProperty(key)]
+		}
+		if (actualCapabilityProperties != expectedCapabilityProperties) {
 			throw new GradleException("${artifact.name} contains stale target capability metadata.")
 		}
 
@@ -722,8 +734,26 @@ tasks.register("validateTargetRegistry") {
 		if (!requiredSourceFamilyIds.contains(cell.sourceFamily.toString())) {
 			throw new GradleException("Release cell '${cell.id}' references an unknown source family '${cell.sourceFamily}'.")
 		}
-		if (!cell.buildStatus.toString().startsWith("planned") && !targetKeys.contains(cell.targetKey.toString())) {
-			throw new GradleException("Built release cell '${cell.id}' references undeclared target '${cell.targetKey}'.")
+		def cellTarget = targets.find { it.key == cell.targetKey }
+		if (cellTarget == null) {
+			throw new GradleException("Release cell '${cell.id}' references undeclared target '${cell.targetKey}'.")
+		}
+		if (!cellTarget.requiredExactSmokeVersions.contains(cell.id.toString())) {
+			throw new GradleException("Release cell '${cell.id}' is not included in target '${cell.targetKey}' exact smoke declarations.")
+		}
+		if ((cell.javaVersion as int) != (cellTarget.javaVersion as int)) {
+			throw new GradleException("Release cell '${cell.id}' has a stale Java level for '${cell.targetKey}'.")
+		}
+		if (cell.loaderAvailability.any { !cellTarget.loaderAvailability.contains(it) }) {
+			throw new GradleException("Release cell '${cell.id}' declares a loader unavailable on target '${cell.targetKey}'.")
+		}
+		def exactLoaderVersions = cellTarget.requiredExactSmokeLoaderVersions ?: [:]
+		def releaseLoaderVersions = exactLoaderVersions[cell.id.toString()] ?: [:]
+		cell.loaderAvailability.findAll { it in ["forge", "neoforge"] }.each { loaderId ->
+			if (cell.id != cellTarget.minecraftVersion
+				&& releaseLoaderVersions[loaderId] == null) {
+				throw new GradleException("Release cell '${cell.id}' is missing its exact ${loaderId} production-smoke coordinate on target '${cell.targetKey}'.")
+			}
 		}
 	}
 	if (registry.registryPolicy?.pre26Maturity != "beta"
@@ -765,6 +795,46 @@ tasks.register("validateTargetRegistry") {
 			}
 			if (!(target.compatibilityProfiles instanceof List) || !target.compatibilityProfiles.contains("base")) {
 				throw new GradleException("PackForge target '${target.key}' must declare the base compatibility profile.")
+			}
+			def capabilityFloors = target.capabilityMinimumMinecraft ?: [:]
+			if (!(capabilityFloors instanceof Map)) {
+				throw new GradleException("PackForge target '${target.key}' capabilityMinimumMinecraft must be a map.")
+			}
+			capabilityFloors.each { capability, minimum ->
+				if (!target.capabilities.contains(capability.toString())) {
+					throw new GradleException("PackForge target '${target.key}' floors undeclared capability '${capability}'.")
+				}
+				if (!(minimum.toString() ==~ /\d+(?:\.\d+)*/)
+					|| !target.requiredExactSmokeVersions.contains(minimum.toString())) {
+					throw new GradleException("PackForge target '${target.key}' capability '${capability}' has invalid floor '${minimum}'.")
+				}
+			}
+			def mixinFloors = target.mixinMinimumMinecraft ?: [:]
+			if (!(mixinFloors instanceof Map)) {
+				throw new GradleException("PackForge target '${target.key}' mixinMinimumMinecraft must be a map.")
+			}
+			if (!mixinFloors.isEmpty()) {
+				def configuredMixins = [] as Set
+				[target.mixinConfigs.main, target.mixinConfigs.client].each { descriptorName ->
+					def descriptorFiles = fileTree("versions/${target.apiAdapter}/common") {
+						include "**/${descriptorName}"
+					}.files
+					if (descriptorFiles.size() != 1) {
+						throw new GradleException("PackForge target '${target.key}' cannot resolve mixin descriptor '${descriptorName}' for floor validation.")
+					}
+					def descriptor = new JsonSlurper().parse(descriptorFiles.first())
+					(descriptor.mixins ?: []).each { configuredMixins << "${descriptor.package}.${it}".toString() }
+					(descriptor.client ?: []).each { configuredMixins << "${descriptor.package}.${it}".toString() }
+				}
+				mixinFloors.each { mixin, minimum ->
+					if (!(minimum.toString() ==~ /\d+(?:\.\d+)*/)
+						|| !target.requiredExactSmokeVersions.contains(minimum.toString())) {
+						throw new GradleException("PackForge target '${target.key}' mixin '${mixin}' has invalid floor '${minimum}'.")
+					}
+					if (!configuredMixins.any { it.endsWith(mixin.toString()) }) {
+						throw new GradleException("PackForge target '${target.key}' floors unconfigured mixin '${mixin}'.")
+					}
+				}
 			}
 			if (target.platforms.isEmpty()) {
 				throw new GradleException("PackForge target '${target.key}' must enable at least one platform.")

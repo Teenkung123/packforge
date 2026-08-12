@@ -1,5 +1,6 @@
 package com.teenkung.packforge.config;
 
+import com.teenkung.packforge.compat.RuntimeMinecraftVersion;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -50,5 +51,27 @@ class PackForgeCapabilitiesTest {
 		PackForgeCapabilityProfile profile = PackForgeCapabilityProfile.safeFallback();
 		assertTrue(profile.available().isEmpty());
 		assertEquals(PackForgeCapability.values().length, profile.unavailable().size());
+	}
+
+	@Test
+	void capabilityFloorsDisableOnlyUnsupportedModules() {
+		Properties properties = new Properties();
+		properties.setProperty("target", "mc1_21_9_11");
+		properties.setProperty("capabilities", "RESOURCE_PACK_INDEX,ATLAS_DECODE_BATCHING");
+		properties.setProperty("capabilityFloor.ATLAS_DECODE_BATCHING", "1.21.11");
+		PackForgeCapabilityProfile profile = PackForgeCapabilityProfile.fromProperties(properties);
+
+		try {
+			RuntimeMinecraftVersion.configure("1.21.10");
+			assertTrue(profile.supports(PackForgeCapability.RESOURCE_PACK_INDEX));
+			assertFalse(profile.supports(PackForgeCapability.ATLAS_DECODE_BATCHING));
+			assertTrue(profile.unavailableReason(PackForgeCapability.ATLAS_DECODE_BATCHING)
+				.orElseThrow().contains("Requires Minecraft 1.21.11"));
+
+			RuntimeMinecraftVersion.configure("1.21.11");
+			assertTrue(profile.supports(PackForgeCapability.ATLAS_DECODE_BATCHING));
+		} finally {
+			RuntimeMinecraftVersion.configure("");
+		}
 	}
 }

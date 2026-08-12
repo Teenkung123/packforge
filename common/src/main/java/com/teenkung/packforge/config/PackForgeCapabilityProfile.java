@@ -1,5 +1,7 @@
 package com.teenkung.packforge.config;
 
+import com.teenkung.packforge.compat.RuntimeMinecraftVersion;
+
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
@@ -74,16 +76,27 @@ public final class PackForgeCapabilityProfile {
 	}
 
 	public boolean supports(PackForgeCapability capability) {
-		return available.contains(Objects.requireNonNull(capability, "capability"));
+		Objects.requireNonNull(capability, "capability");
+		if (!available.contains(capability)) {
+			return false;
+		}
+		String minimum = properties.getProperty("capabilityFloor." + capability.name());
+		return minimum == null || minimum.isBlank() || RuntimeMinecraftVersion.isAtLeast(minimum.trim());
 	}
 
 	public Set<PackForgeCapability> available() {
-		return available;
+		EnumSet<PackForgeCapability> effective = EnumSet.noneOf(PackForgeCapability.class);
+		for (PackForgeCapability capability : available) {
+			if (supports(capability)) {
+				effective.add(capability);
+			}
+		}
+		return Collections.unmodifiableSet(effective);
 	}
 
 	public Set<PackForgeCapability> unavailable() {
 		EnumSet<PackForgeCapability> unavailable = EnumSet.allOf(PackForgeCapability.class);
-		unavailable.removeAll(available);
+		unavailable.removeAll(available());
 		return Collections.unmodifiableSet(unavailable);
 	}
 
@@ -95,6 +108,12 @@ public final class PackForgeCapabilityProfile {
 		Objects.requireNonNull(capability, "capability");
 		if (supports(capability)) {
 			return Optional.empty();
+		}
+		String minimum = properties.getProperty("capabilityFloor." + capability.name());
+		if (available.contains(capability) && minimum != null && !minimum.isBlank()) {
+			String runtime = RuntimeMinecraftVersion.current();
+			return Optional.of("Requires Minecraft " + minimum.trim() + " or newer"
+				+ (runtime.isBlank() ? "" : " (running " + runtime + ")"));
 		}
 		String configured = properties.getProperty("reason." + capability.name());
 		if (configured == null || configured.isBlank()) {

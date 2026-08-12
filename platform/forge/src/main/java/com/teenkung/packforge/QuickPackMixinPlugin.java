@@ -1,5 +1,6 @@
 package com.teenkung.packforge;
 
+import com.teenkung.packforge.compat.VersionedMixinGate;
 import com.teenkung.packforge.forge.ForgeModListCompat;
 import net.minecraftforge.fml.loading.FMLLoader;
 import net.minecraftforge.fml.loading.VersionInfo;
@@ -22,13 +23,18 @@ public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
 		"mixin.loader.SharedZipFileAccessMixin",
 		"client.mixin.font.FontManagerMixin",
 		"client.mixin.font.FontSetMixin",
-		"client.mixin.ui.LoadingOverlayMixin"
+		"client.mixin.ui.LoadingOverlayMixin",
+		"client.mixin.ui.LoadingOverlayToastMixin"
 	);
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+		String minecraftVersion = minecraftVersion();
+		if (!VersionedMixinGate.shouldApply(mixinClassName, minecraftVersion)) {
+			return false;
+		}
 		if (isReloadObserverMixin(mixinClassName)
-			&& !shouldApplyReloadObserver(mixinClassName, minecraftVersion())) {
+			&& !shouldApplyReloadObserver(mixinClassName, minecraftVersion)) {
 			return false;
 		}
 		return !ForgeModListCompat.isLoaded(QUICK_PACK)

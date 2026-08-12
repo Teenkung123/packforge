@@ -1,5 +1,6 @@
 package com.teenkung.packforge;
 
+import com.teenkung.packforge.compat.VersionedMixinGate;
 import net.fabricmc.loader.api.FabricLoader;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
@@ -17,13 +18,24 @@ public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
 		"mixin.loader.SharedZipFileAccessMixin",
 		"client.mixin.font.FontManagerMixin",
 		"client.mixin.font.FontSetMixin",
-		"client.mixin.ui.LoadingOverlayMixin"
+		"client.mixin.ui.LoadingOverlayMixin",
+		"client.mixin.ui.LoadingOverlayToastMixin"
 	);
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		return !FabricLoader.getInstance().isModLoaded(QUICK_PACK)
+		FabricLoader loader = FabricLoader.getInstance();
+		if (!VersionedMixinGate.shouldApply(mixinClassName, minecraftVersion(loader))) {
+			return false;
+		}
+		return !loader.isModLoaded(QUICK_PACK)
 			|| QUICK_PACK_OWNED_MIXINS.stream().noneMatch(mixinClassName::endsWith);
+	}
+
+	private static String minecraftVersion(FabricLoader loader) {
+		return loader.getModContainer("minecraft")
+			.map(container -> container.getMetadata().getVersion().getFriendlyString())
+			.orElse("");
 	}
 
 	@Override public void onLoad(String mixinPackage) {}

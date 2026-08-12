@@ -7,6 +7,11 @@ import java.util.concurrent.Executor;
 public interface PackForgePlatform {
 	String loaderName();
 
+	/** Returns the active Minecraft release reported by the loader. */
+	default String minecraftVersion() {
+		return "";
+	}
+
 	boolean isModLoaded(String modId);
 
 	/** Returns a public loader metadata version when this loader exposes one. */

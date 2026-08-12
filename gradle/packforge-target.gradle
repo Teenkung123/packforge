@@ -97,6 +97,13 @@ project.ext.packforgeWriteGeneratedResources = { File outputDirectory ->
 		"maturity=${platform.maturity}",
 		"beta=${platform.maturity == 'beta'}",
 		"capabilities=${capabilities}"
-	].join(System.lineSeparator()) + System.lineSeparator()
+	]
+	(target.capabilityMinimumMinecraft ?: [:]).keySet().collect { it.toString() }.sort().each { capability ->
+		capabilityProperties << "capabilityFloor.${capability}=${target.capabilityMinimumMinecraft[capability]}"
+	}
+	(target.mixinMinimumMinecraft ?: [:]).keySet().collect { it.toString() }.sort().each { mixin ->
+		capabilityProperties << "mixinFloor.${mixin}=${target.mixinMinimumMinecraft[mixin]}"
+	}
+	capabilityProperties = capabilityProperties.join(System.lineSeparator()) + System.lineSeparator()
 	capabilitiesFile.setText(capabilityProperties, "UTF-8")
 }

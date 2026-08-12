@@ -43,8 +43,11 @@ def artifact_minecraft(target: dict[str, Any], loader: str) -> str:
 
 
 def build_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    targets = target_map(registry)
+    active_target_keys = list(dict.fromkeys(str(cell["targetKey"]) for cell in registry["releaseCells"]))
     rows = []
-    for target in registry["targets"]:
+    for target_key in active_target_keys:
+        target = targets[target_key]
         rows.append(
             {
                 "target": str(target["key"]),

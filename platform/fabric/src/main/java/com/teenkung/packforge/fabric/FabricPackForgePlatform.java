@@ -18,6 +18,11 @@ public final class FabricPackForgePlatform implements PackForgePlatform {
 	}
 
 	@Override
+	public String minecraftVersion() {
+		return modVersion("minecraft").orElse("");
+	}
+
+	@Override
 	public boolean isModLoaded(String modId) {
 		return loader.isModLoaded(modId);
 	}
@@ -50,7 +55,7 @@ public final class FabricPackForgePlatform implements PackForgePlatform {
 
 	@Override
 	public void logPlatformInfo() {
-		PackForge.LOGGER.info("PackForge platform: loader=fabric dev={} gameDir={} configDir={}",
-			isDevelopmentEnvironment(), gameDirectory(), configDirectory());
+		PackForge.LOGGER.info("PackForge platform: loader=fabric minecraft={} dev={} gameDir={} configDir={}",
+			minecraftVersion(), isDevelopmentEnvironment(), gameDirectory(), configDirectory());
 	}
 }

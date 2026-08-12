@@ -144,6 +144,6 @@ public final class PackForgeConfigScreen extends Screen {
 			graphics.drawCenteredString(this.font, saveError, this.width / 2, this.height - 84, 0xFF5555);
 		}
 	}
-	private void rebuild() { init(this.width, this.height); }
+	private void rebuild() { init(); }
 	private static Component boolText(boolean value) { return Component.translatable(value ? "packforge.config.value.enabled" : "packforge.config.value.disabled"); }
 }

@@ -1,5 +1,6 @@
 package com.teenkung.packforge;
 
+import com.teenkung.packforge.compat.RuntimeMinecraftVersion;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.config.PackForgeCapabilities;
 import com.teenkung.packforge.config.PackForgeConfig;
@@ -19,7 +20,9 @@ public final class PackForgeCore {
 		}
 		StartupStatus.start();
 		StartupStatus.update("Initializing", "platform services");
-		PackForgeServices.platform().logPlatformInfo();
+		var platform = PackForgeServices.platform();
+		RuntimeMinecraftVersion.configure(platform.minecraftVersion());
+		platform.logPlatformInfo();
 		var codeSource = PackForgeCore.class.getProtectionDomain().getCodeSource();
 		PackForge.LOGGER.info("PackForge runtime source: {}", codeSource == null ? "unknown" : codeSource.getLocation());
 		StartupStatus.update("Loading", "PackForge config");
@@ -35,7 +38,7 @@ public final class PackForgeCore {
 		}
 		StartupStatus.update("Configuring", "startup optimizer");
 		PackForge.LOGGER.info("PackForge initialized (loader={}, loaderIndex={}, atlasCap={}, atlasRetry={}, startupOptimizer={}, startupExecutorTuning={})",
-			PackForgeServices.platform().loaderName(),
+			platform.loaderName(),
 			FeatureFlags.loaderIndexEnabled(),
 			FeatureFlags.atlasCapEnabled(),
 			FeatureFlags.atlasRetryEnabled(),

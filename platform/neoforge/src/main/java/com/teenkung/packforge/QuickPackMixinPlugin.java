@@ -1,5 +1,7 @@
 package com.teenkung.packforge;
 
+import com.teenkung.packforge.compat.VersionedMixinGate;
+import com.teenkung.packforge.neoforge.NeoForgeMinecraftVersion;
 import net.neoforged.fml.ModList;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
@@ -17,11 +19,15 @@ public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
 		"mixin.loader.SharedZipFileAccessMixin",
 		"client.mixin.font.FontManagerMixin",
 		"client.mixin.font.FontSetMixin",
-		"client.mixin.ui.LoadingOverlayMixin"
+		"client.mixin.ui.LoadingOverlayMixin",
+		"client.mixin.ui.LoadingOverlayToastMixin"
 	);
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+		if (!VersionedMixinGate.shouldApply(mixinClassName, NeoForgeMinecraftVersion.current())) {
+			return false;
+		}
 		return !quickPackLoaded()
 			|| QUICK_PACK_OWNED_MIXINS.stream().noneMatch(mixinClassName::endsWith);
 	}

@@ -17,6 +17,11 @@ public final class NeoForgePackForgePlatform implements PackForgePlatform {
 	}
 
 	@Override
+	public String minecraftVersion() {
+		return NeoForgeMinecraftVersion.current();
+	}
+
+	@Override
 	public boolean isModLoaded(String modId) {
 		return ModList.get().isLoaded(modId);
 	}
@@ -49,7 +54,7 @@ public final class NeoForgePackForgePlatform implements PackForgePlatform {
 
 	@Override
 	public void logPlatformInfo() {
-		PackForge.LOGGER.info("PackForge platform: loader=neoforge dev={} gameDir={} configDir={}",
-			isDevelopmentEnvironment(), gameDirectory(), configDirectory());
+		PackForge.LOGGER.info("PackForge platform: loader=neoforge minecraft={} dev={} gameDir={} configDir={}",
+			minecraftVersion(), isDevelopmentEnvironment(), gameDirectory(), configDirectory());
 	}
 }

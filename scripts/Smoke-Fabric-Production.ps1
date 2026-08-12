@@ -585,6 +585,29 @@ function Compare-NumericVersion {
     return 0
 }
 
+function Get-LibraryIdentity {
+    param($Library)
+
+    $coordinate = [string] (Get-ObjectProperty -Object $Library -Name 'name')
+    if ([string]::IsNullOrWhiteSpace($coordinate)) {
+        return "path:$((Get-LibraryRelativePath -Library $Library).ToLowerInvariant())"
+    }
+
+    $extension = 'jar'
+    $atIndex = $coordinate.LastIndexOf([char] 64)
+    if ($atIndex -ge 0) {
+        $extension = $coordinate.Substring($atIndex + 1)
+        $coordinate = $coordinate.Substring(0, $atIndex)
+    }
+
+    $parts = $coordinate.Split(':')
+    if ($parts.Count -lt 3) {
+        throw "Unsupported Fabric library coordinate: $coordinate"
+    }
+    $classifier = if ($parts.Count -gt 3) { $parts[3] } else { '' }
+    return '{0}:{1}:{2}@{3}' -f $parts[0], $parts[1], $classifier, $extension
+}
+
 function Test-ArtifactMinecraftCoverage {
     param([string] $ArtifactMinecraft, [string] $MinecraftVersion)
 
@@ -722,9 +745,26 @@ $featureValues = @{
     is_quick_play_realms = $false
 }
 
+$effectiveLibraries = [Collections.Generic.List[object]]::new()
+$effectiveLibraryIndexes = [Collections.Generic.Dictionary[string, int]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($library in @(Get-ObjectProperty -Object $metadata -Name 'libraries')) {
+    $rules = Get-ObjectProperty -Object $library -Name 'rules'
+    if (-not (Test-RuleSet -Rules $rules -FeatureValues $featureValues)) { continue }
+    $includeInClasspath = Get-ObjectProperty -Object $library -Name 'include_in_classpath'
+    if ($null -ne $includeInClasspath -and -not [bool] $includeInClasspath) { continue }
+
+    $identity = Get-LibraryIdentity -Library $library
+    if ($effectiveLibraryIndexes.ContainsKey($identity)) {
+        $effectiveLibraries[$effectiveLibraryIndexes[$identity]] = $library
+    } else {
+        $effectiveLibraryIndexes[$identity] = $effectiveLibraries.Count
+        [void] $effectiveLibraries.Add($library)
+    }
+}
+
 $classpath = [Collections.Generic.List[string]]::new()
 $seenLibraries = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-foreach ($library in @(Get-ObjectProperty -Object $metadata -Name 'libraries')) {
+foreach ($library in $effectiveLibraries) {
     $libraryPath = Get-LibraryPath `
         -Library $library `
         -LibrariesRoot $librariesRoot `

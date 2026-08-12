@@ -6,11 +6,10 @@ import com.teenkung.packforge.client.config.ResourcePackButtonLayout;
 import com.teenkung.packforge.client.config.ResourcePackButtonLayoutTracker;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.SpriteIconButton;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.packs.PackSelectionScreen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -27,12 +26,9 @@ import java.util.List;
 /** Adds PackForge's collision-aware configuration shortcut to the client resource-pack screen. */
 @Mixin(value = PackSelectionScreen.class, priority = 100)
 public abstract class PackSelectionScreenMixin extends Screen {
-	@Unique
-	private static final Identifier PACKFORGE_CONFIG_COG =
-		Identifier.fromNamespaceAndPath("packforge", "config_cog");
 	@Shadow @Final private Path packDir;
 	@Shadow private Button doneButton;
-	@Unique private SpriteIconButton packforge$configButton;
+	@Unique private Button packforge$configButton;
 	@Unique private boolean packforge$loggedNoSpace;
 	@Unique private ResourcePackButtonLayoutTracker packforge$layoutTracker;
 
@@ -45,13 +41,11 @@ public abstract class PackSelectionScreenMixin extends Screen {
 		if (this.minecraft == null || !this.packDir.equals(this.minecraft.getResourcePackDirectory())) {
 			return;
 		}
-		this.packforge$configButton = this.addRenderableWidget(SpriteIconButton.builder(
-			Component.translatable("packforge.config.resource_pack_button"),
-			button -> this.minecraft.setScreen(new PackForgeConfigScreen((Screen) (Object) this)),
-			true
-		).size(20, 20)
-			.sprite(PACKFORGE_CONFIG_COG, 16, 16)
-			.withTootip()
+		this.packforge$configButton = this.addRenderableWidget(Button.builder(
+			Component.literal("PF"),
+			button -> this.minecraft.setScreen(new PackForgeConfigScreen((Screen) (Object) this))
+		).bounds(0, 0, 20, 20)
+			.tooltip(Tooltip.create(Component.translatable("packforge.config.resource_pack_button")))
 			.build());
 		this.packforge$configButton.visible = false;
 		this.packforge$layoutTracker = new ResourcePackButtonLayoutTracker();

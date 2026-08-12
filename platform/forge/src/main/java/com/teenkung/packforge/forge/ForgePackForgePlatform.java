@@ -2,6 +2,8 @@ package com.teenkung.packforge.forge;
 
 import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.platform.PackForgePlatform;
+import net.minecraftforge.fml.loading.FMLLoader;
+import net.minecraftforge.fml.loading.VersionInfo;
 import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.nio.file.Path;
@@ -13,6 +15,12 @@ public final class ForgePackForgePlatform implements PackForgePlatform {
 	@Override
 	public String loaderName() {
 		return "forge";
+	}
+
+	@Override
+	public String minecraftVersion() {
+		VersionInfo versionInfo = FMLLoader.versionInfo();
+		return versionInfo == null ? "" : versionInfo.mcVersion();
 	}
 
 	@Override
@@ -47,7 +55,7 @@ public final class ForgePackForgePlatform implements PackForgePlatform {
 
 	@Override
 	public void logPlatformInfo() {
-		PackForge.LOGGER.info("PackForge platform: loader=forge dev={} gameDir={} configDir={}",
-			isDevelopmentEnvironment(), gameDirectory(), configDirectory());
+		PackForge.LOGGER.info("PackForge platform: loader=forge minecraft={} dev={} gameDir={} configDir={}",
+			minecraftVersion(), isDevelopmentEnvironment(), gameDirectory(), configDirectory());
 	}
 }
