@@ -191,3 +191,81 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Publication projection: registry-derived counts `build=19`, `smoke=62`, `publish-smoke=42`, `publish=20`; exactly 20 clean-built artifacts accepted by the release-manifest verifier.
 - Compatibility policy: Quick Pack version is diagnostic only. Presence delegates only `RESOURCE_PACK_INDEX`, `ZIP_READ_POOL`, `FONT_PROVIDER_PRESELECTION`, `ATLAS_MIP_PARALLEL`, `LOADING_FADE_CONTROL`, and `LOADING_STATUS_OVERLAY`; unrelated PackForge modules retain normal policy. Quick Pack 1.4 and older are best-effort/not guaranteed.
 - Rollback: `git revert 5ed1480540162547b3de475e0e9a51e7965d968c`.
+
+## Backfilled exact-family implementation checkpoints
+
+These bounded implementation commits preceded the integrated exact-matrix checkpoint. They are retained separately so each completed implementation unit has an explicit parent, scope, verification state, and rollback command.
+
+### Minecraft 1.21.5-1.21.7 targets
+
+- Commit SHA: `37e6e7ce3305a34c1b06e6ab684c6d008047e3e6`
+- Parent SHA: `764f9a53819b744e108ca5757e9579d126035c44`
+- Scope: exact registry rows, Stonecutter nodes, and loader source selection for Minecraft 1.21.5, 1.21.6, and 1.21.7.
+- Verification: focused target builds completed; later exact-matrix checkpoint `051aaaca42bdc980a3260d1a6c6fcd4404f228b7` proves every applicable final-artifact runtime cell in the widened 1.21.5-1.21.8 family.
+- Status: `SUPERSEDED_BY_FULL_MATRIX_VERIFIED`
+- Rollback: revert later dependent commits first, then `git revert 37e6e7ce3305a34c1b06e6ab684c6d008047e3e6`.
+
+### Minecraft 1.21.9-1.21.10 targets
+
+- Commit SHA: `41bbc54de1e14142307c0342e254e10e13360627`
+- Parent SHA: `37e6e7ce3305a34c1b06e6ab684c6d008047e3e6`
+- Scope: exact registry rows, Stonecutter nodes, loader source selection, and the first 1.21.9/1.21.10 font-provider compatibility sources.
+- Verification: focused target builds completed; later exact-matrix checkpoint `051aaaca42bdc980a3260d1a6c6fcd4404f228b7` proves every applicable final-artifact runtime cell in the widened 1.21.9-1.21.11 family.
+- Status: `SUPERSEDED_BY_FULL_MATRIX_VERIFIED`
+- Rollback: revert later dependent commits first, then `git revert 41bbc54de1e14142307c0342e254e10e13360627`.
+
+### Exact 26.x smoke hardening
+
+- Commit SHA: `e03c4b29c1928758d4a28ee091d06ed8c36734d1`
+- Parent SHA: `41bbc54de1e14142307c0342e254e10e13360627`
+- Scope: exact 26.x production-smoke lifecycle, loader mod-list compatibility, Quick Pack/GUI plugin guards, and process evidence collection.
+- Verification: focused smoke harness checks completed; final 26.1, 26.1.1, 26.1.2, and 26.2 cells are included in the 62/62 final-artifact result.
+- Status: `FULL_MATRIX_VERIFIED`
+- Rollback: revert later smoke-harness dependants first, then `git revert e03c4b29c1928758d4a28ee091d06ed8c36734d1`.
+
+### Minecraft 1.21.9-1.21.10 runtime adapters
+
+- Commit SHA: `f1552b27f33632d5966454bf8cc06927fc10fdc1`
+- Parent SHA: `e03c4b29c1928758d4a28ee091d06ed8c36734d1`
+- Scope: atlas, loading-overlay, and reload-observer bridges plus loader wiring for Minecraft 1.21.9 and 1.21.10.
+- Verification: focused builds and smoke repair checks completed; final same-JAR proof covers all applicable 1.21.9, 1.21.10, and 1.21.11 cells.
+- Status: `FULL_MATRIX_VERIFIED`
+- Rollback: revert later dependent commits first, then `git revert f1552b27f33632d5966454bf8cc06927fc10fdc1`.
+
+### Minecraft 1.21.5-1.21.7 runtime seams
+
+- Commit SHA: `a17d2ca6d5f0926746b9b2d721bec9f572b67db5`
+- Parent SHA: `f1552b27f33632d5966454bf8cc06927fc10fdc1`
+- Scope: reload-observer and loader/runtime compatibility seams for Minecraft 1.21.5 through 1.21.7.
+- Verification: focused smoke repair checks completed; final same-JAR proof covers all applicable 1.21.5 through 1.21.8 cells.
+- Status: `FULL_MATRIX_VERIFIED`
+- Rollback: revert later dependent commits first, then `git revert a17d2ca6d5f0926746b9b2d721bec9f572b67db5`.
+
+## First-range publication wiring
+
+- Commit SHA: `9b060a267e525eda3ce5f47852064fa1e546b079`
+- Parent SHA: `fbd7b3208347230ae17e90f822bde2e100e82992`
+- Scope: publish the proven 1.20.2-1.20.4 range through registry-derived publication metadata and manifest validation.
+- Verification: `publish-smoke=35`, `publish=20`, and the exact 20-artifact manifest verifier passed at this checkpoint; later final evidence covers all 62 publication-smoke cells.
+- Status: `SUPERSEDED_BY_FULL_MATRIX_VERIFIED`
+- Rollback: revert later range commits first, then `git revert 9b060a267e525eda3ce5f47852064fa1e546b079`.
+
+## Remaining range candidates and full exact matrix
+
+- Date: 2026-08-12
+- Commit SHA: `051aaaca42bdc980a3260d1a6c6fcd4404f228b7`
+- Parent SHA: `9498f45c4b92b97d6ff5f19ca5864488c8a33ab1`
+- Scope: final 1.21.2-1.21.4, 1.21.5-1.21.8, and 1.21.9-1.21.11 range artifacts; capability/mixin floors; runtime version bridges; registry-derived seven-family build matrix; resumable exact-production controller; version-independent Quick Pack module handoff.
+- Verification: seven-family aggregate build and artifact verification completed; exactly 20 candidates produced; 62/62 exact release/loader cells passed startup, two reloads, semantic/resource evidence, and clean exit; generated counts are `build=7`, `smoke=62`, `publish-smoke=62`, and `publish=20`.
+- Status: `FULL_MATRIX_VERIFIED`
+- Rollback: revert `a3402866b217ac159d6a3cec70d3585028f79732` first, then `git revert 051aaaca42bdc980a3260d1a6c6fcd4404f228b7`.
+
+## Canonical source consolidation and final hash binding
+
+- Date: 2026-08-12
+- Commit SHA: `a3402866b217ac159d6a3cec70d3585028f79732`
+- Parent SHA: `051aaaca42bdc980a3260d1a6c6fcd4404f228b7`
+- Scope: registry-selected canonical shared Java classes, removal of copied production classes, deterministic source metrics and CI gate, isolated Fabric native roots, final row promotion, and exact-matrix controller hardening.
+- Verification: `reportSourceMetrics validateTargetRegistry verifyExistingArtifacts` PASS against 20 clean-built artifacts; source metrics report 16,209 LOC, 33.48% bridge LOC, zero normalized duplicate classes, and 100% baseline duplicate-group reduction. Eighteen artifacts remained byte-identical and retained 58-cell proof; the four cells represented by the two changed Forge hashes reran 4/4 PASS. The final Quick Pack 1.5.0 profile passed ten reloads with `MODULE_HANDOFF` and natural clean exit.
+- Status: `FULLY_VERIFIED`
+- Rollback: `git revert a3402866b217ac159d6a3cec70d3585028f79732` restores the prior source ownership and publication ledger.

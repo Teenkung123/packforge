@@ -32,6 +32,8 @@ At baseline, only the following anchors exist: `1.20.1`, `1.21.1`, `1.21.4`, `1.
 
 The registry is both the target design ledger and the source for the exact CI smoke matrix. A release row is accepted only after every loader declared by that row passes final-artifact startup, deterministic reload, semantic/resource evidence where supported, and clean exit.
 
-## Registry status at the current checkpoint
+## Registry status at the final checkpoint
 
-`gradle/minecraft-targets.json` is schema v2 and `validateTargetRegistry`/`printResolvedMatrix` pass with all 22 mandatory exact rows. Every exact row now has an independent runtime result: 62 officially available loader cells pass the production smoke contract, including the repaired early NeoForge 1.20.2/1.20.3/1.20.4 route and the 26.1.1/26.1.2 interior stable-range cells. The registry currently keeps the six existing anchors as the public 17-artifact set; newly verified target rows are `planned-verified` until the same final binary is range-tested, so publication is not silently expanded. The 1.21.2 row remains Fabric + NeoForge because no official Forge line is available. No intermediate release is inferred from a metadata range.
+`gradle/minecraft-targets.json` is schema v2 and `validateTargetRegistry`/`printResolvedMatrix` pass with all 22 mandatory exact rows. All 62 officially available loader cells pass the production smoke contract, including the repaired early NeoForge route and the 26.1.1/26.1.2 interior stable-range cells. Every row is promoted to `existing` only after its final range artifact passed every exact release it claims. The 1.21.2 row remains Fabric + NeoForge because no official Forge line is available. No intermediate release is inferred from metadata alone.
+
+Final generated matrices contain seven deduplicated artifact-build anchors, 62 exact smoke rows, 62 publication-smoke rows, and 20 publication artifacts. All pre-26 source families are beta; the 26.x family is stable. The canonical shared Java source map is registry data and resolves one owner for every cross-family production class.

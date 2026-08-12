@@ -25,9 +25,9 @@ Unit policy tests and final-JAR packaging checks pass. The required real-mod pro
 
 - Profile: Fabric 1.21.1, Fabric Loader 0.19.3, Quick Pack `1.5.0`.
 - Quick Pack SHA-1: `71b3ff38a163651c76e707087c00c9bfc41a5987`.
-- PackForge final artifact SHA-256: `99D38B658B6D8A19294ADB4D5986BB714016A67C697B91C8FAB01EC7DE5B4E72`.
+- PackForge final artifact SHA-256: `AAD7C8126DEFDA7A9FB115675841C4F2210607F722CA4141BC3C23BECED6E71A`.
 - Quick Pack staged-JAR SHA-256: `7E93E08D5ADA815DB6874D5BCCA750A12A2AC97F3B80143ED47EF6D70FE32EE1`.
 - Command: `scripts/Smoke-Fabric-Production.ps1` with `-AdditionalModPaths`, `-ReloadCount 10`, and `-AllowControlledTermination`.
-- Result: `PASS`; `status=MODULE_HANDOFF`, `version=1.5.0` (diagnostic only), the six overlap capabilities are externally owned, ten requested reloads completed, and the client exited cleanly.
+- Result: `PASS`; `status=MODULE_HANDOFF`, `version=1.5.0` (diagnostic only), the six overlap capabilities are externally owned, ten requested reloads completed, and the client exited naturally with `cleanExit=true` and `controlledTermination=false`.
 
 The PackForge log contains `PackForge Quick Pack compatibility: status=MODULE_HANDOFF` and the expected ownership set. Unit tests cover `1.4.0`, `1.5.0`, future major versions, malformed text, and missing version metadata with the same module-level result. The real runtime proof is Quick Pack 1.5.0; Quick Pack 1.4 and older remain best-effort and are not guaranteed. Other third-party pairwise profiles are separate scheduled work and are not claimed by this result.

@@ -48,4 +48,6 @@ All pre-26.x rows remain beta and all 26.x rows remain stable. No loader is infe
 
 ## Publication status
 
-The exact-cell evidence above is not a claim that the public manifest covers every row. Current registry-derived publication contains 20 artifacts and 42 publication-smoke cells. Minecraft 1.20.2-1.20.4 resolve to one tested range artifact per loader; Minecraft 1.20.5-1.21.1 resolve to one tested Fabric artifact and one tested Forge/NeoForge artifact over their applicable releases. The remaining seven non-anchor pre-26 rows stay `planned-verified` until their range-artifact proof is recorded. The official Mojang stable-release sequence guard passes for all 22 required IDs.
+Registry-derived publication now contains 20 artifacts and 62 publication-smoke cells. Minecraft 1.20.2-1.20.4, 1.20.5-1.21.1, 1.21.2-1.21.4, 1.21.5-1.21.8, 1.21.9-1.21.11, and 26.1-26.2 each resolve to their proven loader range artifacts; 1.20.1 remains its required two-loader singleton. Every exact release in each metadata range passed the same loader JAR. The official Mojang stable-release sequence guard passes for all 22 required IDs.
+
+The final source-consolidation rebuild left 18 artifacts byte-identical to the full matrix. Only the 1.20.1 and 1.20.2-1.20.4 Forge archive hashes changed, solely from refmap JSON key ordering; those four Forge cells were rerun 4/4 PASS with two reloads and clean exit. Therefore all 62 rows are bound to the final hashes in `final-validation.md`.

@@ -24,3 +24,9 @@ Normalized exact-file comparison found 20 duplicate groups across version produc
 ## Version-specific boundaries
 
 Keep Minecraft class names/descriptors, mixin targets, native widget differences, access wideners, and loader remap/refmap behavior in thin bridges. Move only loader-neutral algorithms and policy into shared sources after a focused parity test.
+
+## Final source inventory
+
+Checkpoint `a3402866b217ac159d6a3cec70d3585028f79732` replaces copied version classes with registry-selected files under `versions/shared`. The final deterministic metrics are 202 files / 16,209 LOC, including 126 version files / 9,650 LOC and 99 bridge files / 5,426 LOC. Bridge code is 33.48% of production logic.
+
+Comment/whitespace-normalized comparison now finds zero duplicate production classes across version families, down from 20 groups at baseline. `reportSourceMetrics` enforces zero duplicate groups, bridge minority, and bounded Stonecutter conditional blocks as part of `validateTargetRegistry`. Full per-area evidence is in `final-validation.md`.

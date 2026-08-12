@@ -222,3 +222,27 @@
 - Deviation repaired: the first clean build exposed Java compatibility being incorrectly used as a proxy for descriptor ownership on Forge 1.20.1. Explicit loader `mixinConfigs` preserve each descriptor family and the focused 1.20.1 verifier plus final clean build pass. Fabric 1.21 also exposed a clean-shutdown observation race after all reloads completed; the harness now grants only a bounded 15-second process-exit grace after reload proof.
 - Rollback: `git revert 5ed1480540162547b3de475e0e9a51e7965d968c` restores the previous singleton 1.21.1 publication target and version-classified Quick Pack policy.
 - Next mandatory phase: consolidate and same-JAR test 1.21.2-1.21.4, 1.21.5-1.21.8, and 1.21.9-1.21.11; then rerun the rebuilt 26.x NeoForge artifact.
+
+## Phase 15 — remaining range families and full exact matrix
+
+- Date: 2026-08-12
+- Commit SHA: `051aaaca42bdc980a3260d1a6c6fcd4404f228b7`; parent `9498f45c4b92b97d6ff5f19ca5864488c8a33ab1`
+- Status: `FULL_MATRIX_VERIFIED`
+- Scope: 1.21.2-1.21.4, 1.21.5-1.21.8, and 1.21.9-1.21.11 range artifacts; exact capability/mixin floors; runtime Minecraft-version bridges; version-independent Quick Pack module handoff; registry validation and seven-row build deduplication.
+- Build evidence: aggregate seven-family clean build PASS; all tests and artifact verifiers PASS; exactly 20 final candidates produced.
+- Runtime evidence: the resumable production controller records 62/62 unique exact cells PASS, two reloads per cell, semantic/resource evidence, and clean exit. Harness-only repairs isolated Fabric natives by exact profile and normalized Forge/NeoForge controlled shutdown.
+- Publication evidence: all 22 release rows and twelve source families promoted after same-JAR proof; generated counts `build=7`, `smoke=62`, `publish-smoke=62`, `publish=20`.
+- Rollback: `git revert 051aaaca42bdc980a3260d1a6c6fcd4404f228b7` after reverting the source-consolidation checkpoint.
+
+## Phase 16 — source consolidation and final hash binding
+
+- Date: 2026-08-12
+- Commit SHA: `a3402866b217ac159d6a3cec70d3585028f79732`; parent `051aaaca42bdc980a3260d1a6c6fcd4404f228b7`
+- Status: `FULLY_VERIFIED`
+- Scope: registry-selected canonical shared Java classes, removal of all copied production classes, `reportSourceMetrics` CI gate, isolated Fabric native roots, resumable exact-matrix controller, and final promotion state.
+- Source evidence: 16,209 production LOC; 5,426 bridge LOC (33.48%); zero normalized duplicate classes; 100% duplicate-group reduction; 202 production files; 736.77 LOC per exact release.
+- Build evidence: clean seven-family build produced exactly 20 artifacts; post-run `reportSourceMetrics validateTargetRegistry verifyExistingArtifacts` PASS; release manifest regenerated with 20 artifacts.
+- Hash evidence: 18/20 artifacts remained byte-identical and retain 58-cell proof. The two legacy Forge JARs changed only refmap key order; all mapping values remained identical, and their four exact cells reran 4/4 PASS with two reloads and clean exit.
+- Quick Pack evidence: final Fabric hash `AAD7C8126DEFDA7A9FB115675841C4F2210607F722CA4141BC3C23BECED6E71A` plus Quick Pack 1.5.0 hash `7E93E08D5ADA815DB6874D5BCCA750A12A2AC97F3B80143ED47EF6D70FE32EE1` PASS with ten reloads, module handoff, and natural clean exit.
+- Unrelated state: `.github/ISSUE_TEMPLATE/bug-report.yml` remains modified and unstaged; `.codegraph/` remains untracked and excluded.
+- Rollback: `git revert a3402866b217ac159d6a3cec70d3585028f79732`.

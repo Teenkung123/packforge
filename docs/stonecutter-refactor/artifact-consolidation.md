@@ -141,3 +141,32 @@ packforge-neoforge-1.3.4-beta.2-mc1.20.6-1.21.1.jar 969BFADD9B219932FAB7040839CA
 Fabric passed 1.20.5, 1.20.6, 1.21, and 1.21.1; Forge and NeoForge each passed 1.20.6, 1.21, and 1.21.1. Every cell used the unchanged loader artifact, completed two deterministic reloads, emitted semantic/resource evidence, and exited cleanly. The Fabric artifact additionally passed ten requested reloads with the real Quick Pack 1.5.0 JAR and `status=MODULE_HANDOFF`.
 
 The final clean build passed in 8m49s and reproduced every tested hash. Current generated counts are 19 build targets, 62 exact smoke cells, 42 publication-smoke cells, and 20 publication rows. `Generate-ReleaseManifest.py` accepts exactly 20 JARs. Seven non-anchor pre-26 releases remain to be consolidated; the intended final 20-artifact layout remains within the plan's evidence-backed ceiling.
+
+## Final 20-artifact layout
+
+The historical sections above show incremental promotion. At checkpoint `a3402866b217ac159d6a3cec70d3585028f79732`, all range families are proven and publication-smoke coverage is 62/62. The authoritative hashes are:
+
+```text
+fabric   1.20.1             3dafe7d9e341e15a3849dc95728fe88cb9ef40751ce1c9b0679c5024b341b864
+forge    1.20.1             86415ce66b254b35a8eec52daa78925dd9c1b03d1b9b54b2791243f6ed1b59b4
+fabric   1.20.2-1.20.4      44a6811603abd81bb02e6b1604a24630f44c02cd1af313d9a4540846f6c8bc14
+forge    1.20.2-1.20.4      2d3b96eef1eb8b10219880ac66e038ffa2e5500b3fa19da7f3583eb6b9d86076
+neoforge 1.20.2-1.20.4      526bd7f7627808ad76f6497f24fbacd600d8cdd5305013e49712588bd939442c
+fabric   1.20.5-1.21.1      aad7c8126defda7a9fb115675841c4f2210607f722ca4141bc3c23beced6e71a
+forge    1.20.6-1.21.1      5c9abac3b8f1d8bf4fceace3d9a8d7e4509bb34d8169ca305fb18ef50928f183
+neoforge 1.20.6-1.21.1      62db915a9a6fc73d7483acc3dc968557d35d5fe714a5a87eb5c3628d3b845e43
+fabric   1.21.2-1.21.4      40b2d8eaba0ac2ac7e5e61c7cfbc7747634b8054d243efd202bcc7204a220870
+forge    1.21.3-1.21.4      5299b4316c52a2aa3a38e7bf44db45ad60b31618b8d9f3d11bb9dabd511c2b38
+neoforge 1.21.2-1.21.4      f5e8bce85b283b7615d259ce241e3a9bded9bc4af6f6f0ff5b97e40a4e8b72fc
+fabric   1.21.5-1.21.8      6792e92a3f72492a04410a7cdc5e33f19820e218fab5efdc9034adb420ff3baa
+forge    1.21.5-1.21.8      31fa446b98b7efaa08d406dbec4f0ced74d56bd11eaf0c247f41402e982b323a
+neoforge 1.21.5-1.21.8      65f18818a39a86faa43cefacbfede479160df847c543de8f82e7a8456efad15d
+fabric   1.21.9-1.21.11     e67a315958cc9044ec3137ad8f1e26808b2ef7754f30477372a2dec576b126b4
+forge    1.21.9-1.21.11     bcc7ccd82fad1110ff4ab655b3bfc1ba6e6aa226a144468474b2b628a8a83670
+neoforge 1.21.9-1.21.11     0240ad0f84e5e21d68bd1ae0e7ef0f73496b60d7b2e9e243cf779a644e280814
+fabric   26.1-26.2           312ec96bb988c319d706110a801680b7af7a51defbff60a62072a57d9f865e95
+forge    26.1-26.2           447d6c727406bde34d81a3b0df17b554f43f924e28cc805b13abfd8df08819fc
+neoforge 26.1-26.2           7e946799ea1b3c81b068acb9048a93f8cfa6907316c08ef886a87b32d321aba6
+```
+
+This is 69.70% below the naïve 66-artifact Cartesian expansion and remains below the evidence-backed ceiling of 21. All 20 pass structural verification and every exact release claimed by their metadata passed the same final loader artifact. `build/libs/release/manifest.json` and `release-table.md` are regenerated from this set.

@@ -25,5 +25,7 @@ The functional baseline is commit `609270f533666e7636d11f7d16590be925ec836f`. Th
 
 - `0dc06bc2a6e684e7efd3d1df5f3f0f1aba6a7db0`: planned 1.20.2 target, Fabric/Forge bridge, Stonecutter node, and planned-target exclusion from the published 17-artifact aggregate. Revert after `862022c` if the feasibility cell is abandoned.
 - `862022c40249155f1d43fb55d97f3c4cb132c136`: keep the 1.21.11 archive constructor hook version-local. Revert this first to restore the prior descriptor before reverting the 1.20.2 bridge.
+- `051aaaca42bdc980a3260d1a6c6fcd4404f228b7`: complete all remaining Java 21 range candidates, capability floors, and exact runtime gates. Revert before removing their source-family definitions.
+- `a3402866b217ac159d6a3cec70d3585028f79732`: latest fully verified checkpoint. It promotes all exact rows, adds the resumable 62-cell controller and per-version Fabric natives, consolidates canonical shared sources, and adds the source-metrics gate. Revert this first to restore per-adapter source ownership and the prior publication ledger.
 
 The unrelated `.github/ISSUE_TEMPLATE/bug-report.yml` edit remains unstaged and is not part of any rollback.
