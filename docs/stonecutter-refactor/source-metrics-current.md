@@ -13,7 +13,7 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 | Exact duplicate groups | 0 |
 | Normalized version duplicate groups | 0 |
 | Platform `target.key` references | 80 |
-| Target-key/version conditional lines | 84 |
+| Target-key/version conditional lines | 85 |
 | Version-specific configuration renderers | 4 |
 | Exact release cells | 22 |
 | Exact loader cells | 62 |

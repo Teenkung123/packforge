@@ -1117,6 +1117,9 @@ tasks.register("validateTargetRegistry") {
 	if (registry.defaultTarget == null || !targetKeys.contains(registry.defaultTarget)) {
 		throw new GradleException("defaultTarget must identify a declared PackForge target.")
 	}
+	if (registry.stonecutterVcsTarget == null || !targetKeys.contains(registry.stonecutterVcsTarget)) {
+		throw new GradleException("stonecutterVcsTarget must identify a declared PackForge target.")
+	}
 	if (!(registry.releaseSequence instanceof List)
 		|| registry.releaseSequence != requiredStableReleaseSequence) {
 		throw new GradleException("Registry releaseSequence must exactly contain the checked-in 1.20.1-26.2 stable release sequence.")
@@ -1517,13 +1520,45 @@ tasks.register("validateTargetRegistry") {
 	}
 }
 
-def stonecutterValidationPreparationTasks = subprojects.collectMany { childProject ->
+if (!rootProject.ext.has('packforgeStonecutterNodePaths')) {
+	throw new GradleException('Settings did not provide the registry-derived Stonecutter node paths.')
+}
+def stonecutterNodePaths = rootProject.ext.packforgeStonecutterNodePaths as List
+def stonecutterSourceAnchors = rootProject.ext.packforgeStonecutterSourceAnchors as List
+def stonecutterValidationPreparationTasks = stonecutterNodePaths.collectMany { nodePath ->
 	["stonecutterPrepare", "stonecutterPrepareTest"].collect { taskName ->
-		"${childProject.path}:${taskName}"
+		"${nodePath}:${taskName}"
 	}
 }
 tasks.named("validateTargetRegistry") {
 	dependsOn stonecutterValidationPreparationTasks
+}
+
+tasks.register("validateStonecutterRegistry") {
+	group = "verification"
+	description = "Validates the registry-derived Stonecutter loader branches and target-node bijection."
+	dependsOn tasks.named("validateTargetRegistry")
+	doLast {
+		def expectedNodeCount = targets.sum { target -> target.platforms.size() } as int
+		if (stonecutterNodePaths.size() != expectedNodeCount
+			|| stonecutterNodePaths.size() != stonecutterNodePaths.toSet().size()) {
+			throw new GradleException("Stonecutter node ledger mismatch: expected=${expectedNodeCount}, actual=${stonecutterNodePaths.size()}.")
+		}
+		def expectedSourceAnchors = targets.collect { target ->
+			[target: target.key.toString(), minecraftVersion: target.minecraftVersion.toString(), sourceFamily: target.sourceFamily.toString()]
+		}
+		if (stonecutterSourceAnchors != expectedSourceAnchors
+			|| stonecutterSourceAnchors.collect { it.target }.size() != stonecutterSourceAnchors.collect { it.target }.toSet().size()) {
+			throw new GradleException("Stonecutter source-anchor ledger mismatch: expected=${expectedSourceAnchors}, actual=${stonecutterSourceAnchors}.")
+		}
+		def actualDistributionCounts = stonecutterNodePaths.collect { it.toString().tokenize(':').last() }.countBy { it }
+		def expectedDistributionCounts = targets.collectEntries { target -> [(target.key.toString()): target.platforms.size()] }
+		if (actualDistributionCounts != expectedDistributionCounts) {
+			throw new GradleException("Stonecutter distribution ledger mismatch: expected=${expectedDistributionCounts}, actual=${actualDistributionCounts}.")
+		}
+		def exactLoaderCellCount = registry.releaseCells.sum { cell -> cell.loaderAvailability.size() } as int
+		println("Stonecutter registry graph valid: branches=${rootProject.ext.packforgeStonecutterLoaderBranches.size()}, sourceAnchors=${stonecutterSourceAnchors.size()}, distributions=${stonecutterNodePaths.size()}, exactLoaderCells=${exactLoaderCellCount}")
+	}
 }
 
 tasks.register("printResolvedMatrix") {
