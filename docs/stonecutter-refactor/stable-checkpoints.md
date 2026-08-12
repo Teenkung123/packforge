@@ -280,3 +280,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Result: 202 production Java files, 16,209 nonblank LOC, 99 aggregate bridge files / 5,426 LOC, zero exact or normalized duplicate groups, 80 platform `target.key` references, 84 target-key/version conditional lines, four native configuration renderer paths, 22 exact releases, 62 loader cells, 19 registered build targets, and 20 publication artifacts.
 - Status: `PHASE_A_VERIFIED_COMPLETE`; build/package evidence only, with runtime/profile limitations classified in `current-state-audit.md`.
 - Rollback: `git revert 71f29b116f40e967996fa5e75e45aad89a7b0bb6` removes the continuation audit and expanded source gates while retaining all earlier implementation history.
+
+## Operation-level Quick Pack ownership
+
+- Date: 2026-08-12
+- Commit SHA: `0c2fb7bcff5dd634254f3ad25b205b896acfe34e`
+- Parent SHA: `bd542a1f286be99d16772c903dfd329e37632717`
+- Scope: loader-neutral optional-mod metadata after bootstrap; exact six-capability Quick Pack handoff; operation-level archive, font, loading-overlay, toast, and startup-status mixins; retained loader observations; packaged-plugin and internal-reference guards.
+- Verification: source metrics and registry gates passed with 207 files, 16,129 LOC, zero exact/normalized duplicates, and zero Quick Pack internal references. Focused policy/UI/timing tests passed on Fabric, Forge, and NeoForge. All-loader builds and artifact-contract verification passed for 1.20.1, 1.20.6, 1.21.1, 1.21.4, 1.21.8, 1.21.9, 1.21.10, 1.21.11, and 26.1-26.2.
+- Status: `IMPLEMENTATION_AND_PACKAGE_VERIFIED`; real Quick Pack final-JAR profiles remain required before Phase C runtime completion.
+- Rollback: `git revert 0c2fb7bcff5dd634254f3ad25b205b896acfe34e` restores early whole-mixin suppression and the preceding compatibility policy.
