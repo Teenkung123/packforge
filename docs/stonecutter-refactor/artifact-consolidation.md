@@ -1,6 +1,6 @@
 # Artifact consolidation baseline
 
-Current published/build artifact count is 17:
+Baseline published/build artifact count was 17:
 
 - Fabric: 6
 - Forge: 6
@@ -9,7 +9,7 @@ Current published/build artifact count is 17:
 - Beta pre-26.x: 14
 - Total bytes after clean build: 23,691,877
 
-Current public artifact names are target-specific, with beta suffixes on pre-26.x artifacts and a `26.1-26.2` range on stable artifacts. The expanded exact target artifacts are built and runtime-checked as CI/focused evidence; the public set remains the smaller 17-artifact anchor set until a separate, same-binary range proof authorizes publication. No beta artifact is merged with the stable 26.x range.
+At baseline, public artifact names were target-specific, with beta suffixes on pre-26.x artifacts and a `26.1-26.2` range on stable artifacts. Expanded exact target artifacts required separate same-binary range proof before publication. No beta artifact is merged with the stable 26.x range.
 
 ## Baseline checksums
 
@@ -37,9 +37,9 @@ packforge-neoforge-1.3.4-mc26.1-26.2.jar bac9dded67b6fe83a576d915cea76b019c39840
 
 Consolidation decision: retain the 17 public artifacts, use the registry-derived exact matrix for interior-release verification, and keep pre-26.x beta metadata separate from the stable 26.x range. The exact target artifacts are not silently added to publication by changing registry status alone.
 
-## Current post-bridge verification
+## Historical post-bridge verification
 
-The current published set remains exactly 17 JARs. `buildAllSupported --rerun-tasks --no-daemon --stacktrace` passed in 5m31s and `verifyAllArtifacts --no-daemon --stacktrace` passed in 5m18s. These SHA-256 values are from that output; they are build evidence, not marketplace checksums.
+At this checkpoint the published set remained exactly 17 JARs. `buildAllSupported --rerun-tasks --no-daemon --stacktrace` passed in 5m31s and `verifyAllArtifacts --no-daemon --stacktrace` passed in 5m18s. These SHA-256 values are from that output; they are build evidence, not marketplace checksums.
 
 ```text
 packforge-fabric-1.3.4-beta.2-mc1.20.1.jar fdc87bda5dc41b47d42f17c704f8517a758d0da3ecdbc4770388244ffbc27787
@@ -61,7 +61,7 @@ packforge-neoforge-1.3.4-beta.2-mc1.21.8.jar 7b042ccd2e3b69115a94a1ad6898dc7a3ac
 packforge-neoforge-1.3.4-mc26.1-26.2.jar fd849db6a6c849d270fb4c1682134f786639234a4dff9077fd6f07ddab2525cc
 ```
 
-The exact 1.20.2/1.20.3/1.20.4 artifacts are deliberately absent from this public release set even though all three loaders now have focused build and production smoke evidence. The registry keeps those rows `planned-verified` so publication remains a separate, reviewable action and the 17-artifact count is stable.
+At this historical checkpoint, the exact 1.20.2/1.20.3/1.20.4 artifacts were deliberately absent from the public release set pending same-binary range proof.
 
 ## Expanded exact target evidence
 
@@ -84,15 +84,15 @@ packforge-neoforge-1.3.4-mc26.1-26.2.jar FDC63B9D58F5A10F48D745CDE47E617625E3392
 
 The exact 1.20.5 through 1.21.10 family hashes are recorded in their phase entries in `work-log.md`; all were structurally verified before runtime smoke.
 
-## Latest registry and manifest evidence
+## Pre-range registry and manifest evidence
 
 - Mojang stable release manifest: `https://piston-meta.mojang.com/mc/game/version_manifest_v2.json`
 - Recorded manifest SHA-256: `380769b566afa9e768c82e1337fa3af3052aea47c7a9fe09d2c5a96edcef2e6c`
 - Verification: `scripts/Verify-Mojang-ReleaseSequence.ps1` PASS; all 22 required release IDs present and ordered.
-- Current generated matrix counts: 19 build targets, 62 exact smoke cells, 26 public-anchor smoke cells, 17 publication rows.
+- Generated matrix counts at this checkpoint: 19 build targets, 62 exact smoke cells, 26 public-anchor smoke cells, 17 publication rows.
 - Current root `build --no-daemon --console plain --stacktrace`: PASS in 4m22s (`87 actionable tasks: 24 executed, 63 up-to-date`); current 26.x NeoForge all-in-one output embeds MixinExtras exactly once and passes the focused 26.x artifact verifier.
 
-The current 17-artifact hashes after that build are recorded below. They are local build checksums, not marketplace checksums:
+The 17-artifact hashes after that build are recorded below. They are local build checksums, not marketplace checksums:
 
 ```text
 packforge-fabric-1.3.4-beta.2-mc1.20.1.jar fdc87bda5dc41b47d42f17c704f8517a758d0da3ecdbc4770388244ffbc27787
@@ -127,3 +127,17 @@ packforge-neoforge-1.3.4-beta.3-mc1.20.2-1.20.4.jar 24460EEFB3D33F1B6AD5154758A2
 ```
 
 Each hash passed Minecraft 1.20.2, 1.20.3, and 1.20.4 startup, two deterministic reloads, semantic/resource evidence, and clean exit on its loader. The registry now assigns those three exact rows to `mc1_20_2`; generated publication contains 20 artifacts and 35 exact publication-smoke cells. This is an evidence-based partial promotion, not a claim that the remaining Java 21 ranges are complete.
+
+## Second range promotion: Minecraft 1.20.5-1.21.1
+
+Checkpoint `5ed1480540162547b3de475e0e9a51e7965d968c` makes the `mc1_21_1` anchor publish one Fabric artifact across 1.20.5-1.21.1 and one Forge/NeoForge artifact across 1.20.6-1.21.1. The loader-specific lower bound preserves official availability while retaining one artifact per loader. The runtime-tested and clean-build-reproduced SHA-256 values are:
+
+```text
+packforge-fabric-1.3.4-beta.2-mc1.20.5-1.21.1.jar   99D38B658B6D8A19294ADB4D5986BB714016A67C697B91C8FAB01EC7DE5B4E72
+packforge-forge-1.3.4-beta.2-mc1.20.6-1.21.1.jar    CA9F0EEAF1B382BA13518C7B5C24149BDA6031C33AA4473A8A08CD510ED78FFA
+packforge-neoforge-1.3.4-beta.2-mc1.20.6-1.21.1.jar 969BFADD9B219932FAB7040839CA6ADAB075EC8B0E941CDED829A22C3A41D5AE
+```
+
+Fabric passed 1.20.5, 1.20.6, 1.21, and 1.21.1; Forge and NeoForge each passed 1.20.6, 1.21, and 1.21.1. Every cell used the unchanged loader artifact, completed two deterministic reloads, emitted semantic/resource evidence, and exited cleanly. The Fabric artifact additionally passed ten requested reloads with the real Quick Pack 1.5.0 JAR and `status=MODULE_HANDOFF`.
+
+The final clean build passed in 8m49s and reproduced every tested hash. Current generated counts are 19 build targets, 62 exact smoke cells, 42 publication-smoke cells, and 20 publication rows. `Generate-ReleaseManifest.py` accepts exactly 20 JARs. Seven non-anchor pre-26 releases remain to be consolidated; the intended final 20-artifact layout remains within the plan's evidence-backed ceiling.

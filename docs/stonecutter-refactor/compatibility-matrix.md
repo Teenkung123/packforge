@@ -12,10 +12,10 @@ The final exact smoke pass covered 22 release rows and 62 officially available l
 | 1.20.2 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final Fabric/Forge/NeoForge artifacts; two reloads and clean exit. |
 | 1.20.3 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final Fabric/Forge/NeoForge artifacts; legacy NeoForge descriptor/bootstrap repaired and rerun. |
 | 1.20.4 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final Fabric/Forge/NeoForge artifacts; two reloads and clean exit. |
-| 1.20.5 | Fabric | `FULL_OPTIMIZED_PATH` | Official loader availability is Fabric-only; final artifact smoke passed. |
-| 1.20.6 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final Java-21-family artifacts; two reloads and clean exit. |
-| 1.21 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; two reloads and clean exit. |
-| 1.21.1 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; also the Quick Pack 1.5.0 profile on Fabric. |
+| 1.20.5 | Fabric | `FULL_OPTIMIZED_PATH` | Shared Fabric 1.20.5-1.21.1 artifact; two reloads and clean exit. Official loader availability is Fabric-only. |
+| 1.20.6 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Shared Java-21 range artifacts; two reloads and clean exit. |
+| 1.21 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Same shared range artifacts; two reloads and clean exit. |
+| 1.21.1 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Same shared range artifacts; also the Quick Pack module-handoff profile on Fabric. |
 | 1.21.2 | Fabric, NeoForge | `FULL_OPTIMIZED_PATH` | Official Forge line unavailable; Fabric/NeoForge exact cells passed. |
 | 1.21.3 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Final exact artifacts; two reloads and clean exit. |
 | 1.21.4 | Fabric, Forge, NeoForge | `FULL_OPTIMIZED_PATH` | Existing beta anchor production smoke and artifact verification. |
@@ -37,15 +37,15 @@ All pre-26.x rows remain beta and all 26.x rows remain stable. No loader is infe
 
 | Profile | Result | Evidence |
 |---|---|---|
-| Quick Pack Fabric 1.21.1, version 1.5.0 | `EXTERNALLY_OWNED_PATH` | Real third-party JAR; `status=VERIFIED_1_5`; six overlap capabilities owned by Quick Pack; ten reloads; clean exit. |
-| Unknown future Quick Pack major | `EXTERNALLY_OWNED_PATH` | Unit policy test; all overlap paths fail closed. |
+| Quick Pack Fabric 1.21.1, version 1.5.0 | `EXTERNALLY_OWNED_PATH` | Real third-party JAR; `status=MODULE_HANDOFF`; six overlap capabilities owned by Quick Pack; ten reloads; clean exit. |
+| Any other Quick Pack version string | `EXTERNALLY_OWNED_PATH` | Unit policy tests cover old, future, malformed, and missing versions; version is diagnostic only and the same six modules are handed off. Quick Pack 1.4 and older are best-effort/not guaranteed. |
 | Sodium/Iris/ImmediatelyFast/ModernFix/FerriteCore pairwise profiles | `UNTESTED` | Not part of the executed exact-release acceptance run; no claim is made. |
 | Official Forge 1.21.2 | `UNAVAILABLE` | No official Forge 1.21.2 line is declared in the registry. |
 
 ## Build/package evidence
 
-`validateTargetRegistry`, `printResolvedMatrix`, exact target verifiers, and the current published 17-artifact verifier pass. Build proof remains separate from runtime proof. Final artifact SHA-256 values are recorded in `artifact-consolidation.md` and the phase entries in `work-log.md`.
+`validateTargetRegistry`, `printResolvedMatrix`, exact target verifiers, and the current 20-artifact release-manifest verifier pass. Build proof remains separate from runtime proof. Final artifact SHA-256 values are recorded in `artifact-consolidation.md` and the phase entries in `work-log.md`.
 
 ## Publication status
 
-The exact-cell evidence above is not a claim that the public manifest covers every row. Current registry-derived publication contains 20 artifacts and 35 publication-smoke cells. Minecraft 1.20.2, 1.20.3, and 1.20.4 now resolve to the same tested 1.20.2-1.20.4 artifact for each loader; the remaining ten non-anchor pre-26 rows stay `planned-verified` until their range-artifact proof is recorded. The official Mojang stable-release sequence guard passes for all 22 required IDs.
+The exact-cell evidence above is not a claim that the public manifest covers every row. Current registry-derived publication contains 20 artifacts and 42 publication-smoke cells. Minecraft 1.20.2-1.20.4 resolve to one tested range artifact per loader; Minecraft 1.20.5-1.21.1 resolve to one tested Fabric artifact and one tested Forge/NeoForge artifact over their applicable releases. The remaining seven non-anchor pre-26 rows stay `planned-verified` until their range-artifact proof is recorded. The official Mojang stable-release sequence guard passes for all 22 required IDs.

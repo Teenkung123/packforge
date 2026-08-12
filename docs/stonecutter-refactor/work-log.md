@@ -207,3 +207,18 @@
 - Publication evidence: registry validation PASS; generated counts `19/62/35/20` for build/smoke/publish-smoke/publish; exact 20-artifact manifest verification PASS.
 - Rollback: `git revert fbd7b3208347230ae17e90f822bde2e100e82992` restores exact-only 1.20.2 metadata and removes the Forge range selector.
 - Next mandatory phase: consolidate and same-JAR test 1.20.5-1.21.1, 1.21.2-1.21.4, 1.21.5-1.21.8, and 1.21.9-1.21.11; then rerun the rebuilt 26.x NeoForge artifact.
+
+## Phase 14 — second same-binary range promotion
+
+- Date: 2026-08-12
+- Commit SHA: `5ed1480540162547b3de475e0e9a51e7965d968c`; parent `9b060a267e525eda3ce5f47852064fa1e546b079`
+- Status: `RANGE_VERIFIED`; three Java 21 consolidation families remain open.
+- Scope: widen `mc1_21_1` to Fabric 1.20.5-1.21.1 and Forge/NeoForge 1.20.6-1.21.1; use supported pack formats 32-34; move Forge descriptor/compatibility selection into loader registry data; accept two-part release IDs in Fabric root preparation; harden clean-exit observation after completed reloads; replace Quick Pack version branching with six-capability module handoff.
+- Build evidence: `buildMc1_21_1` and artifact verification PASS; Quick Pack policy tests cover old, current, future, malformed, and missing version strings; `clean build` PASS in 8m49s; clean output reproduced all runtime-tested hashes exactly.
+- Runtime evidence: Fabric PASS on 1.20.5, 1.20.6, 1.21, and 1.21.1; Forge and NeoForge PASS on 1.20.6, 1.21, and 1.21.1. Every cell used one unchanged loader artifact, completed two deterministic reloads, emitted semantic/resource evidence, and exited cleanly.
+- Artifact hashes: Fabric `99D38B658B6D8A19294ADB4D5986BB714016A67C697B91C8FAB01EC7DE5B4E72`; Forge `CA9F0EEAF1B382BA13518C7B5C24149BDA6031C33AA4473A8A08CD510ED78FFA`; NeoForge `969BFADD9B219932FAB7040839CA6ADAB075EC8B0E941CDED829A22C3A41D5AE`.
+- Quick Pack evidence: real Quick Pack 1.5.0 SHA-256 `7E93E08D5ADA815DB6874D5BCCA750A12A2AC97F3B80143ED47EF6D70FE32EE1`; final Fabric range JAR; ten requested reloads; `status=MODULE_HANDOFF`; all six overlap capabilities delegated; clean exit. Version metadata is diagnostic only. Quick Pack 1.4 and older remain best-effort/not guaranteed.
+- Publication evidence: registry validation PASS; generated counts `19/62/42/20` for build/smoke/publish-smoke/publish; exactly 20 clean-built JARs accepted by the release-manifest verifier.
+- Deviation repaired: the first clean build exposed Java compatibility being incorrectly used as a proxy for descriptor ownership on Forge 1.20.1. Explicit loader `mixinConfigs` preserve each descriptor family and the focused 1.20.1 verifier plus final clean build pass. Fabric 1.21 also exposed a clean-shutdown observation race after all reloads completed; the harness now grants only a bounded 15-second process-exit grace after reload proof.
+- Rollback: `git revert 5ed1480540162547b3de475e0e9a51e7965d968c` restores the previous singleton 1.21.1 publication target and version-classified Quick Pack policy.
+- Next mandatory phase: consolidate and same-JAR test 1.21.2-1.21.4, 1.21.5-1.21.8, and 1.21.9-1.21.11; then rerun the rebuilt 26.x NeoForge artifact.

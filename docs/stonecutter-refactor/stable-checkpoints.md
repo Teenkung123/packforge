@@ -179,3 +179,15 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Verification: all nine exact runtime cells PASS with two deterministic reloads and clean exit; hashes Fabric `77D690FF...`, Forge `88F4BB16...`, NeoForge `24460EEF...`; clean root build PASS with 107 executed tasks; post-clean rebuild reproduced the full hashes recorded in `artifact-consolidation.md`.
 - Publication projection: registry-derived counts `build=19`, `smoke=62`, `publish-smoke=35`, `publish=20`; exactly 20 staged artifacts accepted by the release-manifest verifier.
 - Rollback: `git revert fbd7b3208347230ae17e90f822bde2e100e82992`.
+
+## Second proven range artifact
+
+- Date: 2026-08-12
+- Commit SHA: `5ed1480540162547b3de475e0e9a51e7965d968c`
+- Parent stable checkpoint: `9b060a267e525eda3ce5f47852064fa1e546b079`
+- Status: `RANGE_VERIFIED`
+- Scope: one Fabric artifact for Minecraft 1.20.5-1.21.1; one Forge and NeoForge artifact for 1.20.6-1.21.1; registry-owned loader descriptor compatibility; version-independent Quick Pack overlap-module handoff; bounded Fabric clean-shutdown grace after completed reload proof.
+- Verification: all ten exact runtime cells PASS with two deterministic reloads and clean exit; hashes Fabric `99D38B65...`, Forge `CA9F0EEA...`, NeoForge `969BFADD...`; real Quick Pack 1.5.0 profile PASS with `MODULE_HANDOFF`, ten requested reloads, and clean exit; full clean build PASS in 8m49s and reproduces all tested hashes.
+- Publication projection: registry-derived counts `build=19`, `smoke=62`, `publish-smoke=42`, `publish=20`; exactly 20 clean-built artifacts accepted by the release-manifest verifier.
+- Compatibility policy: Quick Pack version is diagnostic only. Presence delegates only `RESOURCE_PACK_INDEX`, `ZIP_READ_POOL`, `FONT_PROVIDER_PRESELECTION`, `ATLAS_MIP_PARALLEL`, `LOADING_FADE_CONTROL`, and `LOADING_STATUS_OVERLAY`; unrelated PackForge modules retain normal policy. Quick Pack 1.4 and older are best-effort/not guaranteed.
+- Rollback: `git revert 5ed1480540162547b3de475e0e9a51e7965d968c`.

@@ -6,7 +6,7 @@ Every §16 performance candidate has a final decision. No candidate is promoted 
 |---|---:|---|---|
 | ZIP read pool | off | `SAFE_KEEP_DEFAULT_OFF` | Exact runtime matrix and Quick Pack 1.5.0 profile pass; no qualifying isolated performance gate was executed. |
 | Font bitmap provider cache | off | `SAFE_KEEP_DEFAULT_OFF` | Exact runtime matrix passes; provider/epoch parity and a qualifying performance gate are not established. |
-| Atlas mipmap parallelization | off | `SAFE_KEEP_DEFAULT_OFF` | Quick Pack 1.5.x owns this overlap; no independent promotion is permitted. |
+| Atlas mipmap parallelization | off | `SAFE_KEEP_DEFAULT_OFF` | Loaded Quick Pack owns this overlapping module regardless of reported version; no independent promotion is permitted. |
 | Atlas sprite decode batching | off | `SAFE_KEEP_DEFAULT_OFF` | Correctness smoke passes, but no qualifying native-close/performance gate was executed. |
 | Model adaptive batching | off | `SAFE_KEEP_DEFAULT_OFF` | Exact runtime matrix passes; no controlled model-loader benchmark qualifies promotion. |
 | Model duplicate parse cache | off | `SAFE_KEEP_DEFAULT_OFF` | Exact runtime matrix passes; pure-input/context-bypass and measurable-benefit gates are incomplete. |
