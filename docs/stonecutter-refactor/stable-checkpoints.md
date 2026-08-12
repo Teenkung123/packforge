@@ -300,3 +300,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: all three PowerShell scripts parsed with zero AST errors; a one-cell/two-marker dry plan resolved the expected dependency and profile counts; duplicate and unknown cell selections were rejected; focused static contracts passed; two independent read-only reviews found no remaining harness blocker.
 - Status: `HARNESS_VERIFIED_RUNTIME_PENDING`; no Minecraft client was launched for this checkpoint, so it records controller integrity rather than a completed third-party compatibility profile.
 - Rollback: `git revert 3840a63bb8361cadd216ad15853efb4428ac29d1` removes compatibility-profile transport and evidence hardening while retaining operation-level Quick Pack ownership.
+
+## Registry-derived Stonecutter project graph
+
+- Date: 2026-08-12
+- Commit SHA: `8241e600d807f3900224e90a17d3467413d30ee1`
+- Parent SHA: `f6df8d85e079e278566fe61f81b438168df574b4`
+- Scope: registry-derived Stonecutter loader branches and target distributions; separate 19-target source-anchor, 53-distribution, and 62 exact runtime-cell ledgers; explicit VCS target authority; cross-platform delegated-wrapper execution; stale delegated-artifact prevention.
+- Verification: `projects` exposed exactly three loader branches and 53 target-loader leaves. `updateSourceMetricsCheckpoint validateStonecutterRegistry` passed with 19 unique source anchors, 53 distributions, and 62 exact loader cells. A Fabric 1.21.1 leaf regenerated and verified its distribution artifact after the generic freshness hardening. A legacy NeoForge 1.20.2 leaf built and verified through the retained rollback path before that loader-neutral freshness tweak. Independent re-review found no remaining technical blocker.
+- Status: `PHASE_D_VERIFIED_COMPLETE`; this proves registry graph ownership and delegated rollback behavior. Direct in-graph loader builds remain Phase E work, and no Minecraft runtime result is implied.
+- Rollback: revert later direct-build commits first, then `git revert 8241e600d807f3900224e90a17d3467413d30ee1` to restore the prior manually enumerated Stonecutter project graph and settings.
