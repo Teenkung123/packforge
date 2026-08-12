@@ -290,3 +290,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: source metrics and registry gates passed with 207 files, 16,129 LOC, zero exact/normalized duplicates, and zero Quick Pack internal references. Focused policy/UI/timing tests passed on Fabric, Forge, and NeoForge. All-loader builds and artifact-contract verification passed for 1.20.1, 1.20.6, 1.21.1, 1.21.4, 1.21.8, 1.21.9, 1.21.10, 1.21.11, and 26.1-26.2.
 - Status: `IMPLEMENTATION_AND_PACKAGE_VERIFIED`; real Quick Pack final-JAR profiles remain required before Phase C runtime completion.
 - Rollback: `git revert 0c2fb7bcff5dd634254f3ad25b205b896acfe34e` restores early whole-mixin suppression and the preceding compatibility policy.
+
+## Compatibility-profile evidence harness
+
+- Date: 2026-08-12
+- Commit SHA: `3840a63bb8361cadd216ad15853efb4428ac29d1`
+- Parent SHA: `017e5209ae6a6d59180416d93943d5afaf33ab1a`
+- Scope: scalar JSON compatibility-profile transport; additional-mod isolation and SHA-256 provenance for Fabric, Forge, and NeoForge; expected/forbidden log markers; immutable hash-addressed PackForge artifacts, third-party JARs, and fixtures; evidence-bound resume and summaries.
+- Verification: all three PowerShell scripts parsed with zero AST errors; a one-cell/two-marker dry plan resolved the expected dependency and profile counts; duplicate and unknown cell selections were rejected; focused static contracts passed; two independent read-only reviews found no remaining harness blocker.
+- Status: `HARNESS_VERIFIED_RUNTIME_PENDING`; no Minecraft client was launched for this checkpoint, so it records controller integrity rather than a completed third-party compatibility profile.
+- Rollback: `git revert 3840a63bb8361cadd216ad15853efb4428ac29d1` removes compatibility-profile transport and evidence hardening while retaining operation-level Quick Pack ownership.
