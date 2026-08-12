@@ -269,3 +269,14 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: `reportSourceMetrics validateTargetRegistry verifyExistingArtifacts` PASS against 20 clean-built artifacts; source metrics report 16,209 LOC, 33.48% bridge LOC, zero normalized duplicate classes, and 100% baseline duplicate-group reduction. Eighteen artifacts remained byte-identical and retained 58-cell proof; the four cells represented by the two changed Forge hashes reran 4/4 PASS. The final Quick Pack 1.5.0 profile passed ten reloads with `MODULE_HANDOFF` and natural clean exit.
 - Status: `FULLY_VERIFIED`
 - Rollback: `git revert a3402866b217ac159d6a3cec70d3585028f79732` restores the prior source ownership and publication ledger.
+
+## Continuation baseline and deterministic source gates
+
+- Date: 2026-08-12
+- Commit SHA: `71f29b116f40e967996fa5e75e45aad89a7b0bb6`
+- Parent SHA: `9baa02f5bb65277aafc7e508c6f0e1c6c9a261a5`
+- Scope: current-state audit; deterministic handwritten-source, ownership, branch, renderer, registry-cell, and publication metrics; explicit stable-checkpoint snapshot refresh; exact and normalized duplicate gates.
+- Verification: `./gradlew.bat updateSourceMetricsCheckpoint validateTargetRegistry --no-daemon --console=plain` passed; a normal `reportSourceMetrics` rerun preserved checked-in snapshot timestamps and hashes; JSON and Markdown contain LF-only portable bytes; baseline `buildAllSupported verifyAllArtifacts` completed successfully in 12 minutes 1 second with 75 actionable tasks.
+- Result: 202 production Java files, 16,209 nonblank LOC, 99 aggregate bridge files / 5,426 LOC, zero exact or normalized duplicate groups, 80 platform `target.key` references, 84 target-key/version conditional lines, four native configuration renderer paths, 22 exact releases, 62 loader cells, 19 registered build targets, and 20 publication artifacts.
+- Status: `PHASE_A_VERIFIED_COMPLETE`; build/package evidence only, with runtime/profile limitations classified in `current-state-audit.md`.
+- Rollback: `git revert 71f29b116f40e967996fa5e75e45aad89a7b0bb6` removes the continuation audit and expanded source gates while retaining all earlier implementation history.
