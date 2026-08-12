@@ -10,6 +10,12 @@ param(
 
     [string[]] $OnlyCell,
 
+    [string[]] $AdditionalModPaths,
+
+    [string[]] $ExpectedLogMarkers,
+
+    [string[]] $ForbiddenLogMarkers,
+
     [ValidateRange(60, 3600)]
     [int] $TimeoutSeconds = 900,
 
@@ -52,6 +58,48 @@ function Resolve-RequiredFile {
         throw "$Description is missing: $resolved"
     }
     return $resolved
+}
+
+function Resolve-CompatibilityProfileMods {
+    param([string[]] $Paths)
+
+    $resolvedMods = [Collections.Generic.List[object]]::new()
+    $seenNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($path in @($Paths)) {
+        if ([string]::IsNullOrWhiteSpace($path)) { continue }
+        $resolved = Resolve-RequiredFile -Path $path -Description 'Compatibility profile mod'
+        $artifact = [IO.Path]::GetFileName($resolved)
+        if ([string]::IsNullOrWhiteSpace($artifact) -or $artifact -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\-]*\.jar$') {
+            throw "Compatibility profile mod must be a safe JAR filename: $artifact"
+        }
+        if (-not $seenNames.Add($artifact)) {
+            throw "Compatibility profile contains colliding additional-mod filename: $artifact"
+        }
+        [void] $resolvedMods.Add([pscustomobject]@{
+            artifact = $artifact
+            sourcePath = $resolved
+            sha256 = (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash.ToUpperInvariant()
+        })
+    }
+    return @($resolvedMods)
+}
+
+function Get-NonEmptyMarkers {
+    param([string[]] $Markers)
+
+    return @($Markers | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) } | ForEach-Object { [string] $_ })
+}
+
+function Get-Sha256Text {
+    param([string] $Text)
+
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [Text.Encoding]::UTF8.GetBytes($Text)
+        return ([BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace('-', '')
+    } finally {
+        $sha256.Dispose()
+    }
 }
 
 function Get-ExactLoaderCoordinate {
@@ -198,6 +246,88 @@ function Resolve-ResourcePackFixture {
     throw "No deterministic production resource-pack fixture exists for target $Target."
 }
 
+function Copy-ImmutableEvidenceInput {
+    param(
+        [string] $SourcePath,
+        [string] $ExpectedHash,
+        [string] $DestinationRoot,
+        [string] $Description
+    )
+
+    $source = Resolve-RequiredFile -Path $SourcePath -Description $Description
+    $actualSourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($actualSourceHash -ne $ExpectedHash) {
+        throw "$Description changed after profile resolution: expected=$ExpectedHash actual=$actualSourceHash"
+    }
+    $hashRoot = Join-Path $DestinationRoot $ExpectedHash
+    New-Item -ItemType Directory -Path $hashRoot -Force | Out-Null
+    $destination = Join-Path $hashRoot ([IO.Path]::GetFileName($source))
+    if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) {
+        Copy-Item -LiteralPath $source -Destination $destination
+    }
+    $destinationHash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($destinationHash -ne $ExpectedHash) {
+        throw "Immutable $Description hash mismatch: expected=$ExpectedHash actual=$destinationHash"
+    }
+    return [IO.Path]::GetFullPath($destination)
+}
+
+function Test-ProfileProvenance {
+    param(
+        [string] $Path,
+        $Row,
+        [object[]] $ExpectedAdditionalMods
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return 'Smoke PASS line omitted compatibility-profile provenance.' }
+    try {
+        $resolved = Resolve-RequiredFile -Path $Path -Description 'Compatibility profile provenance'
+        $provenance = Get-Content -LiteralPath $resolved -Raw | ConvertFrom-Json
+    } catch {
+        return $_.Exception.Message
+    }
+    if ([string] $provenance.artifact -ne [IO.Path]::GetFileName([string] $Row.Artifact)) {
+        return 'Compatibility profile provenance names a different PackForge artifact.'
+    }
+    if ([string] $provenance.sha256 -ne [string] $Row.ArtifactHash) {
+        return 'Compatibility profile provenance has a different PackForge artifact hash.'
+    }
+    try {
+        $stagedArtifact = Resolve-RequiredFile -Path ([string] $provenance.stagedPath) -Description 'Staged PackForge artifact'
+        $stagedArtifactHash = (Get-FileHash -LiteralPath $stagedArtifact -Algorithm SHA256).Hash.ToUpperInvariant()
+    } catch {
+        return $_.Exception.Message
+    }
+    if ($stagedArtifactHash -ne [string] $Row.ArtifactHash) {
+        return 'Staged PackForge artifact has the wrong SHA-256.'
+    }
+    if ([string] $provenance.loader -ne [string] $Row.Loader -or [string] $provenance.target -ne [string] $Row.Target) {
+        return 'Compatibility profile provenance has a different loader or target.'
+    }
+    $actualAdditionalMods = @($provenance.additionalMods)
+    if ($actualAdditionalMods.Count -ne $ExpectedAdditionalMods.Count) {
+        return 'Compatibility profile provenance has a different additional-mod count.'
+    }
+    foreach ($expected in $ExpectedAdditionalMods) {
+        $matches = @($actualAdditionalMods | Where-Object {
+            [string] $_.artifact -eq [string] $expected.artifact -and [string] $_.sha256 -eq [string] $expected.sha256
+        })
+        if ($matches.Count -ne 1) {
+            return "Compatibility profile provenance is missing $($expected.artifact) with SHA-256 $($expected.sha256)."
+        }
+        try {
+            $staged = Resolve-RequiredFile -Path ([string] $matches[0].stagedPath) -Description "Staged compatibility mod $($expected.artifact)"
+            $stagedHash = (Get-FileHash -LiteralPath $staged -Algorithm SHA256).Hash.ToUpperInvariant()
+        } catch {
+            return $_.Exception.Message
+        }
+        if ($stagedHash -ne [string] $expected.sha256) {
+            return "Staged compatibility mod $($expected.artifact) has the wrong SHA-256."
+        }
+    }
+    return $null
+}
+
 function Ensure-InstallerProfile {
     param(
         [string] $Loader,
@@ -247,9 +377,10 @@ function Get-PriorPasses {
     foreach ($line in Get-Content -LiteralPath $Path) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         try { $record = $line | ConvertFrom-Json } catch { continue }
-        if ([string] $record.status -eq 'PASS') {
-            $passes[[string] $record.cell] = $record
-        }
+        $evidenceProperty = $record.PSObject.Properties['evidenceFingerprint']
+        if ($null -eq $evidenceProperty -or [string]::IsNullOrWhiteSpace([string] $evidenceProperty.Value)) { continue }
+        $key = "$([string] $record.cell)|$([string] $evidenceProperty.Value)"
+        if ([string] $record.status -eq 'PASS') { $passes[$key] = $record } else { [void] $passes.Remove($key) }
     }
     return $passes
 }
@@ -258,7 +389,13 @@ $registry = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
 if ([int] $registry.schemaVersion -ne 2) { throw "Unsupported registry schema $($registry.schemaVersion)." }
 $targets = @{}
 foreach ($target in $registry.targets) { $targets[[string] $target.key] = $target }
-$selectedCells = @($OnlyCell | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) })
+$selectedCells = @($OnlyCell | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) } | ForEach-Object { ([string] $_).Trim() })
+$selectedCellSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($selectedCell in $selectedCells) {
+    if (-not $selectedCellSet.Add($selectedCell)) {
+        throw "Duplicate -OnlyCell selection: $selectedCell"
+    }
+}
 
 $modVersionLine = Select-String -LiteralPath (Join-Path $repositoryRoot 'gradle.properties') -Pattern '^mod_version=(.+)$'
 if ($null -eq $modVersionLine -or $modVersionLine.Matches.Count -ne 1) { throw 'gradle.properties has no unique mod_version.' }
@@ -271,10 +408,11 @@ foreach ($cell in $registry.releaseCells) {
     foreach ($loaderValue in $cell.loaderAvailability) {
         $loader = [string] $loaderValue
         $cellId = "$($cell.id)/$loader"
-        if ($selectedCells.Count -gt 0 -and $cellId -notin $selectedCells) { continue }
+        if ($selectedCellSet.Count -gt 0 -and -not $selectedCellSet.Contains($cellId)) { continue }
         $coordinate = Get-ExactLoaderCoordinate -Target $target -Release ([string] $cell.id) -Loader $loader
         $artifact = Get-ArtifactPath -Target $target -Loader $loader -ModVersion $modVersion
         $java = Resolve-RequiredFile -Path $javaPaths[[string] $cell.javaVersion] -Description "Java $($cell.javaVersion) runtime"
+        $fixture = if ($loader -eq 'fabric') { $null } else { Resolve-ResourcePackFixture -Target ([string] $target.key) -PreferredLoader $loader }
         [void] $rows.Add([pscustomobject]@{
             Cell = $cellId
             Release = [string] $cell.id
@@ -284,15 +422,48 @@ foreach ($cell in $registry.releaseCells) {
             Java = $java
             Artifact = $artifact
             ArtifactHash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToUpperInvariant()
+            Fixture = $fixture
+            FixtureHash = if ($null -eq $fixture) { 'fabric-active-pack-stack-v1' } else { (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash.ToUpperInvariant() }
         })
     }
 }
 if ($selectedCells.Count -eq 0 -and $rows.Count -ne 62) {
     throw "Expected 62 exact production cells, resolved $($rows.Count)."
 }
+if ($selectedCellSet.Count -gt 0) {
+    $resolvedCellSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($row in $rows) { [void] $resolvedCellSet.Add([string] $row.Cell) }
+    $unknownCells = @($selectedCells | Where-Object { -not $resolvedCellSet.Contains($_) })
+    if ($unknownCells.Count -gt 0) {
+        throw "Unknown -OnlyCell selection(s): $($unknownCells -join ', ')"
+    }
+    if ($rows.Count -ne $selectedCellSet.Count) {
+        throw "Requested $($selectedCellSet.Count) unique cells but resolved $($rows.Count)."
+    }
+}
+$profileAdditionalMods = @(Resolve-CompatibilityProfileMods -Paths $AdditionalModPaths)
+$profileExpectedMarkers = @(Get-NonEmptyMarkers -Markers $ExpectedLogMarkers)
+$profileForbiddenMarkers = @(Get-NonEmptyMarkers -Markers $ForbiddenLogMarkers)
+$compatibilityProfileRequested = $profileAdditionalMods.Count -gt 0 -or $profileExpectedMarkers.Count -gt 0 -or $profileForbiddenMarkers.Count -gt 0
+$profileIdentity = [ordered]@{
+    schema = 1
+    additionalMods = @($profileAdditionalMods | Sort-Object artifact | ForEach-Object {
+        [ordered]@{ artifact = $_.artifact; sha256 = $_.sha256 }
+    })
+    expectedLogMarkers = @($profileExpectedMarkers | Sort-Object)
+    forbiddenLogMarkers = @($profileForbiddenMarkers | Sort-Object)
+}
+$profileFingerprint = if ($compatibilityProfileRequested) {
+    Get-Sha256Text -Text ($profileIdentity | ConvertTo-Json -Compress -Depth 4)
+} else {
+    'base-v1'
+}
 
 $uniqueArtifactCount = @($rows | ForEach-Object { $_.Artifact } | Sort-Object -Unique).Count
 Write-Output "MATRIX resolved=$($rows.Count) artifacts=$uniqueArtifactCount reloads=$ReloadCount"
+if ($compatibilityProfileRequested) {
+    Write-Output "PROFILE fingerprint=$profileFingerprint additionalMods=$($profileAdditionalMods.Count) expectedMarkers=$($profileExpectedMarkers.Count) forbiddenMarkers=$($profileForbiddenMarkers.Count)"
+}
 foreach ($row in $rows) {
     Write-Output ("PLAN {0,-20} target={1,-16} coordinate={2,-24} artifact={3}" -f $row.Cell, $row.Target, $row.Coordinate, [IO.Path]::GetFileName($row.Artifact))
 }
@@ -326,6 +497,49 @@ if ([string]::IsNullOrWhiteSpace($ResultsRoot)) {
 }
 $ResultsRoot = [IO.Path]::GetFullPath($ResultsRoot)
 New-Item -ItemType Directory -Path $ResultsRoot -Force | Out-Null
+$evidenceInputsRoot = Join-Path $ResultsRoot 'evidence-inputs'
+$materializedProfileMods = [Collections.Generic.List[object]]::new()
+foreach ($additionalMod in $profileAdditionalMods) {
+    $immutablePath = Copy-ImmutableEvidenceInput `
+        -SourcePath ([string] $additionalMod.sourcePath) `
+        -ExpectedHash ([string] $additionalMod.sha256) `
+        -DestinationRoot (Join-Path $evidenceInputsRoot 'mods') `
+        -Description "Compatibility profile mod $($additionalMod.artifact)"
+    [void] $materializedProfileMods.Add([pscustomobject]@{
+        artifact = [string] $additionalMod.artifact
+        sha256 = [string] $additionalMod.sha256
+        path = $immutablePath
+    })
+}
+foreach ($row in $rows) {
+    $immutableArtifact = Copy-ImmutableEvidenceInput `
+        -SourcePath ([string] $row.Artifact) `
+        -ExpectedHash ([string] $row.ArtifactHash) `
+        -DestinationRoot (Join-Path $evidenceInputsRoot 'artifacts') `
+        -Description "PackForge artifact for $($row.Cell)"
+    $immutableFixture = if ($null -eq $row.Fixture) {
+        $null
+    } else {
+        Copy-ImmutableEvidenceInput `
+            -SourcePath ([string] $row.Fixture) `
+            -ExpectedHash ([string] $row.FixtureHash) `
+            -DestinationRoot (Join-Path $evidenceInputsRoot 'fixtures') `
+            -Description "Deterministic fixture for $($row.Cell)"
+    }
+    $row | Add-Member -NotePropertyName ImmutableArtifact -NotePropertyValue $immutableArtifact
+    $row | Add-Member -NotePropertyName ImmutableFixture -NotePropertyValue $immutableFixture
+}
+$profileInputPath = $null
+if ($compatibilityProfileRequested) {
+    $profileInputPath = Join-Path $evidenceInputsRoot "compatibility-profile-$profileFingerprint.json"
+    $profileInput = [ordered]@{
+        schema = 1
+        additionalModPaths = @($materializedProfileMods | ForEach-Object { $_.path })
+        expectedLogMarkers = @($profileExpectedMarkers)
+        forbiddenLogMarkers = @($profileForbiddenMarkers)
+    }
+    [IO.File]::WriteAllText($profileInputPath, ($profileInput | ConvertTo-Json -Depth 3), [Text.UTF8Encoding]::new($false))
+}
 $resultsPath = Join-Path $ResultsRoot 'results.jsonl'
 $summaryPath = Join-Path $ResultsRoot 'summary.json'
 $priorPasses = if ($Resume.IsPresent) { Get-PriorPasses -Path $resultsPath } else { @{} }
@@ -333,13 +547,46 @@ $passed = 0
 $failed = 0
 $skipped = 0
 $index = 0
+$expectedEvidenceFingerprints = @{}
 
 foreach ($row in $rows) {
     $index++
-    $prior = $priorPasses[$row.Cell]
-    if ($null -ne $prior -and [string] $prior.artifactHash -eq $row.ArtifactHash) {
+    $useForgeBackend = $row.Loader -eq 'neoforge' -and $compatibilityProfileRequested
+    $smokeScript = if ($row.Loader -eq 'fabric') {
+        Join-Path $PSScriptRoot 'Smoke-Fabric-Production.ps1'
+    } elseif ($row.Loader -eq 'forge' -or $useForgeBackend) {
+        Join-Path $PSScriptRoot 'Smoke-Forge-Production.ps1'
+    } else {
+        Join-Path $PSScriptRoot 'Smoke-NeoForge-Production.ps1'
+    }
+    $harnessScripts = [Collections.Generic.List[string]]::new()
+    [void] $harnessScripts.Add([IO.Path]::GetFullPath($PSCommandPath))
+    [void] $harnessScripts.Add([IO.Path]::GetFullPath($smokeScript))
+    if ($row.Loader -eq 'neoforge' -and -not $useForgeBackend) {
+        [void] $harnessScripts.Add([IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'Smoke-Forge-Production.ps1')))
+    }
+    $harnessIdentity = @($harnessScripts | Select-Object -Unique | ForEach-Object {
+        [ordered]@{
+            artifact = [IO.Path]::GetFileName($_)
+            sha256 = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToUpperInvariant()
+        }
+    })
+    $evidenceIdentity = [ordered]@{
+        schema = 3
+        cell = [string] $row.Cell
+        coordinate = [string] $row.Coordinate
+        artifactHash = [string] $row.ArtifactHash
+        fixtureHash = [string] $row.FixtureHash
+        profileFingerprint = $profileFingerprint
+        reloads = $ReloadCount
+        harnesses = $harnessIdentity
+    }
+    $evidenceFingerprint = Get-Sha256Text -Text ($evidenceIdentity | ConvertTo-Json -Compress)
+    $expectedEvidenceFingerprints[[string] $row.Cell] = $evidenceFingerprint
+    $prior = $priorPasses["$($row.Cell)|$evidenceFingerprint"]
+    if ($null -ne $prior) {
         $skipped++
-        Write-Output "SKIP $index/$($rows.Count) $($row.Cell) matchingHash=$($row.ArtifactHash)"
+        Write-Output "SKIP $index/$($rows.Count) $($row.Cell) evidence=$evidenceFingerprint"
         continue
     }
 
@@ -347,13 +594,6 @@ foreach ($row in $rows) {
     $profile = if ($row.Loader -eq 'fabric') { $supportProfile } else { $loaderProfiles[$row.Cell] }
     $logName = $row.Cell.Replace('/', '-') + '.log'
     $logPath = Join-Path $ResultsRoot $logName
-    $smokeScript = if ($row.Loader -eq 'fabric') {
-        Join-Path $PSScriptRoot 'Smoke-Fabric-Production.ps1'
-    } elseif ($row.Loader -eq 'forge') {
-        Join-Path $PSScriptRoot 'Smoke-Forge-Production.ps1'
-    } else {
-        Join-Path $PSScriptRoot 'Smoke-NeoForge-Production.ps1'
-    }
     $arguments = [Collections.Generic.List[string]]::new()
     $arguments.AddRange([string[]] @('-NoProfile', '-File', $smokeScript))
     if ($row.Loader -eq 'fabric') {
@@ -361,24 +601,30 @@ foreach ($row in $rows) {
             '-FabricClientRoot', [string] $profile.Root,
             '-VersionName', [string] $profile.VersionName,
             '-MinecraftVersion', [string] $row.Release,
-            '-ArtifactPath', [string] $row.Artifact,
+            '-ArtifactPath', [string] $row.ImmutableArtifact,
             '-AssetsRoot', (Join-Path $supportProfile.Root 'assets'),
             '-NativesRoot', [string] $supportProfile.NativesRoot,
             '-JavaPath', [string] $row.Java,
             '-FallbackLibrariesRoot', (Join-Path $supportProfile.Root 'libraries')
         ))
     } else {
-        $clientRootParameter = if ($row.Loader -eq 'forge') { '-ForgeClientRoot' } else { '-NeoForgeClientRoot' }
+        $clientRootParameter = if ($row.Loader -eq 'forge' -or $useForgeBackend) { '-ForgeClientRoot' } else { '-NeoForgeClientRoot' }
         $arguments.AddRange([string[]] @(
             $clientRootParameter, [string] $profile.Root,
             '-VersionName', [string] $profile.VersionName,
-            '-ArtifactPath', [string] $row.Artifact,
+            '-ArtifactPath', [string] $row.ImmutableArtifact,
             '-AssetsRoot', (Join-Path $supportProfile.Root 'assets'),
             '-NativesRoot', [string] $supportProfile.NativesRoot,
             '-JavaPath', [string] $row.Java,
             '-FallbackLibrariesRoot', (Join-Path $supportProfile.Root 'libraries'),
-            '-ResourcePackPath', (Resolve-ResourcePackFixture -Target $row.Target -PreferredLoader $row.Loader)
+            '-ResourcePackPath', [string] $row.ImmutableFixture
         ))
+        if ($useForgeBackend) {
+            $arguments.AddRange([string[]] @('-Loader', 'neoforge'))
+        }
+    }
+    if ($compatibilityProfileRequested) {
+        $arguments.AddRange([string[]] @('-CompatibilityProfilePath', $profileInputPath))
     }
     $arguments.AddRange([string[]] @(
         '-TimeoutSeconds', [string] $TimeoutSeconds,
@@ -401,6 +647,25 @@ foreach ($row in $rows) {
     $controlledTermination = $passLine.Count -eq 1 -and $passLine[0] -match 'controlledTermination=true'
     $status = if ($exitCode -eq 0 -and $cleanExit) { 'PASS' } else { 'FAIL' }
     $durationSeconds = [math]::Round(([datetime]::UtcNow - $started).TotalSeconds, 1)
+    $provenancePath = $null
+    if ($passLine.Count -eq 1 -and $passLine[0] -match '(?:^|\s)provenance=(?<path>.+)$') {
+        $provenancePath = $Matches['path']
+    }
+    $profileValidationError = $null
+    if ($status -eq 'PASS') {
+        $profileValidationError = Test-ProfileProvenance `
+            -Path $provenancePath `
+            -Row $row `
+            -ExpectedAdditionalMods @($profileAdditionalMods)
+        if ($null -ne $profileValidationError) {
+            $status = 'FAIL'
+            $exitCode = 1
+            $validationLine = "PROFILE_VALIDATION_FAILED $profileValidationError"
+            [void] $lines.Add($validationLine)
+            Write-Host $validationLine
+            [IO.File]::WriteAllLines($logPath, @($lines), [Text.UTF8Encoding]::new($false))
+        }
+    }
     $record = [ordered]@{
         timestampUtc = [datetime]::UtcNow.ToString('o')
         cell = $row.Cell
@@ -412,14 +677,28 @@ foreach ($row in $rows) {
         profileRoot = [string] $profile.Root
         artifact = [IO.Path]::GetFileName($row.Artifact)
         artifactHash = $row.ArtifactHash
+        fixtureHash = $row.FixtureHash
         reloads = $ReloadCount
+        profileFingerprint = $profileFingerprint
+        evidenceFingerprint = $evidenceFingerprint
         cleanExit = $cleanExit
         controlledTermination = $controlledTermination
         exitCode = $exitCode
         durationSeconds = $durationSeconds
         status = $status
         passLine = if ($passLine.Count -eq 1) { $passLine[0] } else { $null }
+        profileValidationError = $profileValidationError
         log = $logPath
+    }
+    if ($compatibilityProfileRequested) {
+        $record.compatibilityProfile = [ordered]@{
+            additionalMods = @($profileAdditionalMods | ForEach-Object {
+                [ordered]@{ artifact = $_.artifact; sha256 = $_.sha256 }
+            })
+            expectedLogMarkers = @($profileExpectedMarkers)
+            forbiddenLogMarkers = @($profileForbiddenMarkers)
+            provenance = $provenancePath
+        }
     }
     [IO.File]::AppendAllText($resultsPath, (($record | ConvertTo-Json -Compress) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
     if ($status -eq 'PASS') {
@@ -434,7 +713,11 @@ $latestRecords = @{}
 foreach ($line in Get-Content -LiteralPath $resultsPath) {
     if ([string]::IsNullOrWhiteSpace($line)) { continue }
     try { $record = $line | ConvertFrom-Json } catch { continue }
-    $latestRecords[[string] $record.cell] = $record
+    $cell = [string] $record.cell
+    if (-not $expectedEvidenceFingerprints.ContainsKey($cell)) { continue }
+    $evidenceProperty = $record.PSObject.Properties['evidenceFingerprint']
+    if ($null -eq $evidenceProperty -or [string] $evidenceProperty.Value -ne [string] $expectedEvidenceFingerprints[$cell]) { continue }
+    $latestRecords[$cell] = $record
 }
 $latestValues = @($latestRecords.Values)
 $cumulativePassed = @($latestValues | Where-Object { [string] $_.status -eq 'PASS' }).Count
@@ -449,6 +732,7 @@ $summary = [ordered]@{
     cumulativePassed = $cumulativePassed
     cumulativeFailed = $cumulativeFailed
     reloadsPerCell = $ReloadCount
+    profileFingerprint = $profileFingerprint
     results = $resultsPath
 }
 [IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json), [Text.UTF8Encoding]::new($false))

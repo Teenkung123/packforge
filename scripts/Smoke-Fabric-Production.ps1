@@ -25,6 +25,12 @@ param(
 
     [string[]] $AdditionalModPaths,
 
+    [string[]] $ExpectedLogMarkers,
+
+    [string[]] $ForbiddenLogMarkers,
+
+    [string] $CompatibilityProfilePath,
+
     [string] $FallbackLibrariesRoot,
 
     [ValidateRange(60, 86400)]
@@ -204,6 +210,43 @@ function Resolve-RequiredPath {
         throw "$Description is missing: $resolved"
     }
     return $resolved
+}
+
+function Import-CompatibilityProfile {
+    param([string] $Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $null }
+    $resolved = Resolve-RequiredPath -Path $Path -Description 'Compatibility profile input'
+    try {
+        $profile = Get-Content -LiteralPath $resolved -Raw | ConvertFrom-Json
+    } catch {
+        throw "Compatibility profile input is not valid JSON: $resolved"
+    }
+    if ([int] $profile.schema -ne 1) {
+        throw "Unsupported compatibility profile input schema: $($profile.schema)"
+    }
+    return $profile
+}
+
+function Get-CompatibilityProfileStrings {
+    param($Profile, [string] $Name)
+
+    if ($null -eq $Profile) { return @() }
+    $property = $Profile.PSObject.Properties[$Name]
+    if ($null -eq $property) { return @() }
+    $values = [Collections.Generic.List[string]]::new()
+    foreach ($value in @($property.Value)) {
+        if ($value -isnot [string]) { throw "Compatibility profile '$Name' values must be strings." }
+        [void] $values.Add([string] $value)
+    }
+    return @($values)
+}
+
+$compatibilityProfile = Import-CompatibilityProfile -Path $CompatibilityProfilePath
+if ($null -ne $compatibilityProfile) {
+    $AdditionalModPaths = @($AdditionalModPaths) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'additionalModPaths')
+    $ExpectedLogMarkers = @($ExpectedLogMarkers) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'expectedLogMarkers')
+    $ForbiddenLogMarkers = @($ForbiddenLogMarkers) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'forbiddenLogMarkers')
 }
 
 function Resolve-SafeRelativePath {
@@ -585,6 +628,28 @@ function Compare-NumericVersion {
     return 0
 }
 
+function Assert-ProfileLogMarkers {
+    param(
+        [string] $Text,
+        [string] $Context,
+        [string[]] $Expected,
+        [string[]] $Forbidden
+    )
+
+    foreach ($marker in @($Expected)) {
+        if ([string]::IsNullOrWhiteSpace($marker)) { continue }
+        if ($Text.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            throw "Compatibility profile is missing expected log marker during ${Context}: $marker"
+        }
+    }
+    foreach ($marker in @($Forbidden)) {
+        if ([string]::IsNullOrWhiteSpace($marker)) { continue }
+        if ($Text.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            throw "Compatibility profile contains forbidden log marker during ${Context}: $marker"
+        }
+    }
+}
+
 function Get-LibraryIdentity {
     param($Library)
 
@@ -819,6 +884,8 @@ if ($sourceHash -ne $stagedHash) {
 }
 
 $stagedAdditionalMods = [Collections.Generic.List[object]]::new()
+$stagedModNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+[void] $stagedModNames.Add($artifactName)
 foreach ($additionalModPath in @($AdditionalModPaths)) {
     if ([string]::IsNullOrWhiteSpace($additionalModPath)) { continue }
     $additionalMod = Resolve-RequiredPath -Path $additionalModPath -Description 'Additional production profile mod'
@@ -826,8 +893,8 @@ foreach ($additionalModPath in @($AdditionalModPaths)) {
     if ([string]::IsNullOrWhiteSpace($additionalName) -or $additionalName -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\-]*\.jar$') {
         throw "Additional production profile mod must be a safe JAR filename: $additionalName"
     }
-    if ($additionalName -ieq $artifactName) {
-        throw "Additional production profile mod collides with the PackForge artifact: $additionalName"
+    if (-not $stagedModNames.Add($additionalName)) {
+        throw "Additional production profile mod collides with an already staged mod: $additionalName"
     }
     $additionalDestination = Join-Path $modsRoot $additionalName
     Copy-Item -LiteralPath $additionalMod -Destination $additionalDestination -Force
@@ -851,6 +918,7 @@ $provenance = [ordered]@{
     stagedPath = $stagedArtifact
     sha256 = $sourceHash
     additionalMods = @($stagedAdditionalMods)
+    loader = 'fabric'
     minecraftVersion = $MinecraftVersion
     fabricVersion = $VersionName
     target = $targetMarker
@@ -1163,6 +1231,7 @@ try {
 if (-not $passed) { throw 'Fabric production smoke failed.' }
 $finalText = Get-RunText -GameRoot $runRoot -LatestLog $latestLog -StdoutPath $stdoutPath -StderrPath $stderrPath
 Assert-NoFatalLog -Text $finalText -Context 'Fabric production shutdown'
+Assert-ProfileLogMarkers -Text $finalText -Context 'Fabric production shutdown' -Expected $ExpectedLogMarkers -Forbidden $ForbiddenLogMarkers
 $finalLog = Get-LogText -Path $latestLog
 if ($finalLog -notmatch $capabilityPattern) { throw 'Final Fabric log is missing the PackForge capability marker.' }
 if ($finalLog.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -lt 0) { throw 'Final Fabric log is missing the PackForge reload marker.' }

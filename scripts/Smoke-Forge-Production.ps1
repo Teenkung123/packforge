@@ -23,6 +23,14 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $JavaPath,
 
+    [string[]] $AdditionalModPaths,
+
+    [string[]] $ExpectedLogMarkers,
+
+    [string[]] $ForbiddenLogMarkers,
+
+    [string] $CompatibilityProfilePath,
+
     [string] $FallbackLibrariesRoot,
 
     [ValidateRange(60, 3600)]
@@ -109,7 +117,11 @@ public static class PackForgeProductionSmokeNative
 function Resolve-RequiredPath {
     param([string] $Path, [string] $Description, [switch] $Directory)
 
-    $resolved = [IO.Path]::GetFullPath($Path)
+    try {
+        $resolved = [IO.Path]::GetFullPath($Path)
+    } catch {
+        throw "$Description is not a valid path: $Path"
+    }
     $pathType = if ($Directory) { 'Container' } else { 'Leaf' }
     if (-not (Test-Path -LiteralPath $resolved -PathType $pathType)) {
         throw "$Description is missing: $resolved"
@@ -123,6 +135,43 @@ function Get-ObjectProperty {
     $property = $Object.PSObject.Properties[$Name]
     if ($null -eq $property) { return $null }
     return $property.Value
+}
+
+function Import-CompatibilityProfile {
+    param([string] $Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $null }
+    $resolved = Resolve-RequiredPath -Path $Path -Description 'Compatibility profile input'
+    try {
+        $profile = Get-Content -LiteralPath $resolved -Raw | ConvertFrom-Json
+    } catch {
+        throw "Compatibility profile input is not valid JSON: $resolved"
+    }
+    if ([int] $profile.schema -ne 1) {
+        throw "Unsupported compatibility profile input schema: $($profile.schema)"
+    }
+    return $profile
+}
+
+function Get-CompatibilityProfileStrings {
+    param($Profile, [string] $Name)
+
+    if ($null -eq $Profile) { return @() }
+    $property = $Profile.PSObject.Properties[$Name]
+    if ($null -eq $property) { return @() }
+    $values = [Collections.Generic.List[string]]::new()
+    foreach ($value in @($property.Value)) {
+        if ($value -isnot [string]) { throw "Compatibility profile '$Name' values must be strings." }
+        [void] $values.Add([string] $value)
+    }
+    return @($values)
+}
+
+$compatibilityProfile = Import-CompatibilityProfile -Path $CompatibilityProfilePath
+if ($null -ne $compatibilityProfile) {
+    $AdditionalModPaths = @($AdditionalModPaths) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'additionalModPaths')
+    $ExpectedLogMarkers = @($ExpectedLogMarkers) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'expectedLogMarkers')
+    $ForbiddenLogMarkers = @($ForbiddenLogMarkers) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'forbiddenLogMarkers')
 }
 
 function Test-RuleSet {
@@ -276,6 +325,34 @@ if ([IO.Path]::GetPathRoot($clientRoot).TrimEnd('\') -eq $clientRoot.TrimEnd('\'
     throw 'ClientRoot must not be a drive root.'
 }
 
+function Assert-ProfileLogMarkers {
+    param(
+        [string] $Text,
+        [string] $Context,
+        [string[]] $Expected,
+        [string[]] $Forbidden
+    )
+
+    foreach ($marker in @($Expected)) {
+        if ([string]::IsNullOrWhiteSpace($marker)) { continue }
+        if ($Text.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            throw "Compatibility profile is missing expected log marker during ${Context}: $marker"
+        }
+    }
+    foreach ($marker in @($Forbidden)) {
+        if ([string]::IsNullOrWhiteSpace($marker)) { continue }
+        if ($Text.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            throw "Compatibility profile contains forbidden log marker during ${Context}: $marker"
+        }
+    }
+}
+
+function Write-Utf8NoBom {
+    param([string] $Path, [string] $Contents)
+
+    [IO.File]::WriteAllText($Path, $Contents, [Text.UTF8Encoding]::new($false))
+}
+
 function Compare-NumericVersion {
     param([string] $Left, [string] $Right)
 
@@ -391,11 +468,56 @@ $gameRoot = Join-Path $clientRoot "packforge-smoke\$VersionName\$runId"
 $modsRoot = Join-Path $gameRoot 'mods'
 $logsRoot = Join-Path $gameRoot 'logs'
 New-Item -ItemType Directory -Path $modsRoot, $logsRoot -Force | Out-Null
-$stagedArtifact = Join-Path $modsRoot ([IO.Path]::GetFileName($artifact))
-Copy-Item -LiteralPath $artifact -Destination $stagedArtifact
-if ((Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $stagedArtifact -Algorithm SHA256).Hash) {
-    throw 'Staged production artifact hash mismatch.'
+$artifactName = [IO.Path]::GetFileName($artifact)
+$stagedArtifact = Join-Path $modsRoot $artifactName
+$sourceHash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToUpperInvariant()
+Copy-Item -LiteralPath $artifact -Destination $stagedArtifact -Force
+$stagedHash = (Get-FileHash -LiteralPath $stagedArtifact -Algorithm SHA256).Hash.ToUpperInvariant()
+if ($sourceHash -ne $stagedHash) {
+    throw "Staged production artifact SHA-256 mismatch: source=$sourceHash staged=$stagedHash"
 }
+
+$stagedAdditionalMods = [Collections.Generic.List[object]]::new()
+$stagedModNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+[void] $stagedModNames.Add($artifactName)
+foreach ($additionalModPath in @($AdditionalModPaths)) {
+    if ([string]::IsNullOrWhiteSpace($additionalModPath)) { continue }
+    $additionalMod = Resolve-RequiredPath -Path $additionalModPath -Description 'Additional production profile mod'
+    $additionalName = [IO.Path]::GetFileName($additionalMod)
+    if ([string]::IsNullOrWhiteSpace($additionalName) -or $additionalName -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\-]*\.jar$') {
+        throw "Additional production profile mod must be a safe JAR filename: $additionalName"
+    }
+    if (-not $stagedModNames.Add($additionalName)) {
+        throw "Additional production profile mod collides with an already staged mod: $additionalName"
+    }
+
+    $additionalDestination = Join-Path $modsRoot $additionalName
+    Copy-Item -LiteralPath $additionalMod -Destination $additionalDestination -Force
+    $additionalSourceHash = (Get-FileHash -LiteralPath $additionalMod -Algorithm SHA256).Hash.ToUpperInvariant()
+    $additionalStagedHash = (Get-FileHash -LiteralPath $additionalDestination -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($additionalSourceHash -ne $additionalStagedHash) {
+        throw "Staged additional mod SHA-256 mismatch: source=$additionalSourceHash staged=$additionalStagedHash"
+    }
+    [void] $stagedAdditionalMods.Add([ordered]@{
+        artifact = $additionalName
+        sourcePath = $additionalMod
+        stagedPath = $additionalDestination
+        sha256 = $additionalSourceHash
+    })
+}
+$provenancePath = Join-Path $gameRoot 'artifact-provenance.json'
+$provenance = [ordered]@{
+    artifact = $artifactName
+    sourcePath = $artifact
+    stagedPath = $stagedArtifact
+    sha256 = $sourceHash
+    additionalMods = @($stagedAdditionalMods)
+    minecraftVersion = $minecraftVersion
+    loader = $Loader
+    versionName = $VersionName
+    target = $targetMarker
+}
+Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 4)
 if ($AllowControlledTermination.IsPresent) {
     $resourcePackSource = Resolve-RequiredPath -Path $resourcePackSource -Description 'Deterministic production resource pack'
     $resourcePackRoot = Join-Path $gameRoot 'resourcepacks'
@@ -610,5 +732,5 @@ try {
 if (-not $passed) { throw "Production $loaderDisplay smoke failed." }
 $finalText = Get-RunText -GameRoot $gameRoot -Paths @($latestLog, $stdoutPath, $stderrPath)
 Assert-NoFatalLog -Text $finalText -Context 'production shutdown'
-$hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash
-Write-Output "PASS $loaderDisplay production smoke: version=$VersionName artifact=$([IO.Path]::GetFileName($artifact)) sha256=$hash reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot"
+Assert-ProfileLogMarkers -Text $finalText -Context 'production shutdown' -Expected $ExpectedLogMarkers -Forbidden $ForbiddenLogMarkers
+Write-Output "PASS $loaderDisplay production smoke: version=$VersionName artifact=$artifactName sha256=$sourceHash additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot provenance=$provenancePath"
