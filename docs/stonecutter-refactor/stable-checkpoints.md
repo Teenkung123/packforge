@@ -168,3 +168,14 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 - Deviation: 13 non-anchor pre-26 release rows remain `planned-verified`; they are not promoted by status-only change because no same-binary range proof is recorded for their public artifact metadata. A fresh production smoke of the rebuilt modern NeoForge 26.x artifact remains open.
 - Rollback: `git revert b71e281dc7f4318c872982d6dcdf9e5e74508116` restores the previous target-specific build/publication wiring while retaining earlier version-family commits.
 - Next mandatory phase: same-binary pre-26 range proofs, bounded artifact consolidation/publication, current rebuilt NeoForge 26.x production smoke, then final full-matrix evidence commit.
+
+## First proven range artifact
+
+- Date: 2026-08-12
+- Commit SHA: `fbd7b3208347230ae17e90f822bde2e100e82992`
+- Parent stable checkpoint: `0d5dc3ab0820d34fd63d709840696cdbb2335a1d`
+- Status: `RANGE_VERIFIED`
+- Scope: one Fabric, Forge, and NeoForge artifact for Minecraft 1.20.2-1.20.4; Forge 48/49 pre-application reload-observer selection; loader-specific artifact-range plumbing; final-JAR target-marker and interior-range smoke validation.
+- Verification: all nine exact runtime cells PASS with two deterministic reloads and clean exit; hashes Fabric `77D690FF...`, Forge `88F4BB16...`, NeoForge `24460EEF...`; clean root build PASS with 107 executed tasks; post-clean rebuild reproduced the full hashes recorded in `artifact-consolidation.md`.
+- Publication projection: registry-derived counts `build=19`, `smoke=62`, `publish-smoke=35`, `publish=20`; exactly 20 staged artifacts accepted by the release-manifest verifier.
+- Rollback: `git revert fbd7b3208347230ae17e90f822bde2e100e82992`.

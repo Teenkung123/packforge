@@ -48,4 +48,4 @@ All pre-26.x rows remain beta and all 26.x rows remain stable. No loader is infe
 
 ## Publication status
 
-The exact-cell evidence above is not a claim that the public manifest covers every row. Current registry-derived publication contains 17 artifacts and 26 public-anchor smoke cells; the remaining pre-26 rows stay `planned-verified` until range-artifact proof is recorded. The official Mojang stable-release sequence guard passes for all 22 required IDs.
+The exact-cell evidence above is not a claim that the public manifest covers every row. Current registry-derived publication contains 20 artifacts and 35 publication-smoke cells. Minecraft 1.20.2, 1.20.3, and 1.20.4 now resolve to the same tested 1.20.2-1.20.4 artifact for each loader; the remaining ten non-anchor pre-26 rows stay `planned-verified` until their range-artifact proof is recorded. The official Mojang stable-release sequence guard passes for all 22 required IDs.

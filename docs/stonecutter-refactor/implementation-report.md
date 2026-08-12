@@ -2,7 +2,7 @@
 
 This file starts as the baseline report and is extended after each verified phase. Executed baseline evidence remains in `baseline.md`, `artifact-consolidation.md`, and `compatibility-matrix.md`.
 
-Current status: the ordered Stonecutter/refactor implementation, 22-row exact release expansion, Quick Pack ownership seam, exact runtime matrix, and registry-derived CI wiring are implemented on `codex/packforge-stonecutter-refactor`. The goal is still open: the public release manifest remains a verified 17-artifact anchor set, while pre-26 exact rows remain `planned-verified` until a single binary has range-proof evidence for every release it would claim.
+Current status: the ordered Stonecutter/refactor implementation, 22-row exact release expansion, Quick Pack ownership seam, exact runtime matrix, and registry-derived CI wiring are implemented on `codex/packforge-stonecutter-refactor`. The first same-binary range family is verified and promoted: the generated manifest now contains 20 artifacts, including one artifact per loader for Minecraft 1.20.2-1.20.4. The goal remains open while the Java 21 families are consolidated and range-tested.
 
 Phase 1 evidence: `validateTargetRegistry` and `printResolvedMatrix` pass with 22 exact release cells; a focused all-loader `mc1_21_1` build and artifact verification pass. The first focused attempt found and repaired the child-build schema guard; no functional artifact change was intended.
 
@@ -64,4 +64,18 @@ Every §16 performance candidate has a recorded `SAFE_KEEP_DEFAULT_OFF` verdict.
 
 ## Remaining explicit limits
 
-The exact base matrix and the required Quick Pack profile are proven. Pairwise profiles for unrelated third-party optimization/render mods were not executed and remain `UNTESTED`; no claim is made for them. The public release set was not expanded from 17 artifacts by status-only promotion. The 13 non-anchor pre-26 release rows are still `planned-verified`, so the final artifact-consolidation phase remains incomplete: no checked-in range-proof manifest yet covers those rows with the same tested final JAR. The latest root build also verifies the repaired modern NeoForge all-in-one packaging structurally; a fresh production smoke on that rebuilt 26.x NeoForge byte set is still a remaining acceptance check.
+The exact base matrix and the required Quick Pack profile are proven. Pairwise profiles for unrelated third-party optimization/render mods were not executed and remain `UNTESTED`; no claim is made for them. The 1.20.2-1.20.4 rows were promoted only after same-JAR runtime proof on all nine applicable loader cells. Ten non-anchor pre-26 release rows remain `planned-verified`, so the Java 21 artifact-consolidation phase remains incomplete. The latest root build also verifies the repaired modern NeoForge all-in-one packaging structurally; a fresh production smoke on that rebuilt 26.x NeoForge byte set is still a remaining acceptance check.
+
+## First proven range artifact: 1.20.2-1.20.4
+
+Checkpoint `fbd7b3208347230ae17e90f822bde2e100e82992` widens the 1.20.2 anchor into one beta range artifact per loader. Fabric uses legacy `supported_formats` metadata for pack formats 18-22. Forge packages both reload-observer variants and selects the Forge 48 or Forge 49 hook from `FMLLoader.versionInfo().mcVersion()` before mixin application.
+
+All nine exact production cells used the same final JAR for their loader, completed two deterministic reloads, emitted semantic/resource evidence, and exited cleanly:
+
+```text
+Fabric   1.20.2, 1.20.3, 1.20.4  77D690FF0D9956271196CBD96406962C052656AAC8B26FF42AD78B40954F4B1A
+Forge    1.20.2, 1.20.3, 1.20.4  88F4BB16DD9BEDCEA21100827B7A53794050939F936422F8180B86C451C90547
+NeoForge 1.20.2, 1.20.3, 1.20.4  24460EEFB3D33F1B6AD5154758A2E829394138ECD65017C8E19F39F5A1D2BC48
+```
+
+`gradlew.bat clean build --no-daemon --console=plain` passed in 13m16s with 107 executed tasks. Rebuilding `buildMc1_20_2` after the clean build reproduced all three tested SHA-256 values exactly. Registry promotion then produced matrix counts `build=19`, `smoke=62`, `publish-smoke=35`, and `publish=20`; release-manifest verification accepted exactly 20 staged artifacts.

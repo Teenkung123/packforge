@@ -194,3 +194,16 @@
 - Deviation/blocker: 13 non-anchor pre-26 release rows remain `planned-verified`; current rebuilt modern NeoForge 26.x production smoke has not yet been rerun after the JarJar packaging repair.
 - Rollback point: `git revert b71e281dc7f4318c872982d6dcdf9e5e74508116`.
 - Next mandatory phase: range-proof/publication consolidation, current modern NeoForge 26.x production smoke, and final full-matrix evidence.
+
+## Phase 13 — first same-binary range promotion
+
+- Date: 2026-08-12
+- Commit SHA: `fbd7b3208347230ae17e90f822bde2e100e82992`; parent `0d5dc3ab0820d34fd63d709840696cdbb2335a1d`
+- Status: `RANGE_VERIFIED`; Java 21 consolidation remains open.
+- Scope: widen the `mc1_20_2` artifact metadata through 1.20.4, add legacy `supported_formats`, make smoke harnesses read the target marker from the final JAR, support interior artifact-version checks, and select the Forge 48/49 reload observer before mixin application.
+- Build evidence: `buildMc1_20_2` and artifact verification PASS; Forge selector unit tests PASS; `clean build` PASS in 13m16s with 107 executed tasks; the post-clean focused rebuild reproduced the runtime-tested SHA-256 values.
+- Runtime evidence: Fabric, Forge, and NeoForge each passed 1.20.2, 1.20.3, and 1.20.4 with one unchanged loader artifact, two deterministic reloads per cell, semantic/resource evidence, and clean exit.
+- Artifact hashes: Fabric `77D690FF0D9956271196CBD96406962C052656AAC8B26FF42AD78B40954F4B1A`; Forge `88F4BB16DD9BEDCEA21100827B7A53794050939F936422F8180B86C451C90547`; NeoForge `24460EEFB3D33F1B6AD5154758A2E829394138ECD65017C8E19F39F5A1D2BC48`.
+- Publication evidence: registry validation PASS; generated counts `19/62/35/20` for build/smoke/publish-smoke/publish; exact 20-artifact manifest verification PASS.
+- Rollback: `git revert fbd7b3208347230ae17e90f822bde2e100e82992` restores exact-only 1.20.2 metadata and removes the Forge range selector.
+- Next mandatory phase: consolidate and same-JAR test 1.20.5-1.21.1, 1.21.2-1.21.4, 1.21.5-1.21.8, and 1.21.9-1.21.11; then rerun the rebuilt 26.x NeoForge artifact.

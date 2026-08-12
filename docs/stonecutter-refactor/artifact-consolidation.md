@@ -115,3 +115,15 @@ packforge-neoforge-1.3.4-mc26.1-26.2.jar 6f68f8989ccdb119439ccd479110dcca50e7d6b
 ```
 
 The pre-26 rows are not promoted merely because their exact target artifacts pass. The remaining artifact-consolidation work is to prove a range binary, split unsafe ranges, and keep the final count within the plan’s 17-artifact target or evidence-backed 21-artifact fallback.
+
+## First range promotion: Minecraft 1.20.2-1.20.4
+
+Checkpoint `fbd7b3208347230ae17e90f822bde2e100e82992` proves one range artifact per loader across all three exact releases. The tested and reproducibly rebuilt SHA-256 values are:
+
+```text
+packforge-fabric-1.3.4-beta.3-mc1.20.2-1.20.4.jar   77D690FF0D9956271196CBD96406962C052656AAC8B26FF42AD78B40954F4B1A
+packforge-forge-1.3.4-beta.3-mc1.20.2-1.20.4.jar    88F4BB16DD9BEDCEA21100827B7A53794050939F936422F8180B86C451C90547
+packforge-neoforge-1.3.4-beta.3-mc1.20.2-1.20.4.jar 24460EEFB3D33F1B6AD5154758A2E829394138ECD65017C8E19F39F5A1D2BC48
+```
+
+Each hash passed Minecraft 1.20.2, 1.20.3, and 1.20.4 startup, two deterministic reloads, semantic/resource evidence, and clean exit on its loader. The registry now assigns those three exact rows to `mc1_20_2`; generated publication contains 20 artifacts and 35 exact publication-smoke cells. This is an evidence-based partial promotion, not a claim that the remaining Java 21 ranges are complete.
