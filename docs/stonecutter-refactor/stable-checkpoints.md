@@ -380,3 +380,23 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: a focused registry-to-README checker matched one publication marker, 20 loader-specific artifacts, seven publication target keys, and all 22 exact loader rows. Scoped whitespace validation passed, and independent re-review approved the corrected exact table and marker gate. No Gradle build or Minecraft runtime was run for this documentation-only contract.
 - Status: `PHASE_H_DOCUMENTATION_CONSISTENCY_VERIFIED`; historical consolidation remains implemented but unverified against the new direct-build bytes until retained final-JAR same-artifact runtime evidence is regenerated.
 - Rollback: `git revert e0a644d3443fbecc37fef7537de96e5d9cee148a` restores the prior README text and removes its registry consistency gate.
+
+## Isolated README publication gate
+
+- Date: 2026-08-13
+- Commit SHA: `d21a2a5f0652b46afd92bde87725fb943e1842a3`
+- Parent SHA: `af62f124f6938f8e3af464826ae6faf829edadfb`
+- Scope: extract README publication declaration validation from `validateTargetRegistry` into an explicit reusable contract; retain fail-closed marker, artifact-count, and target-key checks.
+- Verification: focused static registry-to-README contract check passed. No compile, package, or Minecraft runtime executed.
+- Status: `PHASE_H_DOCUMENTATION_CONSISTENCY_VERIFIED`; extraction changes validation ownership only.
+- Rollback: `git revert d21a2a5f0652b46afd92bde87725fb943e1842a3` restores the README gate inside `validateTargetRegistry`.
+
+## Registry-owned source selection policies
+
+- Date: 2026-08-13
+- Commit SHA: `4c76d6520080834a3c278bbefd7c0ce31189da84`
+- Parent SHA: `d21a2a5f0652b46afd92bde87725fb943e1842a3`
+- Scope: seven registry-owned source policies and target assignments; shared policy interpreter replacing loader-local target/source-family selection while retaining source ordering, exclusions, source-set enablement, and `sourcesJar` duplicate policy.
+- Verification: static golden source-selection comparison and independent read-only review passed. `validateStonecutterRegistry` passed in 34 seconds with 53 direct leaves and 62 exact loader cells. No compile, package, ZIP parity, or Minecraft runtime executed.
+- Status: `PHASE_F_CONFIGURATION_VERIFIED`; not full build or runtime verification.
+- Rollback: `git revert 4c76d6520080834a3c278bbefd7c0ce31189da84` restores loader-local source selection after reverting later dependants.
