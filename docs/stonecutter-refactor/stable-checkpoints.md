@@ -530,3 +530,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: the offline focused profile self-test passed in 15.7 seconds; AST validation passed for all five scripts; independent review passed.
 - Status: `PHASE_I_MATERIALIZER_STRUCTURAL_VERIFIED`; no network request, artifact download, Gradle task, Minecraft launch, or compatibility runtime was executed. All seven metadata-`AVAILABLE` profiles remain `UNTESTED`; ImmediatelyFast-only profiles fail closed until a dedicated runtime path marker exists, and nonempty configuration overrides fail closed until override transport is implemented.
 - Rollback: after reverting later documentation and profile-runner dependants, `git revert 6257c35d50d04e4d874b1175d4808af52fbacdb1` removes schema-2 profile materialization and restores selector-only profile handling.
+
+## Authoritative direct Stonecutter contract
+
+- Date: 2026-08-13
+- Commit SHA: `3c01a50`; parent `b7e60da`
+- Status: `STRUCTURAL_VERIFIED`; Phase E remains `PARTIAL`.
+- Scope: all 53 registry-derived loader distributions are authoritative direct cells; public graph is direct-only; JOptSimple registry metadata remains explicit; `validateStonecutterDirectContract` is mandatory.
+- Verification: direct contract AST/self-test passed baseline plus 10 rejected mutations; direct task passed; `validateTargetRegistry` dry-run passed in 31 seconds without compilation; independent review passed.
+- Limits: nested Gradle remains only as parity rollback oracle. No all-53 build, broad structural/package parity, Java 17/21/25 proof, remap/JarJar proof, Minecraft runtime, or true Stonecutter-preprocessed source proof occurred.
+- Rollback: revert later dependants, then `git revert 3c01a50`.

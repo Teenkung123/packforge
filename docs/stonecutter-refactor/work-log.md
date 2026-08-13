@@ -276,3 +276,12 @@
 - Verification: the offline focused materialization self-test passed in 15.7 seconds; AST validation passed for all five scripts; independent review passed.
 - Limits: no network request, dependency download, Gradle task, Minecraft launch, or compatibility runtime was executed. The seven metadata-`AVAILABLE` profiles are still not PASS results. ImmediatelyFast-only execution fails closed because no dedicated path marker is yet available, and any nonempty configuration override fails closed because override transport is not implemented.
 - Rollback: revert later documentation/profile dependants first, then `git revert 6257c35d50d04e4d874b1175d4808af52fbacdb1` to restore selector-only profile handling.
+
+## Phase 20 — authoritative direct Stonecutter contract
+
+- Date: 2026-08-13
+- Commit SHA: `3c01a50`; parent `b7e60da`
+- Scope: 53 registry-derived loader distributions authoritative direct cells; direct-only public graph; JOptSimple registry metadata; mandatory `validateStonecutterDirectContract`.
+- Verification: direct contract AST/self-test baseline plus 10 mutations PASS; direct task PASS; `validateTargetRegistry` dry-run PASS in 31 seconds without compilation; independent review PASS.
+- Status: `PHASE_E_STRUCTURAL_VERIFIED_PARTIAL`. Nested Gradle remains parity rollback oracle. No all-53 build/structural/package parity, Java 17/21/25 proof, remap/JarJar proof, runtime, or true Stonecutter-preprocessed source proof.
+- Rollback: revert later dependants, then `git revert 3c01a50`.
