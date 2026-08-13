@@ -2,8 +2,13 @@ import groovy.json.JsonSlurper
 
 pluginManagement {
 	def pluginRegistry = new JsonSlurper().parse(new File(settingsDir, 'gradle/minecraft-targets.json'))
+	def effectiveStonecutterBuildMode = { target, loaderId ->
+		(target.platforms[loaderId]?.stonecutterBuildMode
+			?: pluginRegistry.stonecutterBuildDefaults?[loaderId]
+			?: 'delegated').toString()
+	}
 	def directFabricCells = pluginRegistry.targets.findAll { target ->
-		target.platforms.fabric?.stonecutterBuildMode?.toString() == 'direct'
+		target.platforms.fabric != null && effectiveStonecutterBuildMode(target, 'fabric') == 'direct'
 	}
 	def fabricLoomVersions = directFabricCells
 		.collect { target -> target.platforms.fabric?.loomVersion?.toString() }
@@ -70,6 +75,15 @@ if (expectedStonecutterSourceAnchors.collect { it.target }.size() != expectedSto
 
 def loaderIds = new LinkedHashSet<String>()
 def allowedStonecutterBuildModes = ['delegated', 'direct'] as Set
+def stonecutterBuildDefaults = registry.stonecutterBuildDefaults ?: [:]
+if (!(stonecutterBuildDefaults instanceof Map)) {
+	throw new GradleException("PackForge stonecutterBuildDefaults must be a loader-to-mode map; found ${stonecutterBuildDefaults.getClass().name}.")
+}
+def effectiveStonecutterBuildMode = { target, loaderId ->
+	(target.platforms[loaderId]?.stonecutterBuildMode
+		?: stonecutterBuildDefaults[loaderId]
+		?: 'delegated').toString()
+}
 registry.targets.each { target ->
 	if (!(target.platforms instanceof Map) || target.platforms.isEmpty()) {
 		throw new GradleException("PackForge target '${target.key}' must declare at least one loader platform.")
@@ -77,7 +91,7 @@ registry.targets.each { target ->
 	target.platforms.each { loaderId, platform ->
 		loaderId = loaderId.toString()
 		loaderIds.add(loaderId)
-		def buildMode = (platform.stonecutterBuildMode ?: 'delegated').toString()
+		def buildMode = effectiveStonecutterBuildMode(target, loaderId)
 		if (buildMode !in allowedStonecutterBuildModes) {
 			throw new GradleException("PackForge target '${target.key}' loader '${loaderId}' has unsupported Stonecutter build mode '${buildMode}'; allowed=${allowedStonecutterBuildModes.sort()}.")
 		}
@@ -86,6 +100,14 @@ registry.targets.each { target ->
 			throw new GradleException("PackForge target '${target.key}' loader '${loaderId}' requests direct Stonecutter build without '${directBuildscript}'.")
 		}
 	}
+}
+def unknownDefaultLoaders = stonecutterBuildDefaults.keySet().collect { it.toString() }.findAll { it !in loaderIds }.sort()
+if (!unknownDefaultLoaders.isEmpty()) {
+	throw new GradleException("PackForge stonecutterBuildDefaults has unrecognized loader keys ${unknownDefaultLoaders}; known=${loaderIds.toList().sort()}.")
+}
+def invalidDefaultModes = stonecutterBuildDefaults.findAll { loaderId, mode -> mode == null || mode.toString() !in allowedStonecutterBuildModes }
+if (!invalidDefaultModes.isEmpty()) {
+	throw new GradleException("PackForge stonecutterBuildDefaults has unsupported modes ${invalidDefaultModes}; allowed=${allowedStonecutterBuildModes.sort()}.")
 }
 
 def expectedStonecutterNodePaths = []
@@ -99,7 +121,7 @@ stonecutter {
 				registry.targets.findAll { target -> target.platforms[loaderId] != null }.each { target ->
 					def targetKey = target.key.toString()
 					def nodePath = ":${loaderId}:${targetKey}"
-					def buildMode = (target.platforms[loaderId].stonecutterBuildMode ?: 'delegated').toString()
+					def buildMode = effectiveStonecutterBuildMode(target, loaderId)
 					def buildscriptPath = buildMode == 'direct'
 						? "../platform/${loaderId}/build.gradle"
 						: '../stonecutter-build.gradle'

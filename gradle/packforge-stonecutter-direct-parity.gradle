@@ -1,0 +1,132 @@
+// Shared direct-node parity harness. Loader build scripts provide the final
+// artifact, expected name, and any loader-specific archive assertions through
+// ext.packforgeStonecutterDirectParity before applying this file.
+def directParity = project.extensions.extraProperties.has('packforgeStonecutterDirectParity')
+	? project.extensions.extraProperties.get('packforgeStonecutterDirectParity')
+	: null
+if (!(directParity instanceof Map)) {
+	throw new GradleException("${project.path} must configure packforgeStonecutterDirectParity before applying the direct-node parity helper.")
+}
+
+def requiredParityKeys = [
+	'loaderId', 'artifactProvider', 'expectedArtifactName', 'delegatedArtifact',
+	'directBuildDependencies', 'finalArtifactTask', 'delegatedBuildTaskName'
+]
+def missingParityKeys = requiredParityKeys.findAll { !directParity.containsKey(it) || directParity[it] == null }
+if (!missingParityKeys.isEmpty()) {
+	throw new GradleException("${project.path} direct-node parity configuration is missing ${missingParityKeys}.")
+}
+
+def parityLoaderId = directParity.loaderId.toString()
+def directArtifact = directParity.artifactProvider
+def expectedDirectArtifactName = directParity.expectedArtifactName.toString()
+def delegatedArtifactForParity = directParity.delegatedArtifact as File
+def delegatedBuildTask = tasks.named(directParity.delegatedBuildTaskName.toString())
+def finalArtifactTask = directParity.finalArtifactTask
+def loaderSpecificChecks = directParity.loaderSpecificChecks
+
+def hashStream = { InputStream input ->
+	def digest = java.security.MessageDigest.getInstance('SHA-256')
+	byte[] buffer = new byte[8192]
+	int count
+	while ((count = input.read(buffer)) != -1) {
+		digest.update(buffer, 0, count)
+	}
+	java.util.HexFormat.of().formatHex(digest.digest())
+}
+def expectedStonecutterManifestAttributes = [
+	'Stonecutter-Plugin-Version': '0.9.7',
+	'Stonecutter-Gradle-Version': gradle.gradleVersion,
+	'Stonecutter-Node-Project': project.name,
+	'Stonecutter-Node-Version': stonecutter.current.version.toString()
+]
+def normalizedManifestHash = { InputStream input, boolean directManifest ->
+	def manifest = new java.util.jar.Manifest(input)
+	def normalizeAttributes = { attributes ->
+		def normalized = new TreeMap<String, String>()
+		attributes.each { key, value -> normalized[key.toString()] = value.toString() }
+		normalized
+	}
+	def mainAttributes = normalizeAttributes(manifest.mainAttributes)
+	def actualStonecutterAttributes = mainAttributes.findAll { name, ignored -> name.startsWith('Stonecutter-') }
+	def expectedAttributes = directManifest ? expectedStonecutterManifestAttributes : [:]
+	if (actualStonecutterAttributes != expectedAttributes) {
+		throw new GradleException("${parityLoaderId} artifact manifest Stonecutter attributes mismatch: expected=${expectedAttributes}, actual=${actualStonecutterAttributes}.")
+	}
+	expectedStonecutterManifestAttributes.keySet().each { name -> mainAttributes.remove(name) }
+	def sections = new TreeMap<String, Map<String, String>>()
+	manifest.entries.each { name, attributes -> sections[name] = normalizeAttributes(attributes) }
+	def canonical = groovy.json.JsonOutput.toJson([main: mainAttributes, sections: sections])
+	new ByteArrayInputStream(canonical.getBytes('UTF-8')).withCloseable(hashStream)
+}
+def inspectArtifact = { File artifact, boolean directManifest ->
+	if (!artifact.isFile()) {
+		throw new GradleException("Missing ${parityLoaderId} parity artifact: ${artifact}.")
+	}
+	def entryHashes = new TreeMap<String, List<String>>()
+	def zip = new java.util.zip.ZipFile(artifact)
+	try {
+		zip.entries().each { entry ->
+			def hashes = entryHashes.computeIfAbsent(entry.name) { ignored -> [] }
+			if (entry.directory) {
+				hashes.add('<directory>')
+			} else if (entry.name == 'META-INF/MANIFEST.MF') {
+				hashes.add(zip.getInputStream(entry).withCloseable { input -> normalizedManifestHash(input, directManifest) })
+			} else {
+				hashes.add(zip.getInputStream(entry).withCloseable(hashStream))
+			}
+		}
+	} finally {
+		zip.close()
+	}
+	def duplicates = entryHashes.findAll { name, hashes -> hashes.size() != 1 }.keySet().toList().sort()
+	if (!duplicates.isEmpty()) {
+		throw new GradleException("${parityLoaderId} artifact '${artifact.name}' contains duplicate ZIP entries: ${duplicates}.")
+	}
+	entryHashes.asImmutable()
+}
+
+def directBuild = tasks.register('buildStonecutterDirectNode') {
+	group = 'build'
+	description = "Builds ${project.path} directly in the root Stonecutter graph."
+	dependsOn directParity.directBuildDependencies
+	doLast {
+		def artifact = directArtifact.get().asFile
+		if (artifact.name != expectedDirectArtifactName || !artifact.isFile()) {
+			throw new GradleException("Direct ${parityLoaderId} node artifact mismatch: expected=${expectedDirectArtifactName}, actual=${artifact}.")
+		}
+	}
+}
+
+finalArtifactTask.configure {
+	mustRunAfter(delegatedBuildTask)
+}
+
+tasks.register('verifyStonecutterDirectNode') {
+	group = 'verification'
+	description = "Compares the direct final ${parityLoaderId} JAR with the standalone artifact by complete ZIP content."
+	dependsOn(':validateTargetRegistry')
+	// The nested build remains an explicit parity oracle only. Direct aggregate
+	// build tasks depend solely on buildStonecutterDirectNode.
+	dependsOn(delegatedBuildTask)
+	dependsOn(directBuild)
+	doLast {
+		def directFile = directArtifact.get().asFile
+		def directEntries = inspectArtifact(directFile, true)
+		def delegatedEntries = inspectArtifact(delegatedArtifactForParity, false)
+		if (directEntries != delegatedEntries) {
+			def directNames = directEntries.keySet()
+			def delegatedNames = delegatedEntries.keySet()
+			def missing = delegatedNames.findAll { name -> !directNames.contains(name) }.sort()
+			def extra = directNames.findAll { name -> !delegatedNames.contains(name) }.sort()
+			def changed = directNames.intersect(delegatedNames)
+				.findAll { name -> directEntries[name] != delegatedEntries[name] }
+				.sort()
+			throw new GradleException("Direct ${parityLoaderId} artifact differs from standalone artifact: missing=${missing}, extra=${extra}, changed=${changed}.")
+		}
+		if (loaderSpecificChecks != null) {
+			loaderSpecificChecks.call(directFile, directEntries)
+		}
+		logger.lifecycle("Direct ${parityLoaderId} node parity verified: ${directFile.name} (${directEntries.size()} ZIP entries)")
+	}
+}

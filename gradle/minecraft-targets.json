@@ -2,6 +2,9 @@
   "schemaVersion": 2,
   "defaultTarget": "mc26_1_to_26_2",
   "stonecutterVcsTarget": "mc1_21_1",
+  "stonecutterBuildDefaults": {
+    "fabric": "direct"
+  },
   "releaseSequence": [
     "1.20.1", "1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6",
     "1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4", "1.21.5",
@@ -367,7 +370,6 @@
           "fabricApiVersion": "0.116.15+1.21.1",
           "minecraftDependency": ">=1.20.5 <=1.21.1",
           "mappingMode": "named",
-          "stonecutterBuildMode": "direct",
           "accessWidener": "versions/mc1_21_1/fabric/src/main/resources/packforge.accesswidener",
           "modMenuVersion": "11.0.4",
           "modMenuEntrypoint": true

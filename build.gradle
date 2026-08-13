@@ -64,7 +64,9 @@ def platformBuilds = [
 
 def targetSupports = { target, platform -> target.platforms[platform.id] != null }
 def stonecutterBuildMode = { target, platform ->
-	(target.platforms[platform.id].stonecutterBuildMode ?: "delegated").toString()
+	(target.platforms[platform.id].stonecutterBuildMode
+		?: registry.stonecutterBuildDefaults?[platform.id]
+		?: "delegated").toString()
 }
 def stonecutterNodePath = { target, platform -> ":${platform.id}:${target.key}" }
 def directStonecutterArtifactDirectory = { target, platform ->
@@ -1655,6 +1657,7 @@ platformBuilds.each { platform ->
 def buildTasksByTarget = [:]
 def buildTasksByPlatform = platformBuilds.collectEntries { [(it.id): []] }
 def verificationTasksByTarget = [:]
+def directStructuralVerificationTasks = []
 
 targets.each { target ->
 	def targetBuildTasks = []
@@ -1674,7 +1677,7 @@ targets.each { target ->
 				}
 				into layout.buildDirectory.dir("libs")
 			}
-			tasks.register("verify${platform.name}${target.taskSuffix}DirectArtifact") {
+			def directArtifactVerification = tasks.register("verify${platform.name}${target.taskSuffix}DirectArtifact") {
 				group = "verification"
 				description = "Validates the collected direct ${platform.name} artifact for ${target.artifactMinecraft}."
 				dependsOn directCollectTask
@@ -1682,6 +1685,7 @@ targets.each { target ->
 					verifyArtifact(target, platform, layout.buildDirectory.file("libs/${artifactName(target, platform)}").get().asFile)
 				}
 			}
+			directStructuralVerificationTasks << directArtifactVerification
 		}
 
 		tasks.register("run${platform.name}${target.taskSuffix}Client", Exec) {
@@ -1724,6 +1728,43 @@ targets.each { target ->
 		dependsOn verifyTask
 	}
 	buildTasksByTarget[target.key] = aggregateTask
+}
+
+def directStonecutterBuildTaskPaths = stonecutterDirectNodePaths.collect { "${it}:buildStonecutterDirectNode" }
+def directStonecutterParityTaskPaths = stonecutterDirectNodePaths.collect { "${it}:verifyStonecutterDirectNode" }
+def directFabricNodePaths = stonecutterDirectNodePaths.findAll { it.startsWith(':fabric:') }
+gradle.projectsEvaluated {
+	directFabricNodePaths.eachWithIndex { nodePath, index ->
+		if (index > 0) {
+			project(nodePath).tasks.named('buildStonecutterDirectNode').configure {
+				mustRunAfter("${directFabricNodePaths[index - 1]}:buildStonecutterDirectNode")
+			}
+			project(nodePath).tasks.named('verifyStonecutterDirectNode').configure {
+				mustRunAfter("${directFabricNodePaths[index - 1]}:verifyStonecutterDirectNode")
+			}
+		}
+	}
+}
+
+tasks.register('buildStonecutterAll') {
+	group = 'build'
+	description = 'Builds every registry cell currently configured for direct Stonecutter execution.'
+	dependsOn tasks.named('validateStonecutterRegistry')
+	dependsOn directStonecutterBuildTaskPaths
+}
+
+tasks.register('verifyStonecutterAll') {
+	group = 'verification'
+	description = 'Structurally verifies every registry cell currently configured for direct Stonecutter execution; no nested parity builds run here.'
+	dependsOn tasks.named('validateStonecutterRegistry')
+	dependsOn directStructuralVerificationTasks
+}
+
+tasks.register('verifyStonecutterParityAll') {
+	group = 'verification'
+	description = 'Runs explicit standalone-versus-direct ZIP parity oracles for every current direct Stonecutter cell.'
+	dependsOn tasks.named('validateStonecutterRegistry')
+	dependsOn directStonecutterParityTaskPaths
 }
 
 tasks.register("buildTarget") {
