@@ -340,3 +340,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: `validateStonecutterRegistry` passed. The `mc1_20_1` direct build generated and merged Mixin mappings, produced the legacy refmap, ran JarJar, and completed final renaming. The `mc1_21_1` direct build completed its modern JarJar path. The two collected artifacts then passed the root direct structural verifiers. Independent read-only review found no blocker.
 - Status: `PHASE_E_FORGE_PILOTS_PACKAGE_VERIFIED`; this proves the two distinct Forge packaging paths, not Forge matrix parity, all-cell migration, or Minecraft runtime behavior. Other Forge cells remain delegated.
 - Rollback: `git revert c28cc8cf62dbafa7cd3a52496f259848788c3a78` returns both Forge cells to delegated ownership without affecting the Fabric direct matrix.
+
+## Guarded NeoForge Stonecutter packaging pilots
+
+- Date: 2026-08-13
+- Commit SHA: `2beb0bd821c51d37f2a4b93cb57293ce0be70d5f`
+- Parent SHA: `b600888c3a400c0dafbdb53337d004bc22e98b8a`
+- Scope: direct Stonecutter ownership for NeoForge `mc1_20_2` and `mc1_21_1`; root Foojay toolchain resolution; physical loader source roots; UserDev JarJar and ModDev jar authorities; a shared single-use NeoForge build service and ordered build pipelines protecting parallel multi-version graphs; retained delegated parity oracle.
+- Verification: registry configuration passed. The Java 17 UserDev pilot completed NeoForm preparation, compilation, and JarJar packaging. The Java 21 ModDev pilot completed artifact preparation, compilation, and jar packaging. Both collected artifacts passed the root direct structural verifiers. After correcting an overbroad ordering edge, a dry run of root validation plus both explicit parity tasks passed without graph cycles. Independent re-review approved the final service and ordering design.
+- Status: `PHASE_E_NEOFORGE_PILOTS_PACKAGE_VERIFIED`; actual direct-versus-delegated ZIP parity and Minecraft runtime execution were not run. Other NeoForge cells remain delegated.
+- Rollback: `git revert 2beb0bd821c51d37f2a4b93cb57293ce0be70d5f` returns both NeoForge cells to delegation and removes their root toolchain/serialization wiring without affecting Fabric or Forge direct cells.
