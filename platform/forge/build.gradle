@@ -38,7 +38,7 @@ def usesPlatformMixinConfigs = loaderConfig.mixinConfigs != null
 def mainMixinConfig = packforgeMixinConfigs.main.toString()
 def clientMixinConfig = packforgeMixinConfigs.client.toString()
 def needsLegacyRuntimeRemap = target.minecraftVersion in ["1.20.1", "1.20.2", "1.20.3", "1.20.4"]
-def needsLegacyJoptSimpleModule = target.key in ["mc1_21_1", "mc1_21_4"]
+def joptSimpleRuntimeVersion = loaderConfig.joptSimpleRuntimeVersion?.toString()
 def legacyMixinRefmap = "packforge.refmap.json"
 def artifactSmoke = providers.gradleProperty("packforge_artifact_smoke").map(Boolean::parseBoolean).orElse(false).get()
 if (artifactSmoke) {
@@ -152,8 +152,8 @@ tasks.named("compileTestJava", JavaCompile) {
 
 dependencies {
 	implementation minecraft.dependency
-	if (needsLegacyJoptSimpleModule) {
-		runtimeOnly "net.sf.jopt-simple:jopt-simple:5.0.4"
+	if (joptSimpleRuntimeVersion != null) {
+		runtimeOnly "net.sf.jopt-simple:jopt-simple:${joptSimpleRuntimeVersion}"
 	}
 	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${packforgeMixinExtrasVersion}"))
 	if (needsLegacyRuntimeRemap) {
@@ -173,9 +173,9 @@ dependencies {
 	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
-if (needsLegacyJoptSimpleModule) {
+if (joptSimpleRuntimeVersion != null) {
 	configurations.named("runtimeClasspath") {
-		resolutionStrategy.force "net.sf.jopt-simple:jopt-simple:5.0.4"
+		resolutionStrategy.force "net.sf.jopt-simple:jopt-simple:${joptSimpleRuntimeVersion}"
 	}
 }
 

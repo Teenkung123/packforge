@@ -528,6 +528,7 @@
           "artifactMinecraft": "1.20.6-1.21.1",
           "mixinCompatibility": "JAVA_17",
           "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.font-selection.client.mixins.json"},
+          "joptSimpleRuntimeVersion": "5.0.4",
           "rangeCompileAnchor": true
         },
         "neoforge": {
@@ -957,6 +958,7 @@
           "artifactMinecraft": "1.21.3-1.21.4",
           "mixinCompatibility": "JAVA_17",
           "mixinConfigs": {"main":"packforge.forge.java17.mixins.json","client":"packforge.forge.java17.font-selection.client.mixins.json"},
+          "joptSimpleRuntimeVersion": "5.0.4",
           "rangeCompileAnchor": true
         },
         "neoforge": {

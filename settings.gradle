@@ -5,17 +5,21 @@ pluginManagement {
 	def effectiveStonecutterBuildMode = { target, loaderId ->
 		(target.platforms[loaderId]?.stonecutterBuildMode
 			?: pluginRegistry.stonecutterBuildDefaults?[loaderId]
-			?: 'delegated').toString()
+			?: '<missing>').toString()
 	}
-	def directFabricCells = pluginRegistry.targets.findAll { target ->
-		target.platforms.fabric != null && effectiveStonecutterBuildMode(target, 'fabric') == 'direct'
+	def fabricCells = pluginRegistry.targets.findAll { target -> target.platforms.fabric != null }
+	def nonDirectFabricCells = fabricCells.findAll { target ->
+		effectiveStonecutterBuildMode(target, 'fabric') != 'direct'
 	}
-	def fabricLoomVersions = directFabricCells
+	if (!nonDirectFabricCells.isEmpty()) {
+		throw new GradleException("Root Stonecutter Fabric cells must use direct mode; cells=${nonDirectFabricCells*.key}.")
+	}
+	def fabricLoomVersions = fabricCells
 		.collect { target -> target.platforms.fabric?.loomVersion?.toString() }
 		.findAll { version -> version != null && !version.isBlank() }
 		.toSet()
-	if (!directFabricCells.isEmpty() && fabricLoomVersions.size() != 1) {
-		throw new GradleException("Direct Stonecutter Fabric cells require exactly one registry Loom version; cells=${directFabricCells*.key}, found=${fabricLoomVersions.sort()}.")
+	if (!fabricCells.isEmpty() && fabricLoomVersions.size() != 1) {
+		throw new GradleException("Direct Stonecutter Fabric cells require exactly one registry Loom version; cells=${fabricCells*.key}, found=${fabricLoomVersions.sort()}.")
 	}
 	def fabricLoomVersion = fabricLoomVersions.isEmpty() ? null : fabricLoomVersions.first()
 
@@ -75,7 +79,7 @@ if (expectedStonecutterSourceAnchors.collect { it.target }.size() != expectedSto
 }
 
 def loaderIds = new LinkedHashSet<String>()
-def allowedStonecutterBuildModes = ['delegated', 'direct'] as Set
+def allowedStonecutterBuildModes = ['direct'] as Set
 def stonecutterBuildDefaults = registry.stonecutterBuildDefaults ?: [:]
 if (!(stonecutterBuildDefaults instanceof Map)) {
 	throw new GradleException("PackForge stonecutterBuildDefaults must be a loader-to-mode map; found ${stonecutterBuildDefaults.getClass().name}.")
@@ -83,7 +87,7 @@ if (!(stonecutterBuildDefaults instanceof Map)) {
 def effectiveStonecutterBuildMode = { target, loaderId ->
 	(target.platforms[loaderId]?.stonecutterBuildMode
 		?: stonecutterBuildDefaults[loaderId]
-		?: 'delegated').toString()
+		?: '<missing>').toString()
 }
 registry.targets.each { target ->
 	if (!(target.platforms instanceof Map) || target.platforms.isEmpty()) {
@@ -122,15 +126,9 @@ stonecutter {
 				registry.targets.findAll { target -> target.platforms[loaderId] != null }.each { target ->
 					def targetKey = target.key.toString()
 					def nodePath = ":${loaderId}:${targetKey}"
-					def buildMode = effectiveStonecutterBuildMode(target, loaderId)
-					def buildscriptPath = buildMode == 'direct'
-						? "../platform/${loaderId}/build.gradle"
-						: '../stonecutter-build.gradle'
-					version(targetKey, target.minecraftVersion.toString()).buildscript(buildscriptPath)
+					version(targetKey, target.minecraftVersion.toString()).buildscript("../platform/${loaderId}/build.gradle")
 					expectedStonecutterNodePaths.add(nodePath)
-					if (buildMode == 'direct') {
-						expectedDirectStonecutterNodePaths.add(nodePath)
-					}
+					expectedDirectStonecutterNodePaths.add(nodePath)
 				}
 			}
 		}
@@ -171,5 +169,5 @@ gradle.rootProject {
 	apply from: file('build.gradle')
 }
 
-// Loader projects remain standalone delegated builds until Phase E direct-build
-// parity is proven. They are intentionally not included as composite builds.
+// Loader projects remain independently runnable outside this root graph. Their
+// nested wrapper path is retained only for explicit rollback/parity verification.

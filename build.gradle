@@ -63,6 +63,23 @@ if (selectedTarget == null) {
 
 def isWindows = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows")
 def gradlew = isWindows ? "gradlew.bat" : "./gradlew"
+def resolvePowerShellExecutable = {
+	def executableNames = isWindows
+		? ["pwsh.exe", "pwsh", "powershell.exe", "powershell"]
+		: ["pwsh", "powershell"]
+	def pathValue = System.getenv("PATH") ?: System.getenv("Path") ?: ""
+	def pathEntries = pathValue
+		.split(java.util.regex.Pattern.quote(File.pathSeparator))
+		.collect { entry -> entry.trim().replaceAll(/^"(.*)"$/, '$1') }
+		.findAll { entry -> !entry.isBlank() }
+	def executable = executableNames
+		.collectMany { executableName -> pathEntries.collect { entry -> new File(entry, executableName) } }
+		.find { candidate -> candidate.isFile() && (isWindows || candidate.canExecute()) }
+	if (executable == null) {
+		throw new GradleException("PackForge static validation requires PowerShell; searched ${executableNames} on PATH.")
+	}
+	executable.canonicalPath
+}
 def platformBuilds = [
 	[name: "Fabric", id: "fabric", path: "platform/fabric"],
 	[name: "NeoForge", id: "neoforge", path: "platform/neoforge"],
@@ -73,16 +90,14 @@ def targetSupports = { target, platform -> target.platforms[platform.id] != null
 def stonecutterBuildMode = { target, platform ->
 	(target.platforms[platform.id].stonecutterBuildMode
 		?: registry.stonecutterBuildDefaults?[platform.id]
-		?: "delegated").toString()
+		?: "<missing>").toString()
 }
 def stonecutterNodePath = { target, platform -> ":${platform.id}:${target.key}" }
 def directStonecutterArtifactDirectory = { target, platform ->
 	project(stonecutterNodePath(target, platform)).layout.buildDirectory.dir("libs")
 }
 def artifactSourceDirectory = { target, platform ->
-	stonecutterBuildMode(target, platform) == "direct"
-		? directStonecutterArtifactDirectory(target, platform)
-		: file("${platform.path}/build/${target.key}/libs")
+	directStonecutterArtifactDirectory(target, platform)
 }
 def publishedTargetKeys = registry.releaseCells
 	.groupBy { it.targetKey.toString() }
@@ -1139,9 +1154,31 @@ tasks.register("updateSourceMetricsCheckpoint") {
 	}
 }
 
+def stonecutterDirectContractScript = file("scripts/Validate-StonecutterDirectContract.ps1")
+def validateStonecutterDirectContract = tasks.register("validateStonecutterDirectContract", Exec) {
+	group = "verification"
+	description = "Validates the frozen direct-only Stonecutter graph and rollback/parity isolation."
+	workingDir projectDir
+	inputs.files(
+		stonecutterDirectContractScript,
+		registryFile,
+		file("settings.gradle"),
+		file("build.gradle"),
+		file("stonecutter-build.gradle"),
+		file("gradle/packforge-stonecutter-direct-parity.gradle"),
+		file("platform/fabric/build.gradle"),
+		file("platform/forge/build.gradle"),
+		file("platform/neoforge/build.gradle")
+	)
+	doFirst {
+		commandLine resolvePowerShellExecutable(), "-NoProfile", "-NonInteractive", "-File", stonecutterDirectContractScript.absolutePath
+	}
+}
+
 tasks.register("validateTargetRegistry") {
 	group = "verification"
 	description = "Validates the PackForge target registry and adapter declarations."
+	dependsOn validateStonecutterDirectContract
 	dependsOn reportSourceMetrics
 	inputs.file registryFile
 	inputs.files(fileTree("versions") {
@@ -1418,6 +1455,12 @@ tasks.register("validateTargetRegistry") {
 					if (loader.rangeCompileAnchor != true && !loader.versionRange.toString().startsWith("[${forgeBuildVersion},")) {
 						throw new GradleException("Forge target '${target.key}' must compile against the lower bound of its declared Forge range.")
 					}
+					if (loader.joptSimpleRuntimeVersion != null
+						&& !(loader.joptSimpleRuntimeVersion.toString() ==~ /\d+\.\d+\.\d+/)) {
+						throw new GradleException("Forge target '${target.key}' has invalid joptSimpleRuntimeVersion '${loader.joptSimpleRuntimeVersion}'.")
+					}
+				} else if (loader.joptSimpleRuntimeVersion != null) {
+					throw new GradleException("Non-Forge target '${target.key}' platform '${platformId}' cannot declare joptSimpleRuntimeVersion.")
 				}
 				if (platformId == "neoforge" && loader.rangeCompileAnchor != true && !loader.versionRange.toString().startsWith("[${loader.version},")) {
 					throw new GradleException("NeoForge target '${target.key}' must compile against the lower bound of its declared NeoForge range.")
@@ -1431,6 +1474,15 @@ tasks.register("validateTargetRegistry") {
 					throw new GradleException("Fabric target '${target.key}' must provide optional Mod Menu integration and its development-runtime Fabric API version.")
 				}
 			}
+		}
+		def expectedForgeJoptSimpleRuntimeVersions = [mc1_21_1: "5.0.4", mc1_21_4: "5.0.4"]
+		def actualForgeJoptSimpleRuntimeVersions = targets
+			.findAll { target -> target.platforms.forge?.joptSimpleRuntimeVersion != null }
+			.collectEntries { target ->
+				[(target.key.toString()): target.platforms.forge.joptSimpleRuntimeVersion.toString()]
+			}
+		if (actualForgeJoptSimpleRuntimeVersions != expectedForgeJoptSimpleRuntimeVersions) {
+			throw new GradleException("Forge JOptSimple runtime overrides must match the validated registry exceptions: expected=${expectedForgeJoptSimpleRuntimeVersions}, actual=${actualForgeJoptSimpleRuntimeVersions}.")
 		}
 
 		def mixinSources = fileTree("versions") { include "**/*Mixin.java" }.files
@@ -1593,6 +1645,9 @@ tasks.register("validateStonecutterRegistry") {
 		if (stonecutterDirectNodePaths != expectedDirectNodePaths) {
 			throw new GradleException("Stonecutter direct-node ledger mismatch: expected=${expectedDirectNodePaths}, actual=${stonecutterDirectNodePaths}.")
 		}
+		if (expectedDirectNodePaths != stonecutterNodePaths*.toString().sort()) {
+			throw new GradleException("Every root Stonecutter cell must use direct mode: direct=${expectedDirectNodePaths.size()}, total=${stonecutterNodePaths.size()}.")
+		}
 		def expectedNodeCount = targets.sum { target -> target.platforms.size() } as int
 		if (stonecutterNodePaths.size() != expectedNodeCount
 			|| stonecutterNodePaths.size() != stonecutterNodePaths.toSet().size()) {
@@ -1653,19 +1708,15 @@ tasks.register("printResolvedMatrix") {
 }
 
 def registerPlatformBuildTask = { String taskName, target, platform ->
-	if (stonecutterBuildMode(target, platform) == "direct") {
-		return tasks.register(taskName) {
-			group = "build"
-			description = "Builds the ${platform.name} PackForge jar for ${target.artifactMinecraft} directly in the Stonecutter graph."
-			dependsOn tasks.named("validateTargetRegistry")
-			dependsOn "${stonecutterNodePath(target, platform)}:buildStonecutterDirectNode"
-		}
+	def buildMode = stonecutterBuildMode(target, platform)
+	if (buildMode != "direct") {
+		throw new GradleException("Root public build task '${taskName}' requires direct Stonecutter mode for ${stonecutterNodePath(target, platform)}; found '${buildMode}'.")
 	}
-	return tasks.register(taskName, Exec) {
+	return tasks.register(taskName) {
 		group = "build"
-		description = "Builds the ${platform.name} PackForge jar for ${target.artifactMinecraft}."
+		description = "Builds the ${platform.name} PackForge jar for ${target.artifactMinecraft} directly in the Stonecutter graph."
 		dependsOn tasks.named("validateTargetRegistry")
-		commandLine nestedCommand(platform, target, "build")
+		dependsOn "${stonecutterNodePath(target, platform)}:buildStonecutterDirectNode"
 	}
 }
 
