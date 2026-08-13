@@ -360,3 +360,23 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: registry parsing resolved exactly 19 Fabric, 17 Forge, and 17 NeoForge direct leaves with no explicit overrides. `validateStonecutterRegistry` configured the entire graph and passed with three branches, 19 source anchors, 53 distributions, and 62 exact loader cells. The previously unproven Java 25 Forge and NeoForge `mc26_1_to_26_2` direct builds passed, followed by both root structural artifact verifiers. Earlier checkpoints supply representative Java 17/21 packaging and one Fabric ZIP-parity result.
 - Status: `PHASE_E_DIRECT_OWNERSHIP_IMPLEMENTED_REPRESENTATIVE_VERIFIED`; all 53 leaves are authoritative direct tasks, but the complete direct aggregate, all-cell ZIP parity, and runtime matrix were intentionally deferred. Delegated tasks remain available only as explicit parity/rollback oracles.
 - Rollback: `git revert 9b6e25512c4363829f3b1a5f86538cabf2797fa5` restores the Fabric default plus four verified Forge/NeoForge pilots. Revert loader pilot commits afterward only if those cells must also return to delegation.
+
+## Forward-compatible configuration persistence
+
+- Date: 2026-08-13
+- Commit SHA: `782510c685db64a90d99e177c5d7531e07d9668f`
+- Parent SHA: `f686046b89fee0cb3d60a730a774ccef536cf417`
+- Scope: preservation of unknown root JSON members through load, detached screen drafts, sanitization, and atomic save; deep-copy isolation for nested unknown values; fail-fast uniqueness enforcement for configuration option IDs.
+- Verification: the focused Fabric-hosted `PackForgeConfigPreservationTest` and `PackForgeConfigScreenModelTest` suites passed in 14 seconds with 14 tests, zero failures, and zero errors. The preservation suite covers unknown scalar, object, and array values across version-12 migration and `applyAndSave`; independent read-only review found no blocker.
+- Status: `PHASE_G_CONFIG_SAFETY_VERIFIED`; renderer-family consolidation, structural entry-point coverage, and cross-family presentation parity remain open Phase G work.
+- Rollback: `git revert 782510c685db64a90d99e177c5d7531e07d9668f` restores schema-12-only serialization and removes duplicate option-ID enforcement.
+
+## Publication documentation consistency contract
+
+- Date: 2026-08-13
+- Commit SHA: `e0a644d3443fbecc37fef7537de96e5d9cee148a`
+- Parent SHA: `782510c685db64a90d99e177c5d7531e07d9668f`
+- Scope: README correction from the stale 17-artifact/six-target description to the registry-derived 20-artifact/seven-target publication set; exact loader availability and lower-bound rows for all 22 releases; a fail-closed README marker checked by `validateTargetRegistry`.
+- Verification: a focused registry-to-README checker matched one publication marker, 20 loader-specific artifacts, seven publication target keys, and all 22 exact loader rows. Scoped whitespace validation passed, and independent re-review approved the corrected exact table and marker gate. No Gradle build or Minecraft runtime was run for this documentation-only contract.
+- Status: `PHASE_H_DOCUMENTATION_CONSISTENCY_VERIFIED`; historical consolidation remains implemented but unverified against the new direct-build bytes until retained final-JAR same-artifact runtime evidence is regenerated.
+- Rollback: `git revert e0a644d3443fbecc37fef7537de96e5d9cee148a` restores the prior README text and removes its registry consistency gate.
