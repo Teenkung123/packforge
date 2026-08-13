@@ -330,3 +330,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: `validateStonecutterRegistry` passed with three branches, 19 source anchors, 53 distributions, and 62 exact loader cells. `buildStonecutterAll --dry-run` scheduled all 19 Fabric direct leaves and no delegated node build. Direct builds passed for Java 17 `mc1_20_1`, Java 21 `mc1_21_1` and special-source `mc1_21_9`, and Java 25 `mc26_1_to_26_2`. The targeted `mc1_21_9` direct-versus-delegated oracle matched all 213 ZIP entries. Independent review found no correctness blocker.
 - Status: `IMPLEMENTED_REPRESENTATIVE_VERIFIED`; the full 19-leaf aggregate was stopped on request and is not counted as evidence. This checkpoint does not claim all-Fabric matrix verification, Phase E completion, or Minecraft runtime proof. Forge and NeoForge remain delegated registry cells.
 - Rollback: `git revert 68866ccffae9a06d404d5a791dd4e68d089f9486` restores the single-cell Fabric pilot while retaining its verified direct path; revert `6125316572a086369320616ec754a8076068e29a` afterward only if the pilot must also return to delegated ownership.
+
+## Direct Forge Stonecutter packaging pilots
+
+- Date: 2026-08-13
+- Commit SHA: `c28cc8cf62dbafa7cd3a52496f259848788c3a78`
+- Parent SHA: `3b94a9852494652128919e54500293ca9e4ac3a2`
+- Scope: direct Stonecutter ownership for Forge `mc1_20_1` and `mc1_21_1`; physical loader source roots; legacy SRG/refmap final renaming; modern JarJar packaging; loader-specific metadata and structural checks; retained delegated parity oracle.
+- Verification: `validateStonecutterRegistry` passed. The `mc1_20_1` direct build generated and merged Mixin mappings, produced the legacy refmap, ran JarJar, and completed final renaming. The `mc1_21_1` direct build completed its modern JarJar path. The two collected artifacts then passed the root direct structural verifiers. Independent read-only review found no blocker.
+- Status: `PHASE_E_FORGE_PILOTS_PACKAGE_VERIFIED`; this proves the two distinct Forge packaging paths, not Forge matrix parity, all-cell migration, or Minecraft runtime behavior. Other Forge cells remain delegated.
+- Rollback: `git revert c28cc8cf62dbafa7cd3a52496f259848788c3a78` returns both Forge cells to delegated ownership without affecting the Fabric direct matrix.
