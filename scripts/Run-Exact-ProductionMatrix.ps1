@@ -22,6 +22,8 @@ param(
 
     [switch] $OfflineProfileCache,
 
+    [switch] $SelfTestResumeEvidence,
+
     [string[]] $AdditionalModPaths,
 
     [string[]] $ExpectedLogMarkers,
@@ -744,20 +746,276 @@ function Ensure-InstallerProfile {
     return $profile
 }
 
+function Get-RecordProperty {
+    param($Record, [string] $Name)
+
+    if ($null -eq $Record) { return $null }
+    $property = $Record.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
+function Get-ExactMatrixPassRecordError {
+    param($Record, $ExpectedRow, [string] $ExpectedEvidenceFingerprint, [int] $ExpectedReloads)
+
+    if ([string] (Get-RecordProperty -Record $Record -Name 'status') -cne 'PASS') {
+        return 'status is not PASS'
+    }
+    $exitCode = Get-RecordProperty -Record $Record -Name 'exitCode'
+    $parsedExitCode = 0
+    $exitCodeParsed = $null -ne $exitCode -and [int]::TryParse(
+        [string] $exitCode,
+        [Globalization.NumberStyles]::Integer,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref] $parsedExitCode
+    )
+    if (-not $exitCodeParsed -or $parsedExitCode -ne 0) {
+        return 'exitCode is not zero'
+    }
+    $cleanExit = Get-RecordProperty -Record $Record -Name 'cleanExit'
+    if ($cleanExit -isnot [bool] -or $cleanExit -ne $true) {
+        return 'cleanExit is not true'
+    }
+    $expectedValues = [ordered]@{
+        cell = [string] $ExpectedRow.Cell
+        release = [string] $ExpectedRow.Release
+        loader = [string] $ExpectedRow.Loader
+        target = [string] $ExpectedRow.Target
+        coordinate = [string] $ExpectedRow.Coordinate
+        artifact = [IO.Path]::GetFileName([string] $ExpectedRow.Artifact)
+        artifactHash = [string] $ExpectedRow.ArtifactHash
+        fixtureHash = [string] $ExpectedRow.FixtureHash
+        evidenceFingerprint = $ExpectedEvidenceFingerprint
+    }
+    foreach ($entry in $expectedValues.GetEnumerator()) {
+        $actual = Get-RecordProperty -Record $Record -Name $entry.Key
+        if ($null -eq $actual -or [string] $actual -cne [string] $entry.Value) {
+            return "$($entry.Key) does not match the current matrix evidence"
+        }
+    }
+    $reloads = Get-RecordProperty -Record $Record -Name 'reloads'
+    $parsedReloads = 0
+    $reloadsParsed = $null -ne $reloads -and [int]::TryParse(
+        [string] $reloads,
+        [Globalization.NumberStyles]::Integer,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref] $parsedReloads
+    )
+    if (-not $reloadsParsed -or $parsedReloads -ne $ExpectedReloads) {
+        return 'reload count does not match the current matrix evidence'
+    }
+
+    $loaderDisplay = switch ([string] $ExpectedRow.Loader) {
+        'fabric' { 'Fabric' }
+        'forge' { 'Forge' }
+        'neoforge' { 'NeoForge' }
+        default { return 'current matrix loader has no canonical production PASS prefix' }
+    }
+    $passLine = [string] (Get-RecordProperty -Record $Record -Name 'passLine')
+    if ([string]::IsNullOrWhiteSpace($passLine) -or $passLine -notmatch "^PASS $([regex]::Escape($loaderDisplay)) production smoke:") {
+        return 'missing exact production PASS line'
+    }
+    foreach ($token in @(
+        "artifact=$([regex]::Escape([IO.Path]::GetFileName([string] $ExpectedRow.Artifact)))",
+        "sha256=$([regex]::Escape([string] $ExpectedRow.ArtifactHash))",
+        "reloads=$ExpectedReloads",
+        'cleanExit=true'
+    )) {
+        if ($passLine -notmatch "(?:^|\s)$token(?:\s|$)") {
+            return "PASS line is missing exact token '$($token.Replace('\\', ''))'"
+        }
+    }
+
+    foreach ($evidence in @(
+        [pscustomobject]@{ Name = 'log'; Path = [string] (Get-RecordProperty -Record $Record -Name 'log'); Hash = [string] (Get-RecordProperty -Record $Record -Name 'logSha256') },
+        [pscustomobject]@{ Name = 'provenance'; Path = [string] (Get-RecordProperty -Record $Record -Name 'provenance'); Hash = [string] (Get-RecordProperty -Record $Record -Name 'provenanceSha256') }
+    )) {
+        if ($evidence.Hash -notmatch '^[A-F0-9]{64}$') {
+            return "$($evidence.Name) evidence SHA-256 is invalid"
+        }
+        try {
+            if ([string]::IsNullOrWhiteSpace($evidence.Path) -or -not (Test-Path -LiteralPath $evidence.Path -PathType Leaf)) {
+                return "$($evidence.Name) evidence file is missing"
+            }
+            $actualHash = (Get-FileHash -LiteralPath $evidence.Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpperInvariant()
+            if ($actualHash -cne $evidence.Hash) {
+                return "$($evidence.Name) evidence SHA-256 changed"
+            }
+            if ($evidence.Name -eq 'log' -and (Get-Content -LiteralPath $evidence.Path -Raw -ErrorAction Stop).IndexOf($passLine, [StringComparison]::Ordinal) -lt 0) {
+                return 'saved log does not contain the exact production PASS line'
+            }
+        } catch {
+            return "$($evidence.Name) evidence cannot be read"
+        }
+    }
+    return $null
+}
+
 function Get-PriorPasses {
-    param([string] $Path)
+    param([string] $Path, [hashtable] $ExpectedRowsByCell, [hashtable] $ExpectedEvidenceFingerprints, [int] $ExpectedReloads)
 
     $passes = @{}
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $passes }
     foreach ($line in Get-Content -LiteralPath $Path) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         try { $record = $line | ConvertFrom-Json } catch { continue }
-        $evidenceProperty = $record.PSObject.Properties['evidenceFingerprint']
-        if ($null -eq $evidenceProperty -or [string]::IsNullOrWhiteSpace([string] $evidenceProperty.Value)) { continue }
-        $key = "$([string] $record.cell)|$([string] $evidenceProperty.Value)"
-        if ([string] $record.status -eq 'PASS') { $passes[$key] = $record } else { [void] $passes.Remove($key) }
+        $cell = [string] (Get-RecordProperty -Record $record -Name 'cell')
+        if (-not $ExpectedRowsByCell.ContainsKey($cell) -or -not $ExpectedEvidenceFingerprints.ContainsKey($cell)) { continue }
+        $evidenceFingerprint = [string] (Get-RecordProperty -Record $record -Name 'evidenceFingerprint')
+        $key = "$cell|$evidenceFingerprint"
+        $validationError = Get-ExactMatrixPassRecordError `
+            -Record $record `
+            -ExpectedRow $ExpectedRowsByCell[$cell] `
+            -ExpectedEvidenceFingerprint ([string] $ExpectedEvidenceFingerprints[$cell]) `
+            -ExpectedReloads $ExpectedReloads
+        if ($null -eq $validationError) {
+            $passes[$key] = $record
+        } elseif ($evidenceFingerprint -ceq [string] $ExpectedEvidenceFingerprints[$cell]) {
+            [void] $passes.Remove($key)
+            Write-Warning "Ignoring invalid resumable PASS record for ${cell}: $validationError"
+        }
     }
     return $passes
+}
+
+function Get-LatestExactMatrixRecords {
+    param([string] $Path, [hashtable] $ExpectedRowsByCell, [hashtable] $ExpectedEvidenceFingerprints, [int] $ExpectedReloads)
+
+    $latest = @{}
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $latest }
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        try { $record = $line | ConvertFrom-Json } catch { continue }
+        $cell = [string] (Get-RecordProperty -Record $record -Name 'cell')
+        if (-not $ExpectedRowsByCell.ContainsKey($cell) -or -not $ExpectedEvidenceFingerprints.ContainsKey($cell)) { continue }
+        if ([string] (Get-RecordProperty -Record $record -Name 'evidenceFingerprint') -cne [string] $ExpectedEvidenceFingerprints[$cell]) { continue }
+        if ([string] (Get-RecordProperty -Record $record -Name 'status') -ceq 'PASS') {
+            $validationError = Get-ExactMatrixPassRecordError `
+                -Record $record `
+                -ExpectedRow $ExpectedRowsByCell[$cell] `
+                -ExpectedEvidenceFingerprint ([string] $ExpectedEvidenceFingerprints[$cell]) `
+                -ExpectedReloads $ExpectedReloads
+            if ($null -ne $validationError) {
+                $record | Add-Member -Force -NotePropertyName 'status' -NotePropertyValue 'FAIL'
+                $record | Add-Member -Force -NotePropertyName 'resumeValidationError' -NotePropertyValue $validationError
+            }
+        }
+        $latest[$cell] = $record
+    }
+    return $latest
+}
+
+function Test-ExactMatrixSummaryHasFailure {
+    param([hashtable] $LatestRecords)
+
+    return @($LatestRecords.Values | Where-Object { [string] $_.status -cne 'PASS' }).Count -gt 0
+}
+
+function Invoke-ResumeEvidenceSelfTest {
+    $testRoot = Join-Path ([IO.Path]::GetTempPath()) ("packforge-resume-evidence-" + [guid]::NewGuid().ToString('N'))
+    try {
+        New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
+        $logPath = Join-Path $testRoot 'cell.log'
+        $provenancePath = Join-Path $testRoot 'provenance.json'
+        $row = [pscustomobject]@{
+            Cell = '1.21.1/fabric'
+            Release = '1.21.1'
+            Loader = 'fabric'
+            Target = 'mc1_21_1'
+            Coordinate = '0.19.3'
+            Artifact = (Join-Path $testRoot 'packforge-fabric-test-mc1.21.1.jar')
+            ArtifactHash = ('A' * 64)
+            FixtureHash = ('B' * 64)
+        }
+        $fingerprint = 'C' * 64
+        $passLine = "PASS Fabric production smoke: artifact=$([IO.Path]::GetFileName($row.Artifact)) sha256=$($row.ArtifactHash) reloads=2 cleanExit=true controlledTermination=true provenance=$provenancePath"
+        [IO.File]::WriteAllText($logPath, $passLine + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($provenancePath, '{"schema":3}', [Text.UTF8Encoding]::new($false))
+        $newRecord = {
+            param($Mutate)
+            $record = [ordered]@{
+                cell = $row.Cell
+                release = $row.Release
+                loader = $row.Loader
+                target = $row.Target
+                coordinate = $row.Coordinate
+                artifact = [IO.Path]::GetFileName($row.Artifact)
+                artifactHash = $row.ArtifactHash
+                fixtureHash = $row.FixtureHash
+                reloads = 2
+                evidenceFingerprint = $fingerprint
+                cleanExit = $true
+                controlledTermination = $true
+                exitCode = 0
+                status = 'PASS'
+                passLine = $passLine
+                log = $logPath
+                logSha256 = (Get-FileHash -LiteralPath $logPath -Algorithm SHA256).Hash.ToUpperInvariant()
+                provenance = $provenancePath
+                provenanceSha256 = (Get-FileHash -LiteralPath $provenancePath -Algorithm SHA256).Hash.ToUpperInvariant()
+            }
+            & $Mutate $record
+            return [pscustomobject] $record
+        }
+        $expectedRows = @{ $row.Cell = $row }
+        $expectedFingerprints = @{ $row.Cell = $fingerprint }
+        $assertRejected = {
+            param([string] $Name, [scriptblock] $Mutate)
+            [IO.File]::WriteAllText($logPath, $passLine + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($provenancePath, '{"schema":3}', [Text.UTF8Encoding]::new($false))
+            $record = & $newRecord $Mutate
+            $resultsPath = Join-Path $testRoot "$Name.jsonl"
+            [IO.File]::WriteAllText($resultsPath, ($record | ConvertTo-Json -Compress) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+            $passes = Get-PriorPasses -Path $resultsPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 2
+            if ($passes.Count -ne 0) { throw "Resume evidence self-test accepted mutation '$Name'." }
+        }
+        & $assertRejected 'missing-clean-exit' { param($record) [void] $record.Remove('cleanExit') }
+        & $assertRejected 'false-clean-exit' { param($record) $record.cleanExit = $false }
+        & $assertRejected 'nonzero-exit' { param($record) $record.exitCode = 1 }
+        & $assertRejected 'oversized-exit' { param($record) $record.exitCode = '999999999999999999999999999999' }
+        & $assertRejected 'wrong-reload' { param($record) $record.reloads = 3 }
+        & $assertRejected 'oversized-reload' { param($record) $record.reloads = '999999999999999999999999999999' }
+        & $assertRejected 'wrong-artifact-hash' { param($record) $record.artifactHash = 'D' * 64 }
+        & $assertRejected 'wrong-cell' { param($record) $record.cell = '1.21.2/fabric' }
+        & $assertRejected 'wrong-fingerprint' { param($record) $record.evidenceFingerprint = 'E' * 64 }
+        & $assertRejected 'missing-pass-line' { param($record) $record.passLine = '' }
+        & $assertRejected 'wrong-pass-prefix' { param($record) $record.passLine = $record.passLine.Replace('PASS Fabric production smoke:', 'PASS Invalid production smoke:') }
+        & $assertRejected 'corrupt-pass-line' { param($record) $record.passLine = $record.passLine.Replace('cleanExit=true', 'cleanExit=false') }
+        & $assertRejected 'missing-log' { param($record) $record.log = (Join-Path $testRoot 'missing.log') }
+        & $assertRejected 'missing-log-hash' { param($record) $record.logSha256 = $null }
+        & $assertRejected 'corrupt-log' { param($record) [IO.File]::WriteAllText($logPath, 'corrupt', [Text.UTF8Encoding]::new($false)) }
+        & $assertRejected 'missing-provenance' { param($record) $record.provenance = (Join-Path $testRoot 'missing.json') }
+        & $assertRejected 'corrupt-provenance' { param($record) [IO.File]::WriteAllText($provenancePath, '{"changed":true}', [Text.UTF8Encoding]::new($false)) }
+
+        [IO.File]::WriteAllText($logPath, $passLine + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($provenancePath, '{"schema":3}', [Text.UTF8Encoding]::new($false))
+        $validRecord = & $newRecord { param($record) }
+        $validResultsPath = Join-Path $testRoot 'valid.jsonl'
+        [IO.File]::WriteAllText($validResultsPath, ($validRecord | ConvertTo-Json -Compress) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+        $validPasses = Get-PriorPasses -Path $validResultsPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 2
+        if ($validPasses.Count -ne 1) { throw 'Resume evidence self-test rejected the valid controlled-graceful exit record.' }
+
+        $laterInvalidRecord = & $newRecord { param($record) $record.cleanExit = $false }
+        $chronologicalPath = Join-Path $testRoot 'chronological.jsonl'
+        [IO.File]::WriteAllText($chronologicalPath, (@(
+            ($validRecord | ConvertTo-Json -Compress),
+            ($laterInvalidRecord | ConvertTo-Json -Compress)
+        ) -join [Environment]::NewLine) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+        $chronologicalPasses = Get-PriorPasses -Path $chronologicalPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 2
+        if ($chronologicalPasses.Count -ne 0) { throw 'Resume evidence self-test retained a PASS after its later invalid record.' }
+        $latestChronological = Get-LatestExactMatrixRecords -Path $chronologicalPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 2
+        if ($latestChronological.Count -ne 1 -or [string] $latestChronological[$row.Cell].status -cne 'FAIL' -or -not (Test-ExactMatrixSummaryHasFailure -LatestRecords $latestChronological)) {
+            throw "Resume evidence self-test did not surface the later invalid PASS as a final summary failure (count=$($latestChronological.Count) status=$([string] $latestChronological[$row.Cell].status) summaryFailure=$(Test-ExactMatrixSummaryHasFailure -LatestRecords $latestChronological))."
+        }
+    } finally {
+        if (Test-Path -LiteralPath $testRoot -PathType Container) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
+    }
+}
+
+if ($SelfTestResumeEvidence.IsPresent) {
+    Invoke-ResumeEvidenceSelfTest
+    Write-Output 'Exact production matrix resume-evidence self-test PASS: valid controlled graceful exit accepted; 17 invalid mutations and later-invalid summary failure rejected.'
+    return
 }
 
 $registry = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
@@ -1116,15 +1374,9 @@ if ($compatibilityProfileRequested) {
 }
 $resultsPath = Join-Path $ResultsRoot 'results.jsonl'
 $summaryPath = Join-Path $ResultsRoot 'summary.json'
-$priorPasses = if ($Resume.IsPresent) { Get-PriorPasses -Path $resultsPath } else { @{} }
-$passed = 0
-$failed = 0
-$skipped = 0
-$index = 0
 $expectedEvidenceFingerprints = @{}
-
+$expectedRowsByCell = @{}
 foreach ($row in $rows) {
-    $index++
     $smokeScript = if ($row.Loader -eq 'fabric') {
         Join-Path $PSScriptRoot 'Smoke-Fabric-Production.ps1'
     } elseif ($row.Loader -eq 'forge') {
@@ -1155,8 +1407,34 @@ foreach ($row in $rows) {
         reloads = $ReloadCount
         harnesses = $harnessIdentity
     }
+    $cell = [string] $row.Cell
+    if ($expectedRowsByCell.ContainsKey($cell)) {
+        throw "Exact production matrix resolved duplicate cell $cell."
+    }
     $evidenceFingerprint = Get-Sha256Text -Text ($evidenceIdentity | ConvertTo-Json -Compress)
-    $expectedEvidenceFingerprints[[string] $row.Cell] = $evidenceFingerprint
+    $expectedRowsByCell[$cell] = $row
+    $expectedEvidenceFingerprints[$cell] = $evidenceFingerprint
+    $row | Add-Member -Force -NotePropertyName 'SmokeScript' -NotePropertyValue $smokeScript
+    $row | Add-Member -Force -NotePropertyName 'EvidenceFingerprint' -NotePropertyValue $evidenceFingerprint
+}
+$priorPasses = if ($Resume.IsPresent) {
+    Get-PriorPasses `
+        -Path $resultsPath `
+        -ExpectedRowsByCell $expectedRowsByCell `
+        -ExpectedEvidenceFingerprints $expectedEvidenceFingerprints `
+        -ExpectedReloads $ReloadCount
+} else {
+    @{}
+}
+$passed = 0
+$failed = 0
+$skipped = 0
+$index = 0
+
+foreach ($row in $rows) {
+    $index++
+    $smokeScript = [string] $row.SmokeScript
+    $evidenceFingerprint = [string] $row.EvidenceFingerprint
     $prior = $priorPasses["$($row.Cell)|$evidenceFingerprint"]
     if ($null -ne $prior) {
         $skipped++
@@ -1241,6 +1519,12 @@ foreach ($row in $rows) {
             [IO.File]::WriteAllLines($logPath, @($lines), [Text.UTF8Encoding]::new($false))
         }
     }
+    $logSha256 = (Get-FileHash -LiteralPath $logPath -Algorithm SHA256).Hash.ToUpperInvariant()
+    $provenanceSha256 = if (-not [string]::IsNullOrWhiteSpace($provenancePath) -and (Test-Path -LiteralPath $provenancePath -PathType Leaf)) {
+        (Get-FileHash -LiteralPath $provenancePath -Algorithm SHA256).Hash.ToUpperInvariant()
+    } else {
+        $null
+    }
     $record = [ordered]@{
         timestampUtc = [datetime]::UtcNow.ToString('o')
         cell = $row.Cell
@@ -1264,7 +1548,26 @@ foreach ($row in $rows) {
         passLine = if ($passLine.Count -eq 1) { $passLine[0] } else { $null }
         profileValidationError = $profileValidationError
         log = $logPath
+        logSha256 = $logSha256
+        provenance = $provenancePath
+        provenanceSha256 = $provenanceSha256
     }
+    $resumeValidationError = if ($status -eq 'PASS') {
+        Get-ExactMatrixPassRecordError `
+            -Record ([pscustomobject] $record) `
+            -ExpectedRow $row `
+            -ExpectedEvidenceFingerprint $evidenceFingerprint `
+            -ExpectedReloads $ReloadCount
+    } else {
+        $null
+    }
+    if ($null -ne $resumeValidationError) {
+        $record.status = 'FAIL'
+        $record.exitCode = 1
+    }
+    $record.resumeValidationError = $resumeValidationError
+    $status = [string] $record.status
+    $exitCode = [int] $record.exitCode
     if ($compatibilityProfileRequested) {
         $record.compatibilityProfile = [ordered]@{
             schema = if ($null -ne $schema2ProfileInput) { 2 } else { 1 }
@@ -1304,19 +1607,15 @@ foreach ($row in $rows) {
     Write-Output "RESULT $index/$($rows.Count) $($row.Cell) status=$status seconds=$durationSeconds"
 }
 
-$latestRecords = @{}
-foreach ($line in Get-Content -LiteralPath $resultsPath) {
-    if ([string]::IsNullOrWhiteSpace($line)) { continue }
-    try { $record = $line | ConvertFrom-Json } catch { continue }
-    $cell = [string] $record.cell
-    if (-not $expectedEvidenceFingerprints.ContainsKey($cell)) { continue }
-    $evidenceProperty = $record.PSObject.Properties['evidenceFingerprint']
-    if ($null -eq $evidenceProperty -or [string] $evidenceProperty.Value -ne [string] $expectedEvidenceFingerprints[$cell]) { continue }
-    $latestRecords[$cell] = $record
-}
+$latestRecords = Get-LatestExactMatrixRecords `
+    -Path $resultsPath `
+    -ExpectedRowsByCell $expectedRowsByCell `
+    -ExpectedEvidenceFingerprints $expectedEvidenceFingerprints `
+    -ExpectedReloads $ReloadCount
 $latestValues = @($latestRecords.Values)
 $cumulativePassed = @($latestValues | Where-Object { [string] $_.status -eq 'PASS' }).Count
 $cumulativeFailed = @($latestValues | Where-Object { [string] $_.status -ne 'PASS' }).Count
+$summaryHasFailure = Test-ExactMatrixSummaryHasFailure -LatestRecords $latestRecords
 $summary = [ordered]@{
     completedUtc = [datetime]::UtcNow.ToString('o')
     requested = $rows.Count
@@ -1332,4 +1631,6 @@ $summary = [ordered]@{
 }
 [IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
 Write-Output "SUMMARY requested=$($rows.Count) passed=$passed failed=$failed skipped=$skipped cumulative=$cumulativePassed/$($latestValues.Count) cumulativeFailed=$cumulativeFailed results=$ResultsRoot"
-if ($failed -gt 0) { throw "$failed exact production cells failed. See $summaryPath." }
+if ($failed -gt 0 -or $summaryHasFailure) {
+    throw "Exact production matrix has $failed current failure(s) and $cumulativeFailed cumulative evidence failure(s). See $summaryPath."
+}
