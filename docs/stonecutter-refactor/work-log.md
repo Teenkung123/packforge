@@ -375,3 +375,13 @@
 - Verification: direct-contract self-test passed 38 mutations; metrics passed in 26 seconds: 212 files / 16,403 LOC, 105 bridge files / 5,383 LOC (32.82%), zero duplicates, four blocks / maximum 40 lines, and 18 platform target-key references. Combined compile/sourceJar passed in 31 seconds across 14 tasks; follow-up sourceJar UP-TO-DATE PASS in 24 seconds. Exact SHAs: active `C4694D...`, mc26 mixin `1D281C...`, accessor `F7131E...`.
 - Limits: no runtime, full build, matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert 7efd43f`; then `4f82154`, then `b54a40f` if needed.
+
+## Phase E — canonical preprocessed Bitmap provider Fabric client seam
+
+- Date: 2026-08-13
+- Commit SHA: `c5b61e2`; parent `c9349ea`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: canonical BitmapProviderDefinitionMixin Fabric client preprocessing for all 19 targets, 1.20.1 through 26.1; three physical variants remain for standalone/other loaders, and direct builds use generated `client/java` without a new target-key branch.
+- Verification: direct-contract self-test passed 49 mutations; metrics passed in 32 seconds: 213 files / 16,430 LOC, 106 bridge files / 5,410 LOC (32.93%), zero duplicates, five blocks / maximum 40 lines, and 18 platform target-key references. Fabric 1.20.1/1.21.11/mc26 compileClientJava+sourcesJar passed in 32 seconds across 24 tasks (16 executed, eight up-to-date); each target had one matching `35EF7378...CB22` generated/source-JAR entry and one 2,655-byte compiled class.
+- Limits: no runtime, full build, matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert c5b61e2`; then `7efd43f`, `4f82154`, then `b54a40f` if needed.

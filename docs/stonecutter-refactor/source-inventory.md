@@ -28,19 +28,19 @@ This is a direct registry-derived build graph. Native Stonecutter preprocessing 
 
 | Metric | Current |
 |---|---:|
-| Production Java files | 212 |
-| Production nonblank LOC | 16,403 |
-| Bridge files | 105 |
-| Bridge LOC | 5,383 (32.82%) |
+| Production Java files | 213 |
+| Production nonblank LOC | 16,430 |
+| Bridge files | 106 |
+| Bridge LOC | 5,410 (32.93%) |
 | Exact duplicate groups | 0 |
 | Normalized duplicate groups | 0 |
 | Target/version conditional lines | 15 |
-| Stonecutter conditional blocks | 4 (maximum 40 lines) |
+| Stonecutter conditional blocks | 5 (maximum 40 lines) |
 | Renderer bodies | 3 |
 | Renderer adapters | 2 |
 | Registry publication artifacts | 20 |
 
-Baseline was 212 production files and 16,837 LOC with 20 normalized duplicate groups. Current source removes all measured duplicate groups and 434 LOC, a 2.58% raw LOC reduction. It does not meet a 20-25% raw shrink target; added registry, compatibility, validation, and reporter capabilities must remain explicitly justified rather than recast as shrink proof.
+Baseline was 212 production files and 16,837 LOC with 20 normalized duplicate groups. Current source has one additional production file, removes all measured duplicate groups, and is 407 LOC lower, a 2.42% raw LOC reduction. It does not meet a 20-25% raw shrink target; added registry, compatibility, validation, and reporter capabilities must remain explicitly justified rather than recast as shrink proof.
 
 Three renderer bodies plus two adapters are measured structure, not live UI parity. Twenty publication artifacts is registry output, not proof that 20 current JARs were built or verified.
 

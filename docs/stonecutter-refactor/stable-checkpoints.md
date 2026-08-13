@@ -630,3 +630,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: direct-contract self-test passed 38 mutations. Source metrics passed in 26 seconds: 212 production files, 16,403 LOC, 105 bridge files / 5,383 LOC (32.82%), zero duplicate groups, four Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused combined compile/sourceJar passed in 31 seconds across 14 tasks; follow-up sourceJar was UP-TO-DATE PASS in 24 seconds. Exact generated checksums matched: active SharedZip `C4694D...`, mc26 mixin `1D281C...`, and mc26 accessor `F7131E...`.
 - Limits: no Minecraft runtime, full build, full matrix, release verification, or cross-loader native preprocessing proof was run. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert 7efd43f`; then revert `4f82154` and `b54a40f` in order if removing the preceding Fabric native pilot work.
+
+## Phase E — canonical preprocessed Bitmap provider Fabric client seam
+
+- Date: 2026-08-13
+- Commit SHA: `c5b61e2`; parent `c9349ea`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: canonical preprocessed Fabric client `BitmapProviderDefinitionMixin`, guarded from 1.20.1 through 26.1 across all 19 targets. Three physical variants remain for standalone and other loaders; direct builds transport generated `client/java` sources. Activation remains registry-derived with no new `target.key` branch.
+- Verification: direct-contract self-test passed 49 mutations. Source metrics passed in 32 seconds: 213 production files, 16,430 LOC, 106 bridge files / 5,410 LOC (32.93%), zero duplicate groups, five Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused Fabric 1.20.1/1.21.11/mc26 `compileClientJava` plus `sourcesJar` passed in 32 seconds across 24 tasks (16 executed, eight up-to-date). Each target produced one compiled Bitmap class of 2,655 bytes and one source-JAR entry whose SHA-256 exactly matched its generated source: `35EF7378...CB22`.
+- Limits: no Minecraft runtime, full build, full matrix, release verification, or cross-loader native preprocessing proof was run. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert c5b61e2`; then revert `7efd43f`, `4f82154`, and `b54a40f` in order if removing the preceding Fabric native pilot work.
