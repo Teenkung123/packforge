@@ -227,6 +227,12 @@
       "targets": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]
     },
     {
+      "id": "config-screen-base-1.20.5-through-1.21.11",
+      "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreenBase.java",
+      "sourceSet": "client",
+      "targets": ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10", "mc1_21_11"]
+    },
+    {
       "id": "pack-selection-1.21-through-1.21.10",
       "path": "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java",
       "sourceSet": "client",
