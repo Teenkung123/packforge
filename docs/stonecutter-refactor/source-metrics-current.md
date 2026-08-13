@@ -6,10 +6,10 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 
 | Metric | Value |
 |---|---:|
-| Production Java files | 216 |
-| Production nonblank LOC | 16544 |
-| Bridge files | 109 |
-| Bridge LOC | 5524 (33.39%) |
+| Production Java files | 217 |
+| Production nonblank LOC | 16575 |
+| Bridge files | 110 |
+| Bridge LOC | 5555 (33.51%) |
 | Exact duplicate groups | 0 |
 | Normalized version duplicate groups | 0 |
 | Platform `target.key` references | 18 |
@@ -28,7 +28,7 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 |---|---:|---:|
 | `neutralCommon` | 63 | 6293 |
 | `versionCommon` | 47 | 4832 |
-| `loaderCommon` | 21 | 701 |
+| `loaderCommon` | 22 | 732 |
 | `exactVersionBridge` | 85 | 4718 |
 
 Classification is exclusive and precedence-ordered: root `common` is neutral common; canonical loader roots (`fabric`, `forge`, and `neoforge`), platform directories, and version-loader directories are loader common; remaining version-local mixin/bridge/compat paths are exact-version bridges; all other Minecraft-facing version source is version common. Aggregate bridge files/LOC include canonical and platform loader-owned bridge/compat files as well as the non-loader `exactVersionBridge` layer.

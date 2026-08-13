@@ -107,6 +107,13 @@ def generatedRuntimeResourceHashSource = stonecutterDirectNode
 	? stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/loader/RuntimeResourceHash.java").get().asFile.canonicalFile
 	: null
 def nativeRuntimeResourceHashActive = false
+def legacySimpleReloadSource = stonecutterDirectNode
+	? new File(physicalRepositoryRoot, "versions/mc1_21_8/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java").canonicalFile
+	: null
+def generatedSimpleReloadSource = stonecutterDirectNode
+	? stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java").get().asFile.canonicalFile
+	: null
+def nativeSimpleReloadActive = false
 def legacyLoadingOverlayToastSources = stonecutterDirectNode
 	? [
 		new File(physicalRepositoryRoot, "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java").canonicalFile,
@@ -123,7 +130,8 @@ if (stonecutterDirectNode) {
 		new File(physicalRepositoryRoot, "versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile,
 		legacySharedZipSource,
 		legacyReloadManagerSource,
-		legacyRuntimeResourceHashSource
+		legacyRuntimeResourceHashSource,
+		legacySimpleReloadSource
 	] as Set
 	legacyNativeClientSources = [
 		new File(physicalRepositoryRoot, "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java").canonicalFile,
@@ -134,6 +142,7 @@ if (stonecutterDirectNode) {
 	nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }
 	nativeReloadManagerActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyReloadManagerSource }
 	nativeRuntimeResourceHashActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyRuntimeResourceHashSource }
+	nativeSimpleReloadActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySimpleReloadSource }
 	nativeLoadingOverlayToastActive = selectedClientJavaSources.files.any { source -> source.canonicalFile in legacyLoadingOverlayToastSources }
 	compileMainJavaSources = files(
 		selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyNativeSources },
@@ -377,6 +386,7 @@ tasks.named("sourcesJar") {
 				|| (!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource)
 				|| (!nativeReloadManagerActive && details.file.canonicalFile == generatedReloadManagerSource)
 				|| (!nativeRuntimeResourceHashActive && details.file.canonicalFile == generatedRuntimeResourceHashSource)
+				|| (!nativeSimpleReloadActive && details.file.canonicalFile == generatedSimpleReloadSource)
 				|| (!nativeLoadingOverlayToastActive && details.file.canonicalFile == generatedLoadingOverlayToastSource)) {
 				details.exclude()
 			}

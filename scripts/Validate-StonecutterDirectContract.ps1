@@ -153,6 +153,29 @@ $CanonicalFabricNativeRuntimeResourceHashTargets = @(
     'mc1_21_10'
 )
 $CanonicalFabricNonNativeRuntimeResourceHashTargets = @('mc1_21_11', 'mc26_1_to_26_2')
+$CanonicalFabricNativeSimpleReloadTargets = @(
+    'mc1_21_6',
+    'mc1_21_7',
+    'mc1_21_8'
+)
+$CanonicalFabricNonNativeSimpleReloadTargets = @(
+    'mc1_20_1',
+    'mc1_20_2',
+    'mc1_20_3',
+    'mc1_20_4',
+    'mc1_20_5',
+    'mc1_20_6',
+    'mc1_21',
+    'mc1_21_1',
+    'mc1_21_2',
+    'mc1_21_3',
+    'mc1_21_4',
+    'mc1_21_5',
+    'mc1_21_9',
+    'mc1_21_10',
+    'mc1_21_11',
+    'mc26_1_to_26_2'
+)
 $CanonicalFabricNativeLoadingToastTargets = @(
     'mc1_20_5',
     'mc1_20_6',
@@ -227,6 +250,19 @@ $CanonicalFabricLoadingToastDescriptorPaths = @(
     'versions/mc1_21_9/common/src/client/resources/packforge.mc1_21_9_10.client.mixins.json',
     'versions/mc1_21_11/common/src/client/resources/packforge.fabric.client.mixins.json',
     'versions/mc26/common/src/client/resources/packforge.fabric.client.mixins.json'
+)
+$CanonicalFabricSimpleReloadDescriptorPaths = @(
+    'versions/mc1_20_1/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc1_20_2/common/src/main/resources/packforge.fabric.mixins.mc1_20_2.json',
+    'versions/mc1_20_3_4/common/src/main/resources/packforge.fabric.mixins.mc1_20_3_4.json',
+    'versions/mc1_20_5_6/common/src/main/resources/packforge.fabric.mixins.mc1_20_5_6.json',
+    'versions/mc1_21_1/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc1_21_4/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc1_21_5/common/src/main/resources/packforge.mc1_21_5.mixins.json',
+    'versions/mc1_21_8/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc1_21_9/common/src/main/resources/packforge.mc1_21_9_10.mixins.json',
+    'versions/mc1_21_11/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc26/common/src/main/resources/packforge.fabric.mixins.json'
 )
 $CanonicalFabricSharedZipDescriptorPaths = @(
     'versions/mc1_20_1/common/src/main/resources/packforge.fabric.mixins.json',
@@ -393,6 +429,8 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cnotin $CanonicalFabricNativeReloadManagerTargets }) $CanonicalFabricNonNativeReloadManagerTargets 'Fabric non-native reload-manager targets'
     Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cin $CanonicalFabricNativeRuntimeResourceHashTargets }) $CanonicalFabricNativeRuntimeResourceHashTargets 'Fabric native runtime-resource-hash targets'
     Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cnotin $CanonicalFabricNativeRuntimeResourceHashTargets }) $CanonicalFabricNonNativeRuntimeResourceHashTargets 'Fabric non-native runtime-resource-hash targets'
+    Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cin $CanonicalFabricNativeSimpleReloadTargets }) $CanonicalFabricNativeSimpleReloadTargets 'Fabric native SimpleReload targets'
+    Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cnotin $CanonicalFabricNativeSimpleReloadTargets }) $CanonicalFabricNonNativeSimpleReloadTargets 'Fabric non-native SimpleReload targets'
     Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cin $CanonicalFabricNativeLoadingToastTargets }) $CanonicalFabricNativeLoadingToastTargets 'Fabric native loading-toast targets'
     Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cnotin $CanonicalFabricNativeLoadingToastTargets }) $CanonicalFabricNonNativeLoadingToastTargets 'Fabric non-native loading-toast targets'
     # This physical registry route remains the standalone/rollback implementation;
@@ -424,6 +462,47 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         Fail 'registry pre-1.21.11 runtime-resource-hash route path/sourceSet/platform scope drifted.'
     }
     Assert-SameSet @($runtimeResourceHashRoute.targets) $CanonicalFabricNativeRuntimeResourceHashTargets 'registry pre-1.21.11 runtime-resource-hash route targets'
+    $nativeSimpleReloadTargets = @($Registry.targets | Where-Object { $_.key -cin $CanonicalFabricNativeSimpleReloadTargets })
+    Assert-SameSet @($nativeSimpleReloadTargets.key) $CanonicalFabricNativeSimpleReloadTargets 'registry native SimpleReload target keys'
+    $nativeSimpleReloadIntersection = @($Registry.targets | Where-Object {
+        ($null -ne $_.platforms.PSObject.Properties['fabric']) -and
+        ($_.apiAdapter -ceq 'mc1_21_8') -and
+        ($_.sourcePolicy -ceq 'shared-1.21.6-1.21.8')
+    })
+    Assert-SameSet @($nativeSimpleReloadIntersection.key) $CanonicalFabricNativeSimpleReloadTargets 'registry native SimpleReload adapter/policy intersection'
+    foreach ($target in $nativeSimpleReloadTargets) {
+        if (($target.sourcePolicy -cne 'shared-1.21.6-1.21.8') -or
+            ($target.apiAdapter -cne 'mc1_21_8') -or
+            ($target.mixinConfigs.main -cne 'packforge.fabric.mixins.json')) {
+            Fail "registry native SimpleReload target '$($target.key)' source policy/adapter/descriptor drifted."
+        }
+    }
+    $simpleReloadSeamContracts = @{
+        mc1_21_5 = @('bridge-1.21.5', 'mc1_21_4', 'packforge.mc1_21_5.mixins.json')
+        mc1_21_9 = @('bridge-1.21.9-1.21.10', 'mc1_21_8', 'packforge.mc1_21_9_10.mixins.json')
+        mc1_21_10 = @('bridge-1.21.9-1.21.10', 'mc1_21_8', 'packforge.mc1_21_9_10.mixins.json')
+        mc1_21_11 = @('base', 'mc1_21_11', 'packforge.fabric.mixins.json')
+        mc26_1_to_26_2 = @('base', 'mc26', 'packforge.fabric.mixins.json')
+    }
+    foreach ($targetKey in $simpleReloadSeamContracts.Keys) {
+        $target = @($Registry.targets | Where-Object { $_.key -ceq $targetKey })
+        if ($target.Count -ne 1) { Fail "registry SimpleReload seam target '$targetKey' must exist exactly once." }
+        $expected = $simpleReloadSeamContracts[$targetKey]
+        if (($target[0].sourcePolicy -cne $expected[0]) -or
+            ($target[0].apiAdapter -cne $expected[1]) -or
+            ($target[0].mixinConfigs.main -cne $expected[2])) {
+            Fail "registry SimpleReload seam target '$targetKey' source policy/adapter/descriptor drifted."
+        }
+    }
+    $legacySimpleReloadRoutes = @($Registry.sharedJavaSources | Where-Object { $_.id -ceq 'simple-reload-through-1.21.4' })
+    if ($legacySimpleReloadRoutes.Count -ne 1) { Fail "registry must contain one frozen SimpleReload through-1.21.4 route; found $($legacySimpleReloadRoutes.Count)." }
+    $legacySimpleReloadRoute = $legacySimpleReloadRoutes[0]
+    if (($legacySimpleReloadRoute.path -cne 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java') -or
+        ($legacySimpleReloadRoute.sourceSet -cne 'main') -or
+        ($null -ne $legacySimpleReloadRoute.PSObject.Properties['platforms'])) {
+        Fail 'registry SimpleReload through-1.21.4 route path/sourceSet/platform scope drifted.'
+    }
+    Assert-SameSet @($legacySimpleReloadRoute.targets) @('mc1_20_1', 'mc1_20_2', 'mc1_20_3', 'mc1_20_4', 'mc1_20_5', 'mc1_20_6', 'mc1_21', 'mc1_21_1', 'mc1_21_2', 'mc1_21_3', 'mc1_21_4') 'registry SimpleReload through-1.21.4 route targets'
     $commonLoadingToastRoutes = @($Registry.sharedJavaSources | Where-Object { $_.id -ceq 'loading-overlay-toast-1.20.5-through-1.21.5' })
     if ($commonLoadingToastRoutes.Count -ne 1) { Fail "registry must contain one frozen common loading-toast route; found $($commonLoadingToastRoutes.Count)." }
     $commonLoadingToastRoute = $commonLoadingToastRoutes[0]
@@ -486,6 +565,13 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java")' 'root Fabric native SharedZip validator input'
     Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java")' 'root Fabric native reload-manager validator input'
     Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/loader/RuntimeResourceHash.java")' 'root Fabric native runtime-resource-hash validator input'
+    Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java")' 'root Fabric native SimpleReload validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/shared/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java")' 'root retained shared SimpleReload validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/mc1_21_5/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java")' 'root retained 1.21.5 SimpleReload validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/mc1_21_8/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java")' 'root retained 1.21.8 SimpleReload validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/mc1_21_9/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java")' 'root retained 1.21.9 SimpleReload validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/mc1_21_11/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java")' 'root retained 1.21.11 SimpleReload validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java")' 'root retained mc26 SimpleReload validator input'
     Assert-ContainsOnce $rootBuild 'file("fabric/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java")' 'root Fabric native bitmap-provider validator input'
     Assert-ContainsOnce $rootBuild 'file("fabric/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java")' 'root Fabric native loading-toast validator input'
     Assert-ContainsOnce $rootBuild 'file("versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java")' 'root retained common loading-toast validator input'
@@ -695,6 +781,43 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         Assert-ContainsCount $Sources[$caller] 'RuntimeResourceHash.report(manager, context.reloadId());' 1 "runtime-resource-hash caller '$caller'"
     }
 
+    $nativeSimpleReload = $Sources.FabricNativeSimpleReload
+    $resourceManagerStateFactoryDescriptor = 'Lnet/minecraft/server/packs/resources/SimpleReloadInstance$StateFactory;create(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/server/packs/resources/PreparableReloadListener;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;'
+    $sharedStateFactoryDescriptor = 'Lnet/minecraft/server/packs/resources/SimpleReloadInstance$StateFactory;create(Lnet/minecraft/server/packs/resources/PreparableReloadListener$SharedState;Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/PreparableReloadListener;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;'
+    Assert-ContainsOnce $nativeSimpleReload '//? if >=1.21.6 && <=1.21.8 {' 'Fabric native SimpleReload outer target guard'
+    Assert-ContainsOnce $nativeSimpleReload '@WrapOperation(method = "prepareTasks"' 'Fabric native SimpleReload prepareTasks hook'
+    Assert-ContainsOnce $nativeSimpleReload $resourceManagerStateFactoryDescriptor 'Fabric native SimpleReload ResourceManager StateFactory descriptor'
+    Assert-ContainsOnce $nativeSimpleReload 'return original.call(factory, barrier, manager, listener, prepare, apply);' 'Fabric native SimpleReload vanilla fallback'
+    Assert-ContainsOnce $nativeSimpleReload 'CompletableFuture<?> result = original.call(factory, barrier, manager, listener, trackedPrepare, trackedApply);' 'Fabric native SimpleReload tracked invocation'
+    Assert-ContainsCount $nativeSimpleReload '//? if ' 1 'Fabric native SimpleReload conditional openers'
+    Assert-ContainsCount $nativeSimpleReload '//?}' 1 'Fabric native SimpleReload conditional closers'
+    if ((Normalize-NativeStonecutterJava $nativeSimpleReload) -cne (Normalize-NativeStonecutterJava $Sources.Mc1218SimpleReload)) {
+        Fail 'Fabric native SimpleReload body must remain exactly equal to retained 1.21.8 implementation after directive and whitespace normalization.'
+    }
+    $nativeSimpleReloadMetrics = Measure-StonecutterConditionalBlocks $nativeSimpleReload 'Fabric native SimpleReload'
+    if ($nativeSimpleReloadMetrics.Blocks -ne 1) { Fail "Fabric native SimpleReload must contain one Stonecutter block; found $($nativeSimpleReloadMetrics.Blocks)." }
+    if ($nativeSimpleReloadMetrics.MaxLines -gt 40) { Fail "Fabric native SimpleReload Stonecutter block spans $($nativeSimpleReloadMetrics.MaxLines) lines; maximum is 40." }
+
+    Assert-ContainsOnce $Sources.LegacySharedSimpleReload 'method = "<init>"' 'Fabric shared SimpleReload constructor seam'
+    Assert-ContainsOnce $Sources.LegacySharedSimpleReload $resourceManagerStateFactoryDescriptor 'Fabric shared SimpleReload ResourceManager descriptor'
+    Assert-ContainsOnce $Sources.Mc1215SimpleReload 'method = "prepareTasks"' 'Fabric 1.21.5 SimpleReload prepareTasks seam'
+    Assert-ContainsOnce $Sources.Mc1215SimpleReload $resourceManagerStateFactoryDescriptor 'Fabric 1.21.5 SimpleReload ResourceManager descriptor'
+    Assert-ContainsOnce $Sources.Mc1219SimpleReload $sharedStateFactoryDescriptor 'Fabric 1.21.9 SimpleReload SharedState transition'
+    Assert-ContainsOnce $Sources.Mc12111SimpleReload $sharedStateFactoryDescriptor 'Fabric 1.21.11 SimpleReload SharedState seam'
+    if ($Sources.Mc12111SimpleReload.Contains('import net.minecraft.server.packs.resources.ResourceManager;')) {
+        Fail 'Fabric 1.21.11 SimpleReload must not retain the pre-SharedState ResourceManager import.'
+    }
+    Assert-ContainsOnce $Sources.Mc26SimpleReload $sharedStateFactoryDescriptor 'Fabric mc26 SimpleReload SharedState seam'
+    Assert-ContainsOnce $Sources.Mc26SimpleReload '@Coerce Object stateFactory' 'Fabric mc26 SimpleReload expanded state-factory parameter'
+    Assert-ContainsOnce $Sources.Mc26SimpleReload 'Executor taskExecutor' 'Fabric mc26 SimpleReload expanded task executor'
+
+    try { $simpleReloadDescriptors = $Sources.FabricSimpleReloadDescriptors | ConvertFrom-Json -AsHashtable } catch { Fail "Fabric SimpleReload descriptor proof is invalid JSON: $($_.Exception.Message)" }
+    Assert-SameSet @($simpleReloadDescriptors.Keys) $CanonicalFabricSimpleReloadDescriptorPaths 'Fabric SimpleReload descriptor paths'
+    foreach ($descriptorPath in $CanonicalFabricSimpleReloadDescriptorPaths) {
+        $simpleReloadCount = @($simpleReloadDescriptors[$descriptorPath].mixins | Where-Object { $_ -ceq 'observe.SimpleReloadInstanceMixin' }).Count
+        if ($simpleReloadCount -ne 1) { Fail "Fabric descriptor '$descriptorPath' must register one SimpleReload mixin; found $simpleReloadCount." }
+    }
+
     $nativeReloadManager = $Sources.FabricNativeReloadManager
     Assert-ContainsOnce $nativeReloadManager '//? if >=1.20.1 && <=1.21.11 {' 'Fabric native reload-manager outer target guard'
     Assert-ContainsOnce $nativeReloadManager 'package com.teenkung.packforge.mixin.observe;' 'Fabric native reload-manager package'
@@ -840,6 +963,20 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         $nativeTransport.Contains('versions/mc26/common/src/main/java/com/teenkung/packforge/loader/RuntimeResourceHash.java')) {
         Fail 'Fabric native transport must preserve physical 1.21.11 and mc26 runtime-resource-hash sources.'
     }
+    Assert-ContainsOnce $nativeTransport 'def legacySimpleReloadSource = stonecutterDirectNode' 'Fabric legacy SimpleReload source identity'
+    Assert-ContainsOnce $nativeTransport 'versions/mc1_21_8/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java' 'Fabric legacy 1.21.8 SimpleReload source path'
+    Assert-ContainsOnce $nativeTransport 'def generatedSimpleReloadSource = stonecutterDirectNode' 'Fabric generated SimpleReload source identity'
+    Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java").get().asFile.canonicalFile' 'Fabric generated SimpleReload source path'
+    Assert-ContainsOnce $nativeTransport 'def nativeSimpleReloadActive = false' 'Fabric native SimpleReload default state'
+    foreach ($preservedPath in @(
+        'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java',
+        'versions/mc1_21_5/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java',
+        'versions/mc1_21_9/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java',
+        'versions/mc1_21_11/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java',
+        'versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java'
+    )) {
+        if ($nativeTransport.Contains($preservedPath)) { Fail "Fabric native transport must preserve physical SimpleReload seam '$preservedPath'." }
+    }
     Assert-ContainsOnce $nativeTransport 'def legacyLoadingOverlayToastSources = stonecutterDirectNode' 'Fabric legacy loading-toast source identities'
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java' 'Fabric legacy common loading-toast source path'
     Assert-ContainsOnce $nativeTransport 'versions/shared/modern/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java' 'Fabric legacy modern loading-toast source path'
@@ -856,13 +993,14 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric legacy archive exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric modern archive exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java' 'Fabric legacy SharedZip exclusion'
-    Assert-ContainsCount $nativeTransport 'new File(physicalRepositoryRoot, ' 10 'Fabric exact legacy native exclusions'
+    Assert-ContainsCount $nativeTransport 'new File(physicalRepositoryRoot, ' 11 'Fabric exact legacy native exclusions'
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java' 'Fabric legacy shared bitmap-provider exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java' 'Fabric legacy 1.21.11 bitmap-provider exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java' 'Fabric legacy mc26 bitmap-provider exclusion'
     Assert-ContainsOnce $nativeTransport 'nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }' 'Fabric registry-selected SharedZip activation'
     Assert-ContainsOnce $nativeTransport 'nativeReloadManagerActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyReloadManagerSource }' 'Fabric registry-selected reload-manager activation'
     Assert-ContainsOnce $nativeTransport 'nativeRuntimeResourceHashActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyRuntimeResourceHashSource }' 'Fabric registry-selected runtime-resource-hash activation'
+    Assert-ContainsOnce $nativeTransport 'nativeSimpleReloadActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySimpleReloadSource }' 'Fabric registry-selected SimpleReload activation'
     Assert-ContainsOnce $nativeTransport 'selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyNativeSources }' 'Fabric native source replacement'
     Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.dir("main/java")' 'Fabric generated Java compile root'
     Assert-ContainsOnce $nativeTransport 'selectedClientJavaSources.filter { source -> source.canonicalFile !in legacyNativeClientSources }' 'Fabric native client source replacement'
@@ -891,6 +1029,7 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $fabricSourcesJar '!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource' 'Fabric inactive generated SharedZip filter'
     Assert-ContainsOnce $fabricSourcesJar '!nativeReloadManagerActive && details.file.canonicalFile == generatedReloadManagerSource' 'Fabric inactive generated reload-manager filter'
     Assert-ContainsOnce $fabricSourcesJar '!nativeRuntimeResourceHashActive && details.file.canonicalFile == generatedRuntimeResourceHashSource' 'Fabric inactive generated runtime-resource-hash filter'
+    Assert-ContainsOnce $fabricSourcesJar '!nativeSimpleReloadActive && details.file.canonicalFile == generatedSimpleReloadSource' 'Fabric inactive generated SimpleReload filter'
     Assert-ContainsOnce $fabricSourcesJar '!nativeLoadingOverlayToastActive && details.file.canonicalFile == generatedLoadingOverlayToastSource' 'Fabric inactive generated loading-toast filter'
     Assert-ContainsOnce $fabricSourcesJar 'details.exclude()' 'Fabric sources JAR legacy-source exclusion'
     Assert-ContainsCount $fabricBuild 'stonecutter.tasks.generatedSourcesDir.dir("main/java")' 2 'Fabric exact generated Java root wiring'
@@ -906,6 +1045,7 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
             $Sources["Loader:$loaderId"].Contains('BitmapProviderDefinitionMixin.java') -or
             $Sources["Loader:$loaderId"].Contains('fabric/src/main/java/com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java') -or
             $Sources["Loader:$loaderId"].Contains('fabric/src/main/java/com/teenkung/packforge/loader/RuntimeResourceHash.java') -or
+            $Sources["Loader:$loaderId"].Contains('fabric/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java') -or
             $Sources["Loader:$loaderId"].Contains('fabric/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java')) {
             Fail "$loaderId build script must not consume a Fabric native source pilot."
         }
@@ -919,7 +1059,7 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         Fail 'Forge build script must not hard-code JOptSimple target keys or version.'
     }
 
-    return [pscustomobject]@{ DirectCells = $nodes.Count; JoptOverrides = $joptOverrides.Count; NativeArchiveCells = $CanonicalFabricNativeArchiveTargets.Count; NativeSharedZipCells = $CanonicalFabricNativeSharedZipTargets.Count; NativeReloadManagerCells = $CanonicalFabricNativeReloadManagerTargets.Count; NativeRuntimeResourceHashCells = $CanonicalFabricNativeRuntimeResourceHashTargets.Count; NativeBitmapCells = $CanonicalFabricNativeBitmapTargets.Count; NativeLoadingToastCells = $CanonicalFabricNativeLoadingToastTargets.Count }
+    return [pscustomobject]@{ DirectCells = $nodes.Count; JoptOverrides = $joptOverrides.Count; NativeArchiveCells = $CanonicalFabricNativeArchiveTargets.Count; NativeSharedZipCells = $CanonicalFabricNativeSharedZipTargets.Count; NativeReloadManagerCells = $CanonicalFabricNativeReloadManagerTargets.Count; NativeRuntimeResourceHashCells = $CanonicalFabricNativeRuntimeResourceHashTargets.Count; NativeSimpleReloadCells = $CanonicalFabricNativeSimpleReloadTargets.Count; NativeBitmapCells = $CanonicalFabricNativeBitmapTargets.Count; NativeLoadingToastCells = $CanonicalFabricNativeLoadingToastTargets.Count }
 }
 
 function Copy-Registry($Registry) {
@@ -984,6 +1124,19 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-runtime-resource-hash-rollback-parity-drift' { param($r, $s) $s.LegacyRuntimeResourceHash = $s.LegacyRuntimeResourceHash.Replace('namespace.equals("example")', 'false') } $Registry $Sources
     Assert-MutationRejected 'native-runtime-resource-hash-1.21.11-seam-missing' { param($r, $s) $s.Mc12111RuntimeResourceHash = $s.Mc12111RuntimeResourceHash.Replace('import java.util.function.Predicate;', 'import java.util.function.Function;') } $Registry $Sources
     Assert-MutationRejected 'native-runtime-resource-hash-mc26-seam-missing' { param($r, $s) $s.Mc26RuntimeResourceHash = $s.Mc26RuntimeResourceHash.Replace('import net.minecraft.resources.Identifier;', 'import net.minecraft.resources.ResourceLocation;') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-target-policy-drift' { param($r, $s) $target = @($r.targets | Where-Object { $_.key -ceq 'mc1_21_7' })[0]; $target.sourcePolicy = 'base' } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-seam-policy-drift' { param($r, $s) $target = @($r.targets | Where-Object { $_.key -ceq 'mc1_21_9' })[0]; $target.sourcePolicy = 'shared-1.21.6-1.21.8' } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-legacy-route-drift' { param($r, $s) $route = @($r.sharedJavaSources | Where-Object { $_.id -ceq 'simple-reload-through-1.21.4' })[0]; $route.targets = @($route.targets | Where-Object { $_ -cne 'mc1_21_4' }) } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-lower-range-drift' { param($r, $s) $s.FabricNativeSimpleReload = $s.FabricNativeSimpleReload.Replace('>=1.21.6', '>=1.21.5') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-upper-range-missing' { param($r, $s) $s.FabricNativeSimpleReload = $s.FabricNativeSimpleReload.Replace(' && <=1.21.8', '') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-behavior-drift' { param($r, $s) $s.FabricNativeSimpleReload = $s.FabricNativeSimpleReload.Replace('ReloadListenerTelemetry.observeListenerFuture', 'ReloadListenerTelemetry.missing') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-retained-parity-drift' { param($r, $s) $s.Mc1218SimpleReload = $s.Mc1218SimpleReload.Replace('ReloadExecutionContext.current()', 'null') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-shared-constructor-seam-drift' { param($r, $s) $s.LegacySharedSimpleReload = $s.LegacySharedSimpleReload.Replace('method = "<init>"', 'method = "prepareTasks"') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-1.21.5-descriptor-seam-drift' { param($r, $s) $s.Mc1215SimpleReload = $s.Mc1215SimpleReload.Replace('resources/ResourceManager;', 'resources/PreparableReloadListener$SharedState;') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-1.21.9-shared-state-seam-drift' { param($r, $s) $s.Mc1219SimpleReload = $s.Mc1219SimpleReload.Replace('PreparableReloadListener$SharedState;', 'ResourceManager;') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-1.21.11-import-seam-drift' { param($r, $s) $s.Mc12111SimpleReload += "`nimport net.minecraft.server.packs.resources.ResourceManager;" } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-mc26-expanded-seam-drift' { param($r, $s) $s.Mc26SimpleReload = $s.Mc26SimpleReload.Replace('Executor taskExecutor', 'Executor prepareExecutor') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-descriptor-registration-missing' { param($r, $s) $s.FabricSimpleReloadDescriptors = $s.FabricSimpleReloadDescriptors.Replace('observe.SimpleReloadInstanceMixin', 'observe.MissingSimpleReloadInstanceMixin') } $Registry $Sources
     Assert-MutationRejected 'native-bitmap-registry-route-drift' { param($r, $s) $route = @($r.sharedJavaSources | Where-Object { $_.id -ceq 'bitmap-provider-definition-through-1.21.10' })[0]; $route.sourceSet = 'main' } $Registry $Sources
     Assert-MutationRejected 'native-bitmap-lower-range-drift' { param($r, $s) $s.FabricNativeBitmap = $s.FabricNativeBitmap.Replace('>=1.20.1', '>=1.20.2') } $Registry $Sources
     Assert-MutationRejected 'native-bitmap-upper-range-missing' { param($r, $s) $s.FabricNativeBitmap = $s.FabricNativeBitmap.Replace(' && <=26.1', '') } $Registry $Sources
@@ -1016,6 +1169,10 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-runtime-resource-hash-physical-exclusion-leak' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace("`tlegacyNativeSources = [", "`tlegacyNativeSources = [`n`t`tnew File(physicalRepositoryRoot, `"versions/mc1_21_11/common/src/main/java/com/teenkung/packforge/loader/RuntimeResourceHash.java`"),") } $Registry $Sources
     Assert-MutationRejected 'native-runtime-resource-hash-activation-drift' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('nativeRuntimeResourceHashActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyRuntimeResourceHashSource }', 'nativeRuntimeResourceHashActive = true') } $Registry $Sources
     Assert-MutationRejected 'native-runtime-resource-hash-inactive-generated-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('|| (!nativeRuntimeResourceHashActive && details.file.canonicalFile == generatedRuntimeResourceHashSource)', '') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-legacy-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/mc1_21_8/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java', 'versions/mc1_21_8/common/src/main/java/com/teenkung/packforge/mixin/observe/Missing.java') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-physical-exclusion-leak' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace("`tlegacyNativeSources = [", "`tlegacyNativeSources = [`n`t`tnew File(physicalRepositoryRoot, `"versions/mc1_21_9/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java`"),") } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-activation-drift' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('nativeSimpleReloadActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySimpleReloadSource }', 'nativeSimpleReloadActive = true') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-inactive-generated-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('|| (!nativeSimpleReloadActive && details.file.canonicalFile == generatedSimpleReloadSource)', '') } $Registry $Sources
     Assert-MutationRejected 'native-bitmap-client-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java', 'versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/Missing.java') } $Registry $Sources
     Assert-MutationRejected 'native-bitmap-generated-client-root-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('stonecutter.tasks.generatedSourcesDir.dir("client/java")', 'files()') } $Registry $Sources
     Assert-MutationRejected 'native-bitmap-client-generation-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('dependsOn(stonecutter.tasks.generate["client"])', 'dependsOn(tasks.named("classes"))') } $Registry $Sources
@@ -1033,8 +1190,9 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-bitmap-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java"),', '') } $Registry $Sources
     Assert-MutationRejected 'native-reload-manager-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/main/java/com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java"),', '') } $Registry $Sources
     Assert-MutationRejected 'native-runtime-resource-hash-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/main/java/com/teenkung/packforge/loader/RuntimeResourceHash.java"),', '') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java"),', '') } $Registry $Sources
     Assert-MutationRejected 'native-loading-toast-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java"),', '') } $Registry $Sources
-    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 89 mutations rejected.'
+    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 106 mutations rejected.'
 }
 
 $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath,
@@ -1044,6 +1202,7 @@ $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath
     (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java'),
     (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\observe\ReloadableResourceManagerMixin.java'),
     (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\loader\RuntimeResourceHash.java'),
+    (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java'),
     (Join-Path $RepositoryRoot 'fabric\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java'),
     (Join-Path $RepositoryRoot 'fabric\src\client\java\com\teenkung\packforge\client\mixin\ui\LoadingOverlayToastMixin.java'),
     (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java'),
@@ -1054,6 +1213,12 @@ $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath
     (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\loader\RuntimeResourceHash.java'),
     (Join-Path $RepositoryRoot 'versions\mc1_21_11\common\src\main\java\com\teenkung\packforge\loader\RuntimeResourceHash.java'),
     (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\loader\RuntimeResourceHash.java'),
+    (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\mc1_21_5\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\mc1_21_8\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\mc1_21_9\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\mc1_21_11\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java'),
     (Join-Path $RepositoryRoot 'versions\shared\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java'),
     (Join-Path $RepositoryRoot 'versions\mc1_21_11\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java'),
     (Join-Path $RepositoryRoot 'versions\mc26\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java'),
@@ -1070,6 +1235,8 @@ $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath
         $CanonicalFabricReloadManagerDescriptorPaths | ForEach-Object { Join-Path $RepositoryRoot $_ }
     ) + @(
         $CanonicalFabricLoadingToastDescriptorPaths | ForEach-Object { Join-Path $RepositoryRoot $_ }
+    ) + @(
+        $CanonicalFabricSimpleReloadDescriptorPaths | ForEach-Object { Join-Path $RepositoryRoot $_ }
     )
 foreach ($path in $requiredPaths) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Fail "missing required file '$path'." }
@@ -1108,6 +1275,14 @@ foreach ($relativePath in $CanonicalFabricLoadingToastDescriptorPaths) {
         Fail "Fabric loading-toast descriptor '$relativePath' is invalid JSON: $($_.Exception.Message)"
     }
 }
+$simpleReloadDescriptorProof = [ordered]@{}
+foreach ($relativePath in $CanonicalFabricSimpleReloadDescriptorPaths) {
+    try {
+        $simpleReloadDescriptorProof[$relativePath] = Get-Content -LiteralPath (Join-Path $RepositoryRoot $relativePath) -Raw | ConvertFrom-Json
+    } catch {
+        Fail "Fabric SimpleReload descriptor '$relativePath' is invalid JSON: $($_.Exception.Message)"
+    }
+}
 $sources = @{
     Settings = Get-Content -LiteralPath $SettingsPath -Raw
     RootBuild = Get-Content -LiteralPath $RootBuildPath -Raw
@@ -1117,6 +1292,7 @@ $sources = @{
     FabricNativeSharedZip = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java') -Raw
     FabricNativeReloadManager = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\observe\ReloadableResourceManagerMixin.java') -Raw
     FabricNativeRuntimeResourceHash = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\loader\RuntimeResourceHash.java') -Raw
+    FabricNativeSimpleReload = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java') -Raw
     FabricNativeBitmap = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java') -Raw
     FabricNativeLoadingToast = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\client\java\com\teenkung\packforge\client\mixin\ui\LoadingOverlayToastMixin.java') -Raw
     LegacySharedZip = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java') -Raw
@@ -1127,6 +1303,12 @@ $sources = @{
     LegacyRuntimeResourceHash = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\loader\RuntimeResourceHash.java') -Raw
     Mc12111RuntimeResourceHash = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc1_21_11\common\src\main\java\com\teenkung\packforge\loader\RuntimeResourceHash.java') -Raw
     Mc26RuntimeResourceHash = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\loader\RuntimeResourceHash.java') -Raw
+    LegacySharedSimpleReload = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java') -Raw
+    Mc1215SimpleReload = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc1_21_5\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java') -Raw
+    Mc1218SimpleReload = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc1_21_8\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java') -Raw
+    Mc1219SimpleReload = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc1_21_9\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java') -Raw
+    Mc12111SimpleReload = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc1_21_11\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java') -Raw
+    Mc26SimpleReload = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\observe\SimpleReloadInstanceMixin.java') -Raw
     LegacyBitmap = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\shared\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java') -Raw
     Mc12111Bitmap = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc1_21_11\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java') -Raw
     Mc26Bitmap = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc26\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java') -Raw
@@ -1138,10 +1320,11 @@ $sources = @{
     FabricReloadManagerDescriptors = $reloadManagerDescriptorProof | ConvertTo-Json -Depth 20 -Compress
     FabricBitmapDescriptors = $bitmapDescriptorProof | ConvertTo-Json -Depth 20 -Compress
     FabricLoadingToastDescriptors = $loadingToastDescriptorProof | ConvertTo-Json -Depth 20 -Compress
+    FabricSimpleReloadDescriptors = $simpleReloadDescriptorProof | ConvertTo-Json -Depth 20 -Compress
     'Loader:fabric' = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'platform\fabric\build.gradle') -Raw
     'Loader:forge' = Get-Content -LiteralPath $ForgeBuildPath -Raw
     'Loader:neoforge' = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'platform\neoforge\build.gradle') -Raw
 }
 $summary = Invoke-DirectContractValidation $registry $sources
 if ($SelfTest) { Invoke-SelfTests $registry $sources }
-Write-Output "Stonecutter direct contract PASS: $($summary.DirectCells) direct cells; $($summary.NativeArchiveCells) Fabric native archive cells; $($summary.NativeSharedZipCells) Fabric native SharedZip cells; $($summary.NativeReloadManagerCells) Fabric native reload-manager cells; $($summary.NativeRuntimeResourceHashCells) Fabric native runtime-resource-hash cells; $($summary.NativeBitmapCells) Fabric native bitmap-provider cells; $($summary.NativeLoadingToastCells) Fabric native loading-toast cells; registry physical routes preserved for standalone/rollback; canonical replacement direct-only; $($summary.JoptOverrides) registry JOptSimple overrides."
+Write-Output "Stonecutter direct contract PASS: $($summary.DirectCells) direct cells; $($summary.NativeArchiveCells) Fabric native archive cells; $($summary.NativeSharedZipCells) Fabric native SharedZip cells; $($summary.NativeReloadManagerCells) Fabric native reload-manager cells; $($summary.NativeRuntimeResourceHashCells) Fabric native runtime-resource-hash cells; $($summary.NativeSimpleReloadCells) Fabric native SimpleReload cells; $($summary.NativeBitmapCells) Fabric native bitmap-provider cells; $($summary.NativeLoadingToastCells) Fabric native loading-toast cells; registry physical routes preserved for standalone/rollback; canonical replacement direct-only; $($summary.JoptOverrides) registry JOptSimple overrides."
