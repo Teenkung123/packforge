@@ -20,7 +20,6 @@ import net.minecraft.network.chat.Component;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /** Native Minecraft 26.x renderer for the version-independent config model. */
 public final class PackForgeConfigScreen extends Screen {
@@ -28,7 +27,7 @@ public final class PackForgeConfigScreen extends Screen {
 	private final PackForgeConfigDraft draft = new PackForgeConfigDraft();
 	private final List<PackForgeConfigScreenModel.OptionSpec> availableOptions = PackForgeConfigScreenModel.availableOptions();
 	private final List<PackForgeConfigScreenModel.Category> availableCategories = PackForgeConfigScreenModel.availableCategories(PackForgeCapabilities.available());
-	private final Map<PackForgeConfigScreenModel.OptionSpec, Boolean> invalidInputs = new java.util.HashMap<>();
+	private final PackForgeConfigIntegerInputs integerInputs = new PackForgeConfigIntegerInputs();
 	private EditBox searchBox;
 	private ConfigList list;
 	private Button doneButton;
@@ -60,7 +59,7 @@ public final class PackForgeConfigScreen extends Screen {
 
 		addRenderableWidget(Button.builder(Component.translatable("packforge.config.reset_all"), button -> {
 			draft.resetAll(availableOptions);
-			invalidInputs.clear();
+			integerInputs.clear();
 			rebuildList();
 			updateDoneButton();
 		}).bounds(this.width / 2 - 154, this.height - 32, 100, 20).build());
@@ -108,7 +107,7 @@ public final class PackForgeConfigScreen extends Screen {
 		}
 		// Rebuilding discards each EditBox's raw text. Invalid text was never
 		// applied to the draft, so its validation marker must be discarded too.
-		invalidInputs.clear();
+		integerInputs.clear();
 		list.clear();
 		String currentSection = null;
 		for (PackForgeConfigScreenModel.OptionSpec option : availableOptions) {
@@ -153,16 +152,7 @@ public final class PackForgeConfigScreen extends Screen {
 	}
 
 	private boolean hasInvalidInput() {
-		return invalidInputs.values().stream().anyMatch(Boolean::booleanValue);
-	}
-
-	private void setInputValidity(PackForgeConfigScreenModel.OptionSpec option, boolean valid) {
-		if (valid) {
-			invalidInputs.remove(option);
-		} else {
-			invalidInputs.put(option, true);
-		}
-		updateDoneButton();
+		return integerInputs.hasInvalid();
 	}
 
 	private void updateDoneButton() {
@@ -189,7 +179,7 @@ public final class PackForgeConfigScreen extends Screen {
 			this.control = createControl(option, font);
 			this.reset = Button.builder(Component.translatable("packforge.config.reset"), button -> {
 				draft.reset(option);
-				invalidInputs.remove(option);
+				integerInputs.reset(option);
 				rebuildList();
 				updateDoneButton();
 			}).size(56, 20).build();
@@ -222,25 +212,18 @@ public final class PackForgeConfigScreen extends Screen {
 		}
 
 		private void updateInteger(PackForgeConfigScreenModel.IntegerOption option, EditBox box, String value) {
-			try {
-				int parsed = Integer.parseInt(value.trim());
-				if (!option.valid(parsed)) {
-					setInvalid(box, option);
-					return;
-				}
-				option.set(draft.working(), parsed);
+			if (integerInputs.update(option, draft.working(), value)) {
 				box.setTextColor(0xE0E0E0);
-				setInputValidity(option, true);
-			} catch (NumberFormatException exception) {
+			} else {
 				setInvalid(box, option);
 			}
+			updateDoneButton();
 		}
 
 		private void setInvalid(EditBox box, PackForgeConfigScreenModel.IntegerOption option) {
 			box.setTextColor(0xFF5555);
 			box.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey()).append("\n")
 				.append(Component.literal(option.minimum() + "-" + option.maximum()).withStyle(ChatFormatting.RED))));
-			setInputValidity(option, false);
 		}
 
 		private Component optionTooltip(PackForgeConfigScreenModel.OptionSpec option) {

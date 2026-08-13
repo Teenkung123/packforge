@@ -21,11 +21,13 @@ abstract class PackForgeConfigScreenBase extends Screen {
 	private final PackForgeConfigDraft draft = new PackForgeConfigDraft();
 	private final List<PackForgeConfigScreenModel.OptionSpec> options = PackForgeConfigScreenModel.availableOptions();
 	private final List<PackForgeConfigScreenModel.Category> categories = PackForgeConfigScreenModel.availableCategories(PackForgeCapabilities.available());
+	private final PackForgeConfigIntegerInputs integerInputs = new PackForgeConfigIntegerInputs();
 	private PackForgeConfigScreenModel.Category activeCategory;
 	private String filter = "";
 	private int page;
 	private Component saveError;
 	private EditBox search;
+	private Button doneButton;
 
 	PackForgeConfigScreenBase(Screen parent) {
 		super(Component.translatable("packforge.config.title"));
@@ -35,6 +37,7 @@ abstract class PackForgeConfigScreenBase extends Screen {
 
 	@Override
 	protected void init() {
+		integerInputs.clear();
 		clearWidgets();
 		int contentWidth = Math.min(520, this.width - 24);
 		int left = (this.width - contentWidth) / 2;
@@ -62,9 +65,10 @@ abstract class PackForgeConfigScreenBase extends Screen {
 		addRenderableWidget(Button.builder(Component.literal(">"), button -> { page++; rebuild(); }).bounds(left + 28, this.height - 60, 24, 20).build()).active = page + 1 < pages;
 		addRenderableWidget(new StringWidget(left + 58, this.height - 60, 100, 20, Component.literal((page + 1) + "/" + pages), this.font));
 		int action = Math.min(120, (contentWidth - 12) / 3);
-		addRenderableWidget(Button.builder(Component.translatable("packforge.config.button.reset_all"), button -> { draft.resetAll(options); saveError = null; rebuild(); }).bounds(left, this.height - 32, action, 20).build());
+		addRenderableWidget(Button.builder(Component.translatable("packforge.config.button.reset_all"), button -> { draft.resetAll(options); integerInputs.clear(); saveError = null; rebuild(); }).bounds(left, this.height - 32, action, 20).build());
 		addRenderableWidget(Button.builder(Component.translatable("packforge.config.cancel"), button -> onClose()).bounds(left + (contentWidth - action) / 2, this.height - 32, action, 20).build());
-		addRenderableWidget(Button.builder(Component.translatable("packforge.config.button.done"), button -> apply()).bounds(left + contentWidth - action, this.height - 32, action, 20).build());
+		doneButton = addRenderableWidget(Button.builder(Component.translatable("packforge.config.button.done"), button -> apply()).bounds(left + contentWidth - action, this.height - 32, action, 20).build());
+		updateDoneButton();
 	}
 
 	private List<PackForgeConfigScreenModel.OptionSpec> filtered() {
@@ -106,13 +110,22 @@ abstract class PackForgeConfigScreenBase extends Screen {
 			box.setValue(list.format(draft.working())); box.setMaxLength(512); box.setResponder(value -> list.set(draft.working(), value));
 			box.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey())));
 		}
-		Button reset = addRenderableWidget(Button.builder(Component.translatable("packforge.config.button.reset"), button -> { draft.reset(option); rebuild(); }).bounds(left + width - resetWidth, y, resetWidth, 20).build());
+		Button reset = addRenderableWidget(Button.builder(Component.translatable("packforge.config.button.reset"), button -> { draft.reset(option); integerInputs.reset(option); rebuild(); }).bounds(left + width - resetWidth, y, resetWidth, 20).build());
 		reset.active = !option.sameValue(draft.working(), new PackForgeConfig.Cfg());
 	}
 
 	private void updateInteger(PackForgeConfigScreenModel.IntegerOption option, EditBox box, String value) {
-		try { int parsed = Integer.parseInt(value.trim()); if (!option.valid(parsed)) throw new NumberFormatException(); option.set(draft.working(), parsed); box.setTextColor(0xE0E0E0); }
-		catch (NumberFormatException ignored) { box.setTextColor(0xFF5555); box.setTooltip(Tooltip.create(Component.literal(option.minimum() + "-" + option.maximum()))); }
+		if (integerInputs.update(option, draft.working(), value)) {
+			box.setTextColor(0xE0E0E0);
+		} else {
+			setInvalid(option, box);
+		}
+		updateDoneButton();
+	}
+
+	private void setInvalid(PackForgeConfigScreenModel.IntegerOption option, EditBox box) {
+		box.setTextColor(0xFF5555);
+		box.setTooltip(Tooltip.create(Component.literal(option.minimum() + "-" + option.maximum())));
 	}
 
 	private Component optionTooltip(PackForgeConfigScreenModel.OptionSpec option) {
@@ -133,8 +146,16 @@ abstract class PackForgeConfigScreenBase extends Screen {
 		return tooltip;
 	}
 
-	private void apply() { PackForgeConfig.SaveResult result = draft.apply(); if (result.successful()) Minecraft.getInstance().setScreen(parent); else { saveError = Component.translatable("packforge.config.save_failed", result.errorMessage()); rebuild(); } }
+	private void apply() {
+		if (integerInputs.hasInvalid()) {
+			return;
+		}
+		PackForgeConfig.SaveResult result = draft.apply();
+		if (result.successful()) Minecraft.getInstance().setScreen(parent);
+		else { saveError = Component.translatable("packforge.config.save_failed", result.errorMessage()); rebuild(); }
+	}
 	@Override public void onClose() { draft.discard(); Minecraft.getInstance().setScreen(parent); }
+	private void updateDoneButton() { if (doneButton != null) doneButton.active = !integerInputs.hasInvalid(); }
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		graphics.fill(0, 0, this.width, this.height, 0xB0101010);

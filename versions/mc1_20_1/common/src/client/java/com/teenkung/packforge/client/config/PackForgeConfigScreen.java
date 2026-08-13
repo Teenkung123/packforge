@@ -14,10 +14,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /** Searchable, scrollable native 1.20.1 renderer for the shared config model. */
 public final class PackForgeConfigScreen extends Screen {
@@ -30,7 +28,7 @@ public final class PackForgeConfigScreen extends Screen {
 	private final List<PackForgeConfigScreenModel.OptionSpec> availableOptions = PackForgeConfigScreenModel.availableOptions();
 	private final List<PackForgeConfigScreenModel.Category> availableCategories =
 		PackForgeConfigScreenModel.availableCategories(PackForgeCapabilities.available());
-	private final Map<PackForgeConfigScreenModel.OptionSpec, Boolean> invalidInputs = new HashMap<>();
+	private final PackForgeConfigIntegerInputs integerInputs = new PackForgeConfigIntegerInputs();
 	private PackForgeConfigScreenModel.Category activeCategory;
 	private EditBox searchBox;
 	private Button doneButton;
@@ -48,6 +46,7 @@ public final class PackForgeConfigScreen extends Screen {
 
 	@Override
 	protected void init() {
+		this.integerInputs.clear();
 		this.searchBox = new EditBox(this.font, this.width / 2 - 150, 24, 300, 20,
 			Component.translatable("packforge.config.search"));
 		this.searchBox.setHint(Component.translatable("packforge.config.search"));
@@ -80,7 +79,7 @@ public final class PackForgeConfigScreen extends Screen {
 
 		addRenderableWidget(Button.builder(Component.translatable("packforge.config.reset_all"), button -> {
 			this.draft.resetAll(this.availableOptions);
-			this.invalidInputs.clear();
+			this.integerInputs.clear();
 			rebuild();
 		}).bounds(this.width / 2 - 154, this.height - 28, 100, 20).build());
 		addRenderableWidget(Button.builder(Component.translatable("packforge.config.cancel"), button -> closeWithoutSaving())
@@ -141,7 +140,7 @@ public final class PackForgeConfigScreen extends Screen {
 		addRenderableWidget(control);
 		Button reset = Button.builder(Component.translatable("packforge.config.reset"), button -> {
 			this.draft.reset(option);
-			this.invalidInputs.remove(option);
+			this.integerInputs.reset(option);
 			rebuild();
 		}).bounds(left + contentWidth - RESET_WIDTH, y, RESET_WIDTH, 20).build();
 		reset.active = !option.sameValue(this.draft.working(), new PackForgeConfig.Cfg());
@@ -175,28 +174,19 @@ public final class PackForgeConfigScreen extends Screen {
 	}
 
 	private void updateInteger(PackForgeConfigScreenModel.IntegerOption option, EditBox box, String value) {
-		try {
-			int parsed = Integer.parseInt(value.trim());
-			if (!option.valid(parsed)) {
-				setInvalid(option, box);
-				return;
-			}
-			option.set(this.draft.working(), parsed);
+		if (this.integerInputs.update(option, this.draft.working(), value)) {
 			box.setTextColor(0xE0E0E0);
 			box.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey())));
-			this.invalidInputs.remove(option);
-		} catch (NumberFormatException exception) {
+		} else {
 			setInvalid(option, box);
 		}
 		updateDoneButton();
 	}
 
 	private void setInvalid(PackForgeConfigScreenModel.IntegerOption option, EditBox box) {
-		this.invalidInputs.put(option, true);
 		box.setTextColor(0xFF5555);
 		box.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey()).append("\n")
 			.append(Component.literal(option.minimum() + "-" + option.maximum()).withStyle(ChatFormatting.RED))));
-		updateDoneButton();
 	}
 
 	private Component optionTooltip(PackForgeConfigScreenModel.OptionSpec option) {
@@ -218,7 +208,7 @@ public final class PackForgeConfigScreen extends Screen {
 	}
 
 	private void apply() {
-		if (!this.invalidInputs.isEmpty()) {
+		if (this.integerInputs.hasInvalid()) {
 			return;
 		}
 		PackForgeConfig.SaveResult result = this.draft.apply();
@@ -278,7 +268,7 @@ public final class PackForgeConfigScreen extends Screen {
 
 	private void updateDoneButton() {
 		if (this.doneButton != null) {
-			this.doneButton.active = this.invalidInputs.isEmpty();
+			this.doneButton.active = !this.integerInputs.hasInvalid();
 		}
 	}
 
