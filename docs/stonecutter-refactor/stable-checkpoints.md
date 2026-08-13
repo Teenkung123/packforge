@@ -460,3 +460,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: generator self-test and Python compilation passed; independent read-only review passed. Current `--verify-existing` check reported `CURRENT_MANIFEST_MISSING`: only 7 of 20 expected release JARs existed and `build/libs/release/manifest.json` was absent.
 - Status: `PHASE_K_MANIFEST_VERIFIER_STRUCTURAL_VERIFIED`; real `verifyReleaseManifest` was not run. No full artifact build, final-manifest verification, exact release matrix, compatibility profile, or Minecraft runtime proof exists from this checkpoint. Phase K remains incomplete.
 - Rollback: after reverting later documentation-only checkpoints, `git revert 67a7bf5e57de4d35089983db00ae84328d530c7c` removes the existing-manifest verifier and its self-test, returning to generated-manifest-only behavior.
+
+## Atlas retry compatibility guard
+
+- Date: 2026-08-13
+- Commit SHA: `943354a4897011b62b4c4cab958afbc92fd16035`
+- Parent SHA: `67a7bf5e57de4d35089983db00ae84328d530c7c`
+- Scope: preserve the configured atlas-retry value while shader compatibility changes only its effective state; keep the guard option itself visibly effective; remove the mc26 startup mutation of persisted configuration.
+- Verification: focused Fabric `mc26_1_to_26_2` `FeaturePolicyTest` and `PackForgeConfigScreenModelTest` passed 19 tests in 11 seconds. Independent review found no blocker. No clean, full build, Minecraft runtime, shader profile, benchmark, or default promotion was run.
+- Status: `PHASE_J_ATLAS_RETRY_POLICY_VERIFIED`; atlas retry remains opt-in and Phase J promotion evidence remains incomplete.
+- Rollback: after reverting later documentation-only checkpoints, `git revert 943354a4897011b62b4c4cab958afbc92fd16035` restores startup-time config mutation and the prior UI effective-state mapping.
