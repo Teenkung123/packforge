@@ -670,3 +670,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: static direct-contract self-test passed 89 rejected mutations and includes LoadingOverlayToast for 14 targets. Source metrics passed in 27 seconds: 216 production files, 16,544 LOC, 109 bridge files / 5,524 LOC (33.39%), zero duplicate groups, nine Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused offline six-boundary Fabric `compileClientJava` plus `sourcesJar` reached BUILD SUCCESSFUL in 52 seconds across 48 tasks (39 executed, nine up-to-date). Physical lower SHA-256 `6405DCD1...`, generated common `734966D6...`, generated modern `12A3E4CA...`, and physical mc26 `8D9A1069...` matched; classes existed. Independent final review passed.
 - Limits: no Minecraft runtime, all-53 build/package parity, full matrix, release verification, or general cross-loader preprocessing proof was run. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert 731d1c2`; then revert `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, and `b54a40f` in order if removing the preceding Fabric native pilot work.
+
+## Phase E — canonical preprocessed SimpleReload Fabric seam
+
+- Date: 2026-08-13
+- Commit SHA: `b1ee885`; parent `ebb7c41`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: exact active Fabric SimpleReload coverage for `mc1_21_6`, `mc1_21_7`, and `mc1_21_8` through adapter plus source policy. Adjacent and all other eras retain physical sources.
+- Verification: static self-test passed 106 mutations. Source metrics passed in 30 seconds: 217 production files, 16,575 LOC, 110 bridge files / 5,555 LOC (33.51%), zero duplicate groups, ten Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused 1.21.5/1.21.6/1.21.8/1.21.9 compile/sourceJar reached BUILD SUCCESSFUL in 46 seconds across 24 tasks (20 executed, four up-to-date). Active source SHA-256 `C30B2016...` matched; inactive physical SHA prefixes `BB0AA935...` and `E94AAB4F...` remained; classes existed. Independent final review passed.
+- Limits: no Minecraft runtime, all-53 build/package parity, full matrix, release verification, or general cross-loader preprocessing proof was run. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert b1ee885`; then revert `731d1c2`, `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, and `b54a40f` in order if removing the preceding Fabric native pilot work.

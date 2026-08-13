@@ -415,3 +415,13 @@
 - Verification: static direct-contract self-test passed 89 rejected mutations including LoadingOverlayToast14. Metrics passed in 27 seconds: 216 files / 16,544 LOC, 109 bridge files / 5,524 LOC (33.39%), zero duplicates, nine blocks / maximum 40 lines, and 18 platform target-key references. Offline six-boundary Fabric compileClientJava+sourcesJar reached BUILD SUCCESSFUL in 52 seconds across 48 tasks (39 executed, nine up-to-date); physical lower `6405DCD1...`, generated common `734966D6...`, generated modern `12A3E4CA...`, and physical mc26 `8D9A1069...` matched; classes existed. Independent final review passed.
 - Limits: no runtime, all-53 parity, full matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert 731d1c2`; then `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, then `b54a40f` if needed.
+
+## Phase E — canonical preprocessed SimpleReload Fabric seam
+
+- Date: 2026-08-13
+- Commit SHA: `b1ee885`; parent `ebb7c41`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: exact active Fabric SimpleReload for `mc1_21_6`, `mc1_21_7`, and `mc1_21_8` via adapter plus source policy; adjacent and all other eras retain physical sources.
+- Verification: static self-test passed 106 mutations. Metrics passed in 30 seconds: 217 files / 16,575 LOC, 110 bridge files / 5,555 LOC (33.51%), zero duplicates, ten blocks / maximum 40 lines, and 18 platform target-key references. Focused 1.21.5/1.21.6/1.21.8/1.21.9 compile/sourceJar reached BUILD SUCCESSFUL in 46 seconds across 24 tasks (20 executed, four up-to-date); active `C30B2016...` matched, inactive physical `BB0AA935...` / `E94AAB4F...` remained, and classes existed. Independent final review passed.
+- Limits: no runtime, all-53 parity, full matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert b1ee885`; then `731d1c2`, `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, then `b54a40f` if needed.
