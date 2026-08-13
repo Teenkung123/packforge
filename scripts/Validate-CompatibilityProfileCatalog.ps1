@@ -2,12 +2,19 @@
 param(
     [string] $CatalogPath = (Join-Path $PSScriptRoot '..\gradle\compatibility-profiles.json'),
     [string] $RegistryPath = (Join-Path $PSScriptRoot '..\gradle\minecraft-targets.json'),
+    [string] $PackForgeConfigPath = (Join-Path $PSScriptRoot '..\common\src\main\java\com\Teenkung\packforge\config\PackForgeConfig.java'),
     [switch] $SelfTest
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+
+$compatibilityConfigHelperPath = Join-Path $PSScriptRoot 'CompatibilityProfileConfig.ps1'
+if (-not (Test-Path -LiteralPath $compatibilityConfigHelperPath -PathType Leaf)) {
+    throw "Compatibility profile config helper is missing: $compatibilityConfigHelperPath"
+}
+. $compatibilityConfigHelperPath
 
 # This is intentionally duplicated from the catalog. The catalog must not be able to
 # redefine its own coverage contract.
@@ -48,6 +55,84 @@ function Test-JsonObject($Value) {
 function Assert-JsonObject($Value, [string] $Context) {
     if (-not (Test-JsonObject $Value)) { Fail "$Context must be an object." }
     return $Value
+}
+
+function Assert-FeatureOverrides($Overrides, [string] $Context) {
+    try {
+        ConvertTo-NormalizedFeatureOverrides -Overrides $Overrides -Context $Context | Out-Null
+    } catch {
+        Fail $_.Exception.Message
+    }
+}
+
+function Get-PackForgeConfigSourceDefaults([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { Fail "missing PackForgeConfig source '$Path'." }
+    $source = Get-Content -LiteralPath $Path
+    $versionMatch = @($source | Select-String -Pattern '^\s*private static final int CURRENT_VERSION = ([0-9]+);\s*$')
+    if ($versionMatch.Count -ne 1) { Fail 'PackForgeConfig source must declare one numeric CURRENT_VERSION.' }
+    $currentVersion = [int] $versionMatch[0].Matches[0].Groups[1].Value
+    $defaults = [ordered]@{}
+    foreach ($line in $source) {
+        if ($line -notmatch '^\s*public\s+(boolean|int|List<String>)\s+([A-Za-z0-9_]+)\s*=\s*(.+);\s*$') { continue }
+        $type = $Matches[1]
+        $name = $Matches[2]
+        $expression = $Matches[3].Trim()
+        if ($defaults.Contains($name)) { Fail "PackForgeConfig source duplicates serialized field '$name'." }
+        $value = switch ($type) {
+            'boolean' {
+                if ($expression -cnotin @('true', 'false')) { Fail "PackForgeConfig boolean '$name' has unsupported initializer '$expression'." }
+                $expression -ceq 'true'
+            }
+            'int' {
+                if ($expression -ceq 'CURRENT_VERSION') { $currentVersion }
+                elseif ($expression -match '^-?[0-9]+$') { [int] $expression }
+                else { Fail "PackForgeConfig integer '$name' has unsupported initializer '$expression'." }
+            }
+            'List<String>' {
+                if ($expression -notmatch '^new ArrayList<>\(List\.of\((.*)\)\)$') {
+                    Fail "PackForgeConfig list '$name' has unsupported initializer '$expression'."
+                }
+                $listBody = $Matches[1]
+                try {
+                    @(("[$listBody]" | ConvertFrom-Json))
+                } catch {
+                    Fail "PackForgeConfig list '$name' has invalid string literals."
+                }
+            }
+        }
+        $defaults[$name] = $value
+    }
+    return $defaults
+}
+
+function Assert-PackForgeConfigBaseline([string] $Path) {
+    $sourceDefaults = Get-PackForgeConfigSourceDefaults $Path
+    $baseline = New-CompatibilityBaseConfig
+    $sourceKeys = @($sourceDefaults.Keys)
+    $baselineKeys = @($baseline.Keys)
+    if ($sourceKeys.Count -ne 50 -or $baselineKeys.Count -ne 50 -or
+        @(Compare-Object -ReferenceObject $sourceKeys -DifferenceObject $baselineKeys).Count -ne 0) {
+        Fail "compatibility smoke baseline must match all 50 serialized PackForgeConfig.Cfg fields exactly; source=$($sourceKeys.Count) baseline=$($baselineKeys.Count)."
+    }
+    if ($sourceDefaults.loaderTimingsEnabled -ne $false -or $sourceDefaults.startupStatusOverlayEnabled -ne $true) {
+        Fail 'documented smoke deltas require Java defaults loaderTimingsEnabled=false and startupStatusOverlayEnabled=true.'
+    }
+    $expected = [ordered]@{}
+    foreach ($key in $sourceKeys) { $expected[$key] = $sourceDefaults[$key] }
+    $expected.loaderTimingsEnabled = $true
+    $expected.startupStatusOverlayEnabled = $false
+    foreach ($key in $sourceKeys) {
+        $actualJson = $baseline[$key] | ConvertTo-Json -Compress -Depth 5
+        $expectedJson = $expected[$key] | ConvertTo-Json -Compress -Depth 5
+        if ($actualJson -cne $expectedJson) {
+            Fail "compatibility smoke baseline field '$key' differs from PackForgeConfig.Cfg default outside the two documented smoke deltas; expected=$expectedJson actual=$actualJson."
+        }
+    }
+    $baselineJson = $baseline | ConvertTo-Json
+    $roundTripJson = ($baselineJson | ConvertFrom-Json) | ConvertTo-Json
+    if ((Get-Sha256Text $baselineJson) -cne (Get-Sha256Text $roundTripJson)) {
+        Fail 'compatibility smoke baseline is not JSON serialization/hash stable.'
+    }
 }
 
 function Require-Text($Object, [string] $Name, [string] $Context) {
@@ -279,7 +364,7 @@ function Invoke-CatalogValidation($Catalog, $Registry) {
         )
         [void] (Assert-UniqueStrings $runtimeModIds "profile '$id' runtime mod ids")
         $featureOverrides = Value $profile 'featureOverrides'
-        Assert-JsonObject $featureOverrides "profile '$id' featureOverrides" | Out-Null
+        Assert-FeatureOverrides $featureOverrides "profile '$id' featureOverrides"
 
         $fixture = Require-Text $profile 'fixture' "profile '$id'"
         $path = Require-Text $profile 'expectedPath' "profile '$id'"
@@ -337,7 +422,7 @@ function Assert-MutationRejected([string] $Name, [scriptblock] $Mutation, $Catal
 function Invoke-SelfTests($Catalog, $Registry) {
 	Invoke-CatalogValidation $Catalog $Registry | Out-Null
 	$positive = Copy-JsonObject $Catalog
-	$positiveProfile = $positive.profiles[0]
+	$positiveProfile = @($positive.profiles | Where-Object id -eq 'fabric-sodium')[0]
 	$positiveProfile.result = $positiveProfile.expectedPath
 	$validatorRelativePath = [IO.Path]::GetRelativePath($RepositoryRoot, $PSCommandPath).Replace('\', '/')
 	$validatorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
@@ -348,29 +433,48 @@ function Invoke-SelfTests($Catalog, $Registry) {
 	Invoke-CatalogValidation $positive $Registry | Out-Null
     Assert-MutationRejected 'catalog-can-drop-required-id' { param($c) $c.requiredRecipeIds = @($c.requiredRecipeIds | Select-Object -Skip 1) } $Catalog $Registry
     Assert-MutationRejected 'catalog-can-add-noncanonical-profile' { param($c) $c.profiles[0].id = 'fabric-untracked-profile' } $Catalog $Registry
-    Assert-MutationRejected 'dependencies-must-be-array' { param($c) $c.profiles[0].dependencies = [pscustomobject]@{} } $Catalog $Registry
-    Assert-MutationRejected 'feature-overrides-must-be-object' { param($c) $c.profiles[0].featureOverrides = 'enabled' } $Catalog $Registry
-    Assert-MutationRejected 'available-pins-must-be-complete' { param($c) $p = $c.profiles[0]; $p.externalMods[0].PSObject.Properties.Remove('sha256') } $Catalog $Registry
-    Assert-MutationRejected 'available-requires-reporter-marker' { param($c) $c.profiles[0].expectedLogMarkers = @($c.profiles[0].expectedLogMarkers | Where-Object { $_ -notlike 'PackForge compatibility profile: id=*' }) } $Catalog $Registry
-    Assert-MutationRejected 'available-requires-loader-observed-mod' { param($c) $c.profiles[0].expectedLogMarkers = @($c.profiles[0].expectedLogMarkers | Where-Object { $_ -ne 'quick-pack:true:' }) } $Catalog $Registry
+    Assert-MutationRejected 'dependencies-must-be-array' { param($c) ($c.profiles | Where-Object id -eq 'fabric-sodium').dependencies = [pscustomobject]@{} } $Catalog $Registry
+    Assert-MutationRejected 'feature-overrides-must-be-object' { param($c) ($c.profiles | Where-Object id -eq 'fabric-sodium').featureOverrides = 'enabled' } $Catalog $Registry
+    Assert-MutationRejected 'feature-overrides-reject-unknown-key' { param($c) ($c.profiles | Where-Object id -eq 'fabric-sodium').featureOverrides = [pscustomobject]@{ atlasMipParallelEnabled = $true } } $Catalog $Registry
+    Assert-MutationRejected 'feature-overrides-reject-null' { param($c) ($c.profiles | Where-Object id -eq 'fabric-sodium').featureOverrides = [pscustomobject]@{ atlasRetryEnabled = $null } } $Catalog $Registry
+    Assert-MutationRejected 'feature-overrides-reject-wrong-json-type' { param($c) ($c.profiles | Where-Object id -eq 'fabric-sodium').featureOverrides = [pscustomobject]@{ atlasRetryEnabled = 1 } } $Catalog $Registry
+    Assert-MutationRejected 'available-pins-must-be-complete' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.externalMods[0].PSObject.Properties.Remove('sha256') } $Catalog $Registry
+    Assert-MutationRejected 'available-requires-reporter-marker' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.expectedLogMarkers = @($p.expectedLogMarkers | Where-Object { $_ -notlike 'PackForge compatibility profile: id=*' }) } $Catalog $Registry
+    Assert-MutationRejected 'available-requires-loader-observed-mod' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.expectedLogMarkers = @($p.expectedLogMarkers | Where-Object { $_ -ne 'sodium:true:' }) } $Catalog $Registry
     Assert-MutationRejected 'synthetic-profile-marker-is-forbidden' { param($c) $c.profiles[1].forbiddenLogMarkers += ('profile' + ':fabric-sodium:failed') } $Catalog $Registry
-    Assert-MutationRejected 'unavailable-requires-availability-evidence' { param($c) $p = $c.profiles[0]; $p.availability = 'UNAVAILABLE'; $p.result = 'UNAVAILABLE'; $p | Add-Member -NotePropertyName reason -NotePropertyValue 'No compatible artifact was published.' -Force } $Catalog $Registry
+    Assert-MutationRejected 'unavailable-requires-availability-evidence' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.availability = 'UNAVAILABLE'; $p.result = 'UNAVAILABLE'; $p | Add-Member -NotePropertyName reason -NotePropertyValue 'No compatible artifact was published.' -Force } $Catalog $Registry
     Assert-MutationRejected 'unavailable-evidence-requires-safe-source' { param($c) ($c.profiles | Where-Object id -eq 'fabric-resource-pack-unbounded').availabilityEvidence.sources[0].sourceUrl = 'https://example.invalid/release' } $Catalog $Registry
-    Assert-MutationRejected 'pending-pins-cannot-be-partial' { param($c) $c.profiles[1].externalMods[0] | Add-Member -NotePropertyName coordinate -NotePropertyValue 'modrinth:sodium' } $Catalog $Registry
-    Assert-MutationRejected 'sha-cannot-be-zero' { param($c) $p = $c.profiles[0]; $p.externalMods[0].sha256 = ('0' * 64) } $Catalog $Registry
-    Assert-MutationRejected 'sha-cannot-repeat-pattern' { param($c) $p = $c.profiles[0]; $p.externalMods[0].sha256 = ('ABCDEF01' * 8) } $Catalog $Registry
-    Assert-MutationRejected 'pin-cannot-use-reserved-host' { param($c) $p = $c.profiles[0]; $p.externalMods[0].sourceUrl = 'https://example.invalid/mod.jar' } $Catalog $Registry
-    Assert-MutationRejected 'pin-cannot-use-weak-coordinate-or-version' { param($c) $p = $c.profiles[0]; $p.externalMods[0].coordinate = 'latest'; $p.externalMods[0].version = 'latest' } $Catalog $Registry
-    Assert-MutationRejected 'successful-result-requires-evidence' { param($c) $p = $c.profiles[0]; $p.result = $p.expectedPath } $Catalog $Registry
-    Assert-MutationRejected 'evidence-must-exist' { param($c) $p = $c.profiles[0]; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'missing-profile-result.json'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08' }) -Force } $Catalog $Registry
-    Assert-MutationRejected 'evidence-hash-must-match-file' { param($c) $p = $c.profiles[0]; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'scripts/Validate-CompatibilityProfileCatalog.ps1'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08'; provenance = [pscustomobject]@{ commit = ('A' * 40) } }) -Force } $Catalog $Registry
-    Assert-MutationRejected 'failed-result-requires-reason-and-evidence' { param($c) $p = $c.profiles[0]; $p.result = 'FAILED'; $p.PSObject.Properties.Remove('reason') } $Catalog $Registry
-	Write-Output 'Compatibility profile catalog self-test PASS: positive AVAILABLE control accepted; 19 mutations rejected.'
+    Assert-MutationRejected 'pending-pins-cannot-be-partial' { param($c) ($c.profiles | Where-Object id -eq 'fabric-quick-pack').externalMods[0] | Add-Member -NotePropertyName coordinate -NotePropertyValue 'modrinth:pSISfJ4O' } $Catalog $Registry
+    Assert-MutationRejected 'sha-cannot-be-zero' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.externalMods[0].sha256 = ('0' * 64) } $Catalog $Registry
+    Assert-MutationRejected 'sha-cannot-repeat-pattern' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.externalMods[0].sha256 = ('ABCDEF01' * 8) } $Catalog $Registry
+    Assert-MutationRejected 'pin-cannot-use-reserved-host' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.externalMods[0].sourceUrl = 'https://example.invalid/mod.jar' } $Catalog $Registry
+    Assert-MutationRejected 'pin-cannot-use-weak-coordinate-or-version' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.externalMods[0].coordinate = 'latest'; $p.externalMods[0].version = 'latest' } $Catalog $Registry
+    Assert-MutationRejected 'successful-result-requires-evidence' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.result = $p.expectedPath } $Catalog $Registry
+    Assert-MutationRejected 'evidence-must-exist' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'missing-profile-result.json'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08' }) -Force } $Catalog $Registry
+    Assert-MutationRejected 'evidence-hash-must-match-file' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'scripts/Validate-CompatibilityProfileCatalog.ps1'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08'; provenance = [pscustomobject]@{ commit = ('A' * 40) } }) -Force } $Catalog $Registry
+    Assert-MutationRejected 'failed-result-requires-reason-and-evidence' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.result = 'FAILED'; $p.PSObject.Properties.Remove('reason') } $Catalog $Registry
+	$mutatedConfigPath = Join-Path ([IO.Path]::GetTempPath()) ("packforge-config-default-mutation-" + [guid]::NewGuid().ToString('N') + '.java')
+	try {
+		$mutatedSource = (Get-Content -LiteralPath $PackForgeConfigPath -Raw).Replace(
+			'public boolean largeAtlasFixerEnabled = true;',
+			'public boolean largeAtlasFixerEnabled = false;')
+		[IO.File]::WriteAllText($mutatedConfigPath, $mutatedSource, [Text.UTF8Encoding]::new($false))
+		try {
+			Assert-PackForgeConfigBaseline $mutatedConfigPath
+			Fail "self-test 'PackForgeConfig boolean default drift' was accepted."
+		} catch {
+			if ($_.Exception.Message -notmatch "largeAtlasFixerEnabled.*differs") { throw }
+		}
+	} finally {
+		if (Test-Path -LiteralPath $mutatedConfigPath -PathType Leaf) { Remove-Item -LiteralPath $mutatedConfigPath -Force }
+	}
+	Write-Output 'Compatibility profile catalog self-test PASS: positive AVAILABLE control accepted; 22 catalog mutations plus PackForgeConfig boolean-default drift rejected.'
 }
 
-foreach ($path in @($CatalogPath, $RegistryPath)) {
+foreach ($path in @($CatalogPath, $RegistryPath, $PackForgeConfigPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Fail "missing required file '$path'." }
 }
+Assert-PackForgeConfigBaseline $PackForgeConfigPath
 try { $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json } catch { Fail "catalog is not valid JSON: $($_.Exception.Message)" }
 try { $registry = Get-Content -LiteralPath $RegistryPath -Raw | ConvertFrom-Json } catch { Fail "registry is not valid JSON: $($_.Exception.Message)" }
 $summary = Invoke-CatalogValidation $catalog $registry

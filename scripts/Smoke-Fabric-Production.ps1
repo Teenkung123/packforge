@@ -53,6 +53,12 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
+$compatibilityConfigHelperPath = Join-Path $PSScriptRoot 'CompatibilityProfileConfig.ps1'
+if (-not (Test-Path -LiteralPath $compatibilityConfigHelperPath -PathType Leaf)) {
+    throw "Compatibility profile config helper is missing: $compatibilityConfigHelperPath"
+}
+. $compatibilityConfigHelperPath
+
 if (-not ('PackForgeFabricProductionSmokeNative' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -305,17 +311,10 @@ function Assert-Schema2CompatibilityProfile {
     if ([string] $fixture.sha256 -notmatch '^[A-F0-9]{64}$' -or $fixtureHash -cne [string] $fixture.sha256) {
         throw "Schema-2 fixture SHA-256 mismatch: expected=$($fixture.sha256) actual=$fixtureHash"
     }
-    if ($null -eq $Profile.config -or $null -eq $Profile.config.overrides -or $null -eq $Profile.featureOverrides) {
-        throw 'Schema-2 compatibility profile omitted featureOverrides/config transport.'
-    }
-    if (($Profile.config.overrides | ConvertTo-Json -Compress -Depth 10) -cne ($Profile.featureOverrides | ConvertTo-Json -Compress -Depth 10)) {
-        throw 'Schema-2 compatibility profile config overrides differ from featureOverrides.'
-    }
-    if (@($Profile.featureOverrides.PSObject.Properties).Count -gt 0) {
-        throw "Schema-2 compatibility profile '$($Profile.profileId)' declares featureOverrides, but executable override-key validation is not implemented; refusing launch."
-    }
+    $configContract = Get-Schema2ConfigContract -Profile $Profile
     [void] (Get-CompatibilityProfileStrings -Profile $Profile -Name 'expectedLogMarkers')
     [void] (Get-CompatibilityProfileStrings -Profile $Profile -Name 'forbiddenLogMarkers')
+    return $configContract
 }
 
 function Assert-Schema2RuntimeCell {
@@ -330,9 +329,10 @@ function Assert-Schema2RuntimeCell {
 }
 
 $compatibilityProfile = Import-CompatibilityProfile -Path $CompatibilityProfilePath
+$compatibilityProfileConfigContract = $null
 if ($null -ne $compatibilityProfile) {
     if ([int] $compatibilityProfile.schema -eq 2) {
-        Assert-Schema2CompatibilityProfile -Profile $compatibilityProfile -ExpectedLoader 'fabric'
+        $compatibilityProfileConfigContract = Assert-Schema2CompatibilityProfile -Profile $compatibilityProfile -ExpectedLoader 'fabric'
         if (@($AdditionalModPaths | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) }).Count -gt 0) {
             throw 'Schema-2 compatibility profile cannot be combined with direct AdditionalModPaths.'
         }
@@ -366,6 +366,9 @@ if ($ValidateCompatibilityProfileOnly.IsPresent) {
         fixturePath = $ResourcePackPath
         expectedLogMarkers = [string[]] @($ExpectedLogMarkers)
         forbiddenLogMarkers = [string[]] @($ForbiddenLogMarkers)
+        featureOverrides = if ([int] $compatibilityProfile.schema -eq 2) { $compatibilityProfileConfigContract.Overrides } else { $null }
+        effectiveConfig = if ([int] $compatibilityProfile.schema -eq 2) { $compatibilityProfileConfigContract.Effective } else { $null }
+        configSha256 = if ([int] $compatibilityProfile.schema -eq 2) { $compatibilityProfileConfigContract.Sha256 } else { $null }
     }
     Write-Output ("PROFILE_TRANSPORT " + ($transport | ConvertTo-Json -Compress -Depth 6))
     return
@@ -1056,14 +1059,18 @@ $provenance = [ordered]@{
 }
 
 $configPath = Join-Path $configRoot 'packforge.json'
-$profileConfig = [ordered]@{
-    configVersion = 12
-    reloadOptimizerEnabled = $true
-    loaderIndexEnabled = $true
-    loaderTimingsEnabled = $true
-    reloadListenerTimingsEnabled = $false
-    startupTimingsEnabled = $true
-    startupStatusOverlayEnabled = $false
+$profileConfig = if ($null -ne $compatibilityProfileConfigContract) {
+    $compatibilityProfileConfigContract.Effective
+} else {
+    [ordered]@{
+        configVersion = 12
+        reloadOptimizerEnabled = $true
+        loaderIndexEnabled = $true
+        loaderTimingsEnabled = $true
+        reloadListenerTimingsEnabled = $false
+        startupTimingsEnabled = $true
+        startupStatusOverlayEnabled = $false
+    }
 }
 Write-Utf8NoBom -Path $configPath -Contents ($profileConfig | ConvertTo-Json)
 
@@ -1099,7 +1106,7 @@ incompatibleResourcePacks:[]
     $provenance.config = [ordered]@{
         path = $configPath
         sha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash.ToUpperInvariant()
-        overrides = $compatibilityProfile.config.overrides
+        overrides = $compatibilityProfileConfigContract.Overrides
     }
 }
 Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 8)

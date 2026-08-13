@@ -38,6 +38,12 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
+$compatibilityConfigHelperPath = Join-Path $PSScriptRoot 'CompatibilityProfileConfig.ps1'
+if (-not (Test-Path -LiteralPath $compatibilityConfigHelperPath -PathType Leaf)) {
+    throw "Compatibility profile config helper is missing: $compatibilityConfigHelperPath"
+}
+. $compatibilityConfigHelperPath
+
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $registryPath = Join-Path $repositoryRoot 'gradle\minecraft-targets.json'
 $artifactsRoot = Join-Path $repositoryRoot 'build\libs'
@@ -124,18 +130,6 @@ function Get-RequiredPathEvidenceMarkers {
         }
     }
     return @($requiredMarkers)
-}
-
-function Get-Sha256Text {
-    param([string] $Text)
-
-    $sha256 = [Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [Text.Encoding]::UTF8.GetBytes($Text)
-        return ([BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace('-', '')
-    } finally {
-        $sha256.Dispose()
-    }
 }
 
 function Get-SafeArtifactNameFromSourceUrl {
@@ -498,6 +492,13 @@ function New-Schema2CompatibilityProfileInput {
         [string] $EvidenceInputsRoot
     )
 
+    $normalizedOverrides = ConvertTo-NormalizedFeatureOverrides `
+        -Overrides $Profile.featureOverrides `
+        -Context "Compatibility profile '$($Profile.id)' featureOverrides"
+    $baseConfig = New-CompatibilityBaseConfig
+    $effectiveConfig = Merge-CompatibilityProfileConfig -Overrides $normalizedOverrides
+    $effectiveConfigJson = $effectiveConfig | ConvertTo-Json
+
     $materializedMods = [Collections.Generic.List[object]]::new()
     foreach ($runtimeMod in $RuntimeMods) {
         $immutablePath = Copy-ImmutableEvidenceInput `
@@ -536,8 +537,13 @@ function New-Schema2CompatibilityProfileInput {
         expectedLogMarkers = @($Profile.expectedLogMarkers | ForEach-Object { [string] $_ })
         forbiddenLogMarkers = @($Profile.forbiddenLogMarkers | ForEach-Object { [string] $_ })
         pathEvidenceMarkers = @(Get-RequiredPathEvidenceMarkers -Profile $Profile)
-        featureOverrides = $Profile.featureOverrides
-        config = [ordered]@{ overrides = $Profile.featureOverrides }
+        featureOverrides = $normalizedOverrides
+        config = [ordered]@{
+            base = [pscustomobject] $baseConfig
+            overrides = $normalizedOverrides
+            effective = [pscustomobject] $effectiveConfig
+            sha256 = Get-Sha256Text -Text $effectiveConfigJson
+        }
         fixture = [ordered]@{
             id = [string] $Fixture.id
             artifact = [string] $Fixture.artifact
@@ -653,12 +659,17 @@ function Test-ProfileProvenance {
             return $_.Exception.Message
         }
         if ($configHash -ne [string] $config.sha256) { return 'Staged compatibility configuration has the wrong SHA-256.' }
-        foreach ($override in $ExpectedSchema2Profile.config.overrides.PSObject.Properties) {
-            $actualProperty = $stagedConfig.PSObject.Properties[$override.Name]
-            if ($null -eq $actualProperty -or
-                ($actualProperty.Value | ConvertTo-Json -Compress) -cne ($override.Value | ConvertTo-Json -Compress)) {
-                return "Staged compatibility configuration omitted or changed override '$($override.Name)'."
-            }
+        if ($configHash -cne [string] $ExpectedSchema2Profile.config.sha256 -or
+            [string] $config.sha256 -cne [string] $ExpectedSchema2Profile.config.sha256) {
+            return 'Staged compatibility configuration does not match the schema-2 effective-config SHA-256.'
+        }
+        if (($stagedConfig | ConvertTo-Json -Compress -Depth 10) -cne
+            ($ExpectedSchema2Profile.config.effective | ConvertTo-Json -Compress -Depth 10)) {
+            return 'Staged compatibility configuration differs from the exact schema-2 effective config.'
+        }
+        if (($config.overrides | ConvertTo-Json -Compress -Depth 10) -cne
+            ($ExpectedSchema2Profile.config.overrides | ConvertTo-Json -Compress -Depth 10)) {
+            return 'Compatibility profile provenance changed normalized feature overrides.'
         }
 
         $runtimeEvidence = Get-PropertyValue -Object $provenance -Name 'runtimeEvidence'
@@ -815,6 +826,9 @@ if ($profileIdProvided) {
         throw "Compatibility profile ID '$ProfileId' is duplicated $($selectedProfiles.Count) times."
     }
     $selectedProfile = $selectedProfiles[0]
+    $selectedProfile.featureOverrides = ConvertTo-NormalizedFeatureOverrides `
+        -Overrides $selectedProfile.featureOverrides `
+        -Context "Compatibility profile '$ProfileId' featureOverrides"
     $profileRelease = [string] $selectedProfile.minecraftVersion
     $profileLoader = [string] $selectedProfile.loader
     $profileTargetKey = [string] $selectedProfile.packForgeArtifact.targetKey
@@ -1121,6 +1135,7 @@ foreach ($row in $rows) {
     $harnessScripts = [Collections.Generic.List[string]]::new()
     [void] $harnessScripts.Add([IO.Path]::GetFullPath($PSCommandPath))
     [void] $harnessScripts.Add([IO.Path]::GetFullPath($smokeScript))
+    [void] $harnessScripts.Add([IO.Path]::GetFullPath($compatibilityConfigHelperPath))
     if ($row.Loader -eq 'neoforge') {
         [void] $harnessScripts.Add([IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'Smoke-Forge-Production.ps1')))
     }

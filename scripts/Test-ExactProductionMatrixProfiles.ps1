@@ -10,8 +10,13 @@ $fabricSmokePath = Join-Path $PSScriptRoot 'Smoke-Fabric-Production.ps1'
 $forgeSmokePath = Join-Path $PSScriptRoot 'Smoke-Forge-Production.ps1'
 $neoForgeSmokePath = Join-Path $PSScriptRoot 'Smoke-NeoForge-Production.ps1'
 $sourceCatalogPath = Join-Path $repositoryRoot 'gradle\compatibility-profiles.json'
+$configHelperPath = Join-Path $PSScriptRoot 'CompatibilityProfileConfig.ps1'
+$packForgeConfigPath = Join-Path $repositoryRoot 'common\src\main\java\com\Teenkung\packforge\config\PackForgeConfig.java'
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ("packforge-profile-runner-test-" + [guid]::NewGuid().ToString('N'))
 $pwshPath = Join-Path $PSHOME 'pwsh.exe'
+
+if (-not (Test-Path -LiteralPath $configHelperPath -PathType Leaf)) { throw "Missing compatibility config helper: $configHelperPath" }
+. $configHelperPath
 
 function Write-Catalog {
     param($Catalog, [string] $Path)
@@ -127,6 +132,29 @@ function Assert-NoNetworkOrSmoke {
 
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 try {
+    $baseConfig = New-CompatibilityBaseConfig
+    $baseProperties = @($baseConfig.Keys)
+    $cfgSource = Get-Content -LiteralPath $packForgeConfigPath
+    $sourceFields = @($cfgSource | ForEach-Object {
+        if ($_ -match '^\s*public\s+(?:boolean|int|List<String>)\s+([A-Za-z0-9_]+)\s*=') { $Matches[1] }
+    })
+    if ($baseProperties.Count -ne 50 -or $sourceFields.Count -ne 50 -or
+        @(Compare-Object -ReferenceObject $sourceFields -DifferenceObject $baseProperties).Count -ne 0) {
+        throw "Compatibility config baseline must match all 50 serialized PackForgeConfig.Cfg fields exactly. source=$($sourceFields.Count) baseline=$($baseProperties.Count)"
+    }
+    $baseJson = $baseConfig | ConvertTo-Json
+    $roundTripJson = ($baseJson | ConvertFrom-Json) | ConvertTo-Json
+    if ((Get-Sha256Text $baseJson) -cne (Get-Sha256Text $roundTripJson)) {
+        throw 'Compatibility config baseline is not serialization/hash stable.'
+    }
+    if (@($baseConfig.atlasExcludeIds).Count -ne 1 -or $baseConfig.atlasExcludeIds[0] -cne 'minecraft:gui' -or
+        (@($baseConfig.atlasSplitTargets) -join ',') -cne 'minecraft:items,minecraft:particles' -or
+        [int] $baseConfig.atlasMipBatchSize -ne 128 -or [int] $baseConfig.atlasDecodeBatchSize -ne 128 -or
+        [int] $baseConfig.modelParseBatchSize -ne 64 -or [int] $baseConfig.atlasCapPx -ne 256 -or
+        [int] $baseConfig.atlasRetryMaxAttempts -ne 2 -or [int] $baseConfig.atlasSplitMaxTiers -ne 1 -or
+        [int] $baseConfig.startupWorkerThreads -ne 0 -or [int] $baseConfig.startupThreadPriority -ne 4) {
+        throw 'Compatibility config baseline changed a frozen list or integer default.'
+    }
     $catalog = Get-Content -LiteralPath $sourceCatalogPath -Raw | ConvertFrom-Json
     $catalogPath = Join-Path $testRoot 'catalog.json'
     Write-Catalog $catalog $catalogPath
@@ -150,13 +178,28 @@ try {
     $duplicate = Invoke-Runner @('-PlanOnly', '-ProfileId', 'fabric-quick-pack', '-CompatibilityCatalogPath', $duplicateCatalogPath)
     Assert-Failure $duplicate 'duplicate profile rejection' '(?:duplicate|duplicated)'
 
-    $wrongCell = Invoke-Runner @('-PlanOnly', '-ProfileId', 'fabric-quick-pack', '-CompatibilityCatalogPath', $catalogPath, '-OnlyCell', '1.21.1/forge')
-    Assert-Failure $wrongCell 'profile cell mismatch' "OnlyCell must be absent or exactly '1.21.1/fabric'"
-    $exactCell = Invoke-Runner @('-PlanOnly', '-ProfileId', 'fabric-quick-pack', '-CompatibilityCatalogPath', $catalogPath, '-OnlyCell', '1.21.1/fabric')
+    $wrongCell = Invoke-Runner @('-PlanOnly', '-ProfileId', 'forge-quick-pack', '-CompatibilityCatalogPath', $catalogPath, '-OnlyCell', '1.21.1/fabric')
+    Assert-Failure $wrongCell 'profile cell mismatch' "OnlyCell must be absent or exactly '1.21.1/forge'"
+    $exactCell = Invoke-Runner @('-PlanOnly', '-ProfileId', 'forge-quick-pack', '-CompatibilityCatalogPath', $catalogPath, '-OnlyCell', '1.21.1/forge')
     Assert-Success $exactCell 'exact profile cell selection'
     Assert-NoNetworkOrSmoke $exactCell 'exact profile cell selection'
     if (($exactCell.Output -join [Environment]::NewLine) -notmatch 'availability=AVAILABLE') {
         throw 'Exact profile cell selection did not print its declared state.'
+    }
+
+    foreach ($invalidOverrideCase in @(
+        [pscustomobject]@{ Name = 'unknown override key'; Overrides = [pscustomobject]@{ atlasMipParallelEnabled = $true }; Pattern = 'unsupported key' },
+        [pscustomobject]@{ Name = 'null override value'; Overrides = [pscustomobject]@{ atlasRetryEnabled = $null }; Pattern = 'must be a JSON.*boolean' },
+        [pscustomobject]@{ Name = 'wrong override JSON type'; Overrides = [pscustomobject]@{ atlasRetryEnabled = 'true' }; Pattern = 'must be a JSON.*boolean' },
+        [pscustomobject]@{ Name = 'numeric override key'; Overrides = [pscustomobject]@{ atlasRetryMaxAttempts = 2 }; Pattern = 'unsupported key' }
+    )) {
+        $invalidCatalog = Copy-Catalog $catalog
+        ($invalidCatalog.profiles | Where-Object id -eq 'fabric-sodium').featureOverrides = $invalidOverrideCase.Overrides
+        $invalidCatalogPath = Join-Path $testRoot (($invalidOverrideCase.Name -replace '[^a-z]+', '-') + '.json')
+        Write-Catalog $invalidCatalog $invalidCatalogPath
+        $invalidOverride = Invoke-Runner @('-PlanOnly', '-ProfileId', 'fabric-sodium', '-CompatibilityCatalogPath', $invalidCatalogPath)
+        Assert-Failure $invalidOverride $invalidOverrideCase.Name $invalidOverrideCase.Pattern
+        Assert-NoNetworkOrSmoke $invalidOverride $invalidOverrideCase.Name
     }
 
     $genericIfResults = Join-Path $testRoot 'generic-if-results'
@@ -175,7 +218,7 @@ try {
         throw 'ImmediatelyFast profile without path-specific evidence materialized result inputs.'
     }
 
-    $pendingProfileId = 'fabric-sodium'
+    $pendingProfileId = 'fabric-quick-pack'
     $pendingResults = Join-Path $testRoot 'pending-results'
     $pending = Invoke-Runner @('-ProfileId', $pendingProfileId, '-CompatibilityCatalogPath', $catalogPath, '-ResultsRoot', $pendingResults)
     Assert-Success $pending 'pending profile recording'
@@ -201,13 +244,25 @@ try {
 
     $availableCatalog = Copy-Catalog $catalog
     $availableProfile = @($availableCatalog.profiles | Where-Object id -eq 'fabric-quick-pack')[0]
+    $availableProfile.availability = 'AVAILABLE'
+    $availableProfile.expectedLogMarkers = @(
+        'PackForge compatibility profile: id=fabric-quick-pack',
+        'quick-pack:true:',
+        'PackForge Quick Pack compatibility: status=MODULE_HANDOFF'
+    )
+    $availableProfile.featureOverrides = [pscustomobject]@{
+        atlasRetryEnabled = $true
+        startupExecutorTuningEnabled = $true
+    }
     $modBytes = [Text.Encoding]::UTF8.GetBytes('offline pinned compatibility mod')
     $modHash = Get-BytesSha256 -Bytes $modBytes
-    $availableMod = $availableProfile.externalMods[0]
-    $availableMod.coordinate = 'modrinth:quick-pack-test'
-    $availableMod.sourceUrl = 'https://cdn.modrinth.com/data/quick-pack-test/versions/1.0.0/quick-pack-test.jar'
-    $availableMod.version = '1.0.0'
-    $availableMod.sha256 = $modHash
+    $availableProfile.externalMods = @([pscustomobject]@{
+        id = 'quick-pack'
+        coordinate = 'modrinth:quick-pack-test'
+        sourceUrl = 'https://cdn.modrinth.com/data/quick-pack-test/versions/1.0.0/quick-pack-test.jar'
+        version = '1.0.0'
+        sha256 = $modHash
+    })
     $availableCatalogPath = Join-Path $testRoot 'available.json'
     Write-Catalog $availableCatalog $availableCatalogPath
     $cacheRoot = Join-Path $testRoot 'cache'
@@ -242,6 +297,21 @@ try {
     }
     if ($schema.fixture.id -ne 'normal-resource-pack' -or -not (Test-Path -LiteralPath ([string] $schema.fixture.path) -PathType Leaf)) {
         throw 'Materialized schema-2 fixture identity/path is invalid.'
+    }
+    $effectiveProperties = @($schema.config.effective.PSObject.Properties)
+    if ($effectiveProperties.Count -ne 50 -or
+        $schema.config.effective.atlasRetryEnabled -ne $true -or
+        $schema.config.effective.forceDisablePartIIIWithIris -ne $true -or
+        $schema.config.effective.startupExecutorTuningEnabled -ne $true -or
+        $schema.config.effective.startupOptimizerEnabled -ne $true -or
+        [int] $schema.config.effective.startupWorkerThreads -ne 0 -or
+        [int] $schema.config.effective.startupThreadPriority -ne 4 -or
+        $schema.config.effective.startupSkipWithSmoothBoot -ne $true) {
+        throw 'Materialized schema-2 effective config did not preserve the fixed baseline and derived startup guard.'
+    }
+    $expectedConfigHash = Get-BytesSha256 -Bytes ([Text.Encoding]::UTF8.GetBytes(($schema.config.effective | ConvertTo-Json)))
+    if ([string] $schema.config.sha256 -cne $expectedConfigHash) {
+        throw 'Materialized schema-2 effective config SHA-256 is not deterministic.'
     }
 
     $wrongCacheRoot = Join-Path $testRoot 'wrong-cache'
@@ -283,7 +353,10 @@ try {
         '-ExpectedProfileMinecraftVersion', '1.21.1', '-ExpectedProfileTarget', 'mc1_21_1'
     )) 'Fabric schema-2 transport'
     if ($fabricTransport.schema -ne 2 -or $fabricTransport.loader -ne 'fabric' -or @($fabricTransport.modIds)[0] -ne 'quick-pack' -or
-        [IO.Path]::GetFullPath([string] $fabricTransport.fixturePath) -ne [IO.Path]::GetFullPath([string] $schema.fixture.path)) {
+        [IO.Path]::GetFullPath([string] $fabricTransport.fixturePath) -ne [IO.Path]::GetFullPath([string] $schema.fixture.path) -or
+        [string] $fabricTransport.configSha256 -cne $expectedConfigHash -or
+        $fabricTransport.effectiveConfig.atlasRetryEnabled -ne $true -or
+        $fabricTransport.effectiveConfig.startupOptimizerEnabled -ne $true) {
         throw "Fabric schema-2 transport changed profile identity, mod IDs, or fixture path: $($fabricTransport | ConvertTo-Json -Compress -Depth 6)"
     }
 
@@ -302,8 +375,11 @@ try {
             '-CompatibilityProfilePath', $loaderSchemaPath, '-ValidateCompatibilityProfileOnly',
             '-ExpectedProfileMinecraftVersion', '1.21.1', '-ExpectedProfileTarget', 'mc1_21_1'
         )) "$($loaderCase.Loader) schema-2 transport"
-        if ($transport.schema -ne 2 -or $transport.loader -ne $loaderCase.Loader -or $transport.profileId -ne $loaderCase.ProfileId) {
-            throw "$($loaderCase.Loader) schema-2 transport changed profile identity or loader."
+        if ($transport.schema -ne 2 -or $transport.loader -ne $loaderCase.Loader -or $transport.profileId -ne $loaderCase.ProfileId -or
+            [string] $transport.configSha256 -cne $expectedConfigHash -or
+            $transport.effectiveConfig.atlasRetryEnabled -ne $true -or
+            $transport.effectiveConfig.startupOptimizerEnabled -ne $true) {
+            throw "$($loaderCase.Loader) schema-2 transport changed profile identity, loader, effective config, or config hash."
         }
 
         $mismatchedLoaderSchema = Copy-Catalog $loaderSchema
@@ -332,20 +408,28 @@ try {
     )
     Assert-Failure $mismatchedFabricCell 'Fabric schema-2 runtime-cell mismatch rejection' 'runtime cell mismatch'
 
-    $overrideSchema = Copy-Catalog $schema
-    $overrideSchema.featureOverrides = [pscustomobject]@{ atlasMipParallelEnabled = $true }
-    $overrideSchema.config.overrides = [pscustomobject]@{ atlasMipParallelEnabled = $true }
-    $overrideSchemaPath = Join-Path $testRoot 'override-schema.json'
-    [IO.File]::WriteAllText($overrideSchemaPath, ($overrideSchema | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
-    $overrideBlocker = Invoke-Script $fabricSmokePath @(
-        '-FabricClientRoot', $dummy, '-VersionName', '1.21.1-fabric-test', '-MinecraftVersion', '1.21.1',
-        '-ArtifactPath', $dummy, '-AssetsRoot', $dummy, '-NativesRoot', $dummy, '-JavaPath', $dummy,
-        '-CompatibilityProfilePath', $overrideSchemaPath, '-ValidateCompatibilityProfileOnly',
-        '-ExpectedProfileMinecraftVersion', '1.21.1', '-ExpectedProfileTarget', 'mc1_21_1'
-    )
-    Assert-Failure $overrideBlocker 'feature override fail-closed behavior' 'refusing launch'
+    foreach ($schemaTamperCase in @(
+        [pscustomobject]@{ Name = 'child unknown override rejection'; Pattern = 'unsupported key'; Mutate = { param($s) $s.featureOverrides = [pscustomobject]@{ atlasMipParallelEnabled = $true }; $s.config.overrides = $s.featureOverrides } },
+        [pscustomobject]@{ Name = 'child wrong override type rejection'; Pattern = 'must be a JSON.*boolean'; Mutate = { param($s) $s.featureOverrides = [pscustomobject]@{ atlasRetryEnabled = 1 }; $s.config.overrides = $s.featureOverrides } },
+        [pscustomobject]@{ Name = 'child fixed baseline rejection'; Pattern = 'fixed smoke baseline'; Mutate = { param($s) $s.config.base.startupWorkerThreads = 1 } },
+        [pscustomobject]@{ Name = 'child missing known field rejection'; Pattern = 'fixed smoke baseline'; Mutate = { param($s) $s.config.base.PSObject.Properties.Remove('largeAtlasFixerEnabled') } },
+        [pscustomobject]@{ Name = 'child missing effective field rejection'; Pattern = 'independently merged config'; Mutate = { param($s) $s.config.effective.PSObject.Properties.Remove('largeAtlasFixerEnabled') } },
+        [pscustomobject]@{ Name = 'child effective hash rejection'; Pattern = 'SHA-256 mismatch'; Mutate = { param($s) $s.config.sha256 = ('A' * 64) } }
+    )) {
+        $tamperedSchema = Copy-Catalog $schema
+        & $schemaTamperCase.Mutate $tamperedSchema
+        $tamperedSchemaPath = Join-Path $testRoot (($schemaTamperCase.Name -replace '[^a-z]+', '-') + '.json')
+        [IO.File]::WriteAllText($tamperedSchemaPath, ($tamperedSchema | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
+        $tampered = Invoke-Script $fabricSmokePath @(
+            '-FabricClientRoot', $dummy, '-VersionName', '1.21.1-fabric-test', '-MinecraftVersion', '1.21.1',
+            '-ArtifactPath', $dummy, '-AssetsRoot', $dummy, '-NativesRoot', $dummy, '-JavaPath', $dummy,
+            '-CompatibilityProfilePath', $tamperedSchemaPath, '-ValidateCompatibilityProfileOnly',
+            '-ExpectedProfileMinecraftVersion', '1.21.1', '-ExpectedProfileTarget', 'mc1_21_1'
+        )
+        Assert-Failure $tampered $schemaTamperCase.Name $schemaTamperCase.Pattern
+    }
 
-    Write-Output 'Exact production matrix profile self-test PASS: selection states, path-evidence fail-closed gate, offline hash cache, fixture/schema-2 materialization, hash mismatch, filename collision, exact Fabric/Forge/NeoForge cell transport, and override fail-closed paths verified without network, build, or smoke launch.'
+    Write-Output 'Exact production matrix profile self-test PASS: selection states, path-evidence gate, typed override rejection, offline hash cache, fixture/schema-2 materialization, fixed config merge/hash, filename collision, and exact Fabric/Forge/NeoForge transport verified without network, build, or smoke launch.'
 } finally {
     if (Test-Path -LiteralPath $testRoot) {
         Remove-Item -LiteralPath $testRoot -Recurse -Force

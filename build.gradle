@@ -1172,6 +1172,7 @@ tasks.register("updateSourceMetricsCheckpoint") {
 def stonecutterDirectContractScript = file("scripts/Validate-StonecutterDirectContract.ps1")
 def configScreenContractScript = file("scripts/Validate-ConfigScreenContract.ps1")
 def compatibilityProfileContractScript = file("scripts/Validate-CompatibilityProfileCatalog.ps1")
+def compatibilityProfileConfigScript = file("scripts/CompatibilityProfileConfig.ps1")
 def defaultOffCandidateContractScript = file("scripts/Validate-DefaultOffCandidateCatalog.ps1")
 def compatibilityFixtureGenerator = file("scripts/Generate-CompatibilityFixtures.py")
 
@@ -1196,7 +1197,13 @@ def validateCompatibilityProfileCatalog = tasks.register("validateCompatibilityP
 	group = "verification"
 	description = "Validates the frozen compatibility-profile catalog without running mutation self-tests."
 	workingDir projectDir
-	inputs.files(compatibilityProfileContractScript, file("gradle/compatibility-profiles.json"), registryFile)
+	inputs.files(
+		compatibilityProfileContractScript,
+		compatibilityProfileConfigScript,
+		file("gradle/compatibility-profiles.json"),
+		registryFile,
+		file("common/src/main/java/com/Teenkung/packforge/config/PackForgeConfig.java")
+	)
 	doFirst {
 		commandLine resolvePowerShellExecutable(), "-NoProfile", "-NonInteractive", "-File", compatibilityProfileContractScript.absolutePath
 	}
