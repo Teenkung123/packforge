@@ -420,3 +420,33 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: focused Fabric `mc1_21_10` test passed in 13 seconds with five tests, zero failures, zero errors, and compilation. `mc1_20_1 compileClientJava` passed in 11 seconds; `mc26 compileClientJava` passed in 10 seconds. `Validate-ConfigScreenContract` passed with `bodies=3`, `wrappers=2`, `entryPoints=9`, and `sharedTargets=14`. Independent static reviews passed.
 - Status: `PHASE_G_VERIFIED_COMPLETE_STRUCTURAL`; the plan explicitly permits structural renderer tests in place of screenshots, so the Phase G completion gate is met. No live UI screenshot or Minecraft client runtime was executed, and those must not be inferred from this checkpoint.
 - Rollback: after reverting later documentation and dependants, revert `35a6b4ca39b8afc0a9d1a096a76780b463ff2b5e` first, then `839928cb7ee2be3ebcab73db859e0c2a5fc34a84`.
+
+## Compatibility profile catalog foundation
+
+- Date: 2026-08-13
+- Commit SHA: `934c283695a099593134e178bbe4b26f274ffe1a`
+- Parent SHA: `1de2afff16b333759946f805802de56019913bff`
+- Scope: declarative compatibility-profile catalog covering 36 required isolated and high-risk recipes, with frozen registry-cell references and explicit metadata/evidence state.
+- Verification: catalog AST and normal validator passed for 36 profiles, 36 frozen recipes, and valid registry-cell references. No external metadata resolution, artifact download, or profile execution occurred.
+- Status: `PHASE_I_FOUNDATION_VERIFIED`; every catalog profile remains `PENDING_METADATA` and `UNTESTED`.
+- Rollback: after reverting the two later Phase I checkpoints, `git revert 934c283695a099593134e178bbe4b26f274ffe1a` removes the catalog foundation only.
+
+## Compatibility profile evidence validation
+
+- Date: 2026-08-13
+- Commit SHA: `b35a0b04305aed040d0ae6d9f203acb3a0f3d84f`
+- Parent SHA: `934c283695a099593134e178bbe4b26f274ffe1a`
+- Scope: fail-closed validation for profile availability, external dependency pins, and execution evidence; `AVAILABLE` materialization requires complete provenance and evidence.
+- Verification: validator self-test accepted one positive `AVAILABLE` fixture and rejected 14 mutations; independent retests rejected fake pins and nonexistent evidence. No real metadata lookup, download, or smoke/profile launch occurred.
+- Status: `PHASE_I_FOUNDATION_VERIFIED`; all 36 real catalog entries remain `PENDING_METADATA` and `UNTESTED`.
+- Rollback: after reverting the runner-selection checkpoint, `git revert b35a0b04305aed040d0ae6d9f203acb3a0f3d84f` restores the prior catalog-only validation.
+
+## Compatibility profile runner selection
+
+- Date: 2026-08-13
+- Commit SHA: `5f668bc597ffdc094c91fda645fde19e7f0ed5f2`
+- Parent SHA: `b35a0b04305aed040d0ae6d9f203acb3a0f3d84f`
+- Scope: catalog-backed profile selection for the exact-production runner, including duplicate/conflicting selector guards and fail-closed availability handling.
+- Verification: runner AST validation passed. `Test-ExactProductionMatrixProfiles` passed in about six seconds, covering empty, unknown, catalog guard, duplicate, conflict, exact-cell, `PENDING_METADATA`, `UNAVAILABLE`, and `AVAILABLE` cases. The runner invokes the catalog validator directly; it is not a root Gradle or CI gate.
+- Status: `PHASE_I_FOUNDATION_VERIFIED`; all 36 profiles remain `PENDING_METADATA` and `UNTESTED`. No real metadata resolution, download, or compatibility profile execution occurred.
+- Rollback: `git revert 5f668bc597ffdc094c91fda645fde19e7f0ed5f2` first; then revert `b35a0b0` and `934c283` if the entire Phase I foundation must be removed.
