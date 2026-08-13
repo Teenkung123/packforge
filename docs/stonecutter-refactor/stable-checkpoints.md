@@ -650,3 +650,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: direct-contract static self-test passed 61 rejected mutations: 53 total cells, 16 archive targets, 17 SharedZip targets, 18 ReloadableResourceManager targets, and 19 Bitmap targets. Source metrics passed in 36 seconds: 214 production files, 16,471 LOC, 107 bridge files / 5,451 LOC (33.09%), zero duplicate groups, six Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused offline Fabric 1.20.1/1.21.11/mc26 `compileJava` plus `sourcesJar` reached BUILD SUCCESSFUL in 35 seconds across 18 tasks (12 executed, six up-to-date). Active entry SHA-256 `ACD7634C...DDFD` matched generated output; mc26 SHA-256 `1D05F03C...A13C` matched the retained physical source; classes existed in all three cells. Independent final review passed.
 - Limits: no Minecraft runtime, all-53 build/package parity, full matrix, release verification, or general cross-loader preprocessing proof was run. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert aba98b3`; then revert `c5b61e2`, `7efd43f`, `4f82154`, and `b54a40f` in order if removing the preceding Fabric native pilot work.
+
+## Phase E — canonical preprocessed RuntimeResourceHash Fabric seam
+
+- Date: 2026-08-13
+- Commit SHA: `f74e0a7`; parent `ea10f52`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: canonical guarded Fabric RuntimeResourceHash preprocessing for exact 1.20.1 through 1.21.10 (17 targets). The 1.21.11 raw Predicate/String and mc26 Identifier physical seams remain; standalone, Forge, and NeoForge paths are untouched.
+- Verification: static direct-contract self-test passed 73 rejected mutations and includes RuntimeResourceHash for 17 targets. Source metrics passed in 27 seconds: 215 production files, 16,496 LOC, 108 bridge files / 5,476 LOC (33.20%), zero duplicate groups, seven Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused offline Fabric 1.20.1/1.21.10/1.21.11/mc26 `compileJava` plus `sourcesJar` reached BUILD SUCCESSFUL in 44 seconds across 24 tasks (18 executed, six up-to-date). Active SHA-256 `F1726800...D9B7` matched generated output; physical 1.21.11 `ED80675E...AE83` and mc26 `532500D6...ABE6` matched; inactive generated output was absent; classes existed. Independent final review passed.
+- Limits: no Minecraft runtime, all-53 build/package parity, full matrix, release verification, or general cross-loader preprocessing proof was run. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert f74e0a7`; then revert `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, and `b54a40f` in order if removing the preceding Fabric native pilot work.
