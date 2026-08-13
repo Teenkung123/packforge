@@ -748,6 +748,18 @@ def handwrittenProductionJava = files(
 		include "src/main/java/**/*.java"
 		include "src/client/java/**/*.java"
 	},
+	fileTree("fabric") {
+		include "src/main/java/**/*.java"
+		include "src/client/java/**/*.java"
+	},
+	fileTree("forge") {
+		include "src/main/java/**/*.java"
+		include "src/client/java/**/*.java"
+	},
+	fileTree("neoforge") {
+		include "src/main/java/**/*.java"
+		include "src/client/java/**/*.java"
+	},
 	fileTree("platform") {
 		include "*/src/main/java/**/*.java"
 		include "*/src/client/java/**/*.java"
@@ -788,7 +800,8 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 			if (relativePath.startsWith("common/")) {
 				return "neutralCommon"
 			}
-			if (relativePath.startsWith("platform/")
+			if (relativePath ==~ /(?:fabric|forge|neoforge)\/src\/.*/
+				|| relativePath.startsWith("platform/")
 				|| relativePath.matches("versions/[^/]+/(?:fabric|forge|neoforge)/src/.*")) {
 				return "loaderCommon"
 			}
@@ -800,7 +813,8 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 		def rows = handwrittenProductionJava.files
 			.collect { source ->
 				def relativePath = project.relativePath(source).replace('\\', '/')
-				def bridge = relativePath.startsWith("platform/")
+				def bridge = relativePath ==~ /(?:fabric|forge|neoforge)\/src\/.*/
+					|| relativePath.startsWith("platform/")
 					|| (relativePath.startsWith("versions/") && relativePath.contains("/mixin/"))
 					|| relativePath.matches("versions/[^/]+/(?:fabric|forge|neoforge)/src/.*")
 					|| relativePath.matches(".*/com/teenkung/packforge/(?:fabric|forge|neoforge)/.*")
@@ -927,35 +941,50 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 		int maxConditionalBlockLines = 0
 		def oversizedConditionalBlocks = []
 		rows.each { row ->
-			int depth = 0
-			int blockLines = 0
-			int blockStart = 0
+			def blockStack = []
 			row.file.readLines("UTF-8").eachWithIndex { line, index ->
-				def trimmed = line.trim()
-				if (trimmed ==~ /\/\/\?\s*if\b.*/) {
-					if (depth == 0) {
-						conditionalBlocks++
-						blockLines = 0
-						blockStart = index + 1
+				def directive = line.trim().replaceFirst(/^\*\//, "")
+				boolean opener = directive ==~ /\/\/\?\s*if\b.+\{\s*/
+				boolean alternate = directive ==~ /\/\/\?\s*}\s*else\s*\{\s*/
+				boolean closer = directive ==~ /\/\/\?\s*}\s*/
+				if (opener) {
+					conditionalBlocks++
+					blockStack << [start: index + 1, lines: 0, branchLines: 0, hasElse: false]
+				} else if (alternate) {
+					if (blockStack.isEmpty()) {
+						throw new GradleException("${row.path}:${index + 1} has a Stonecutter else without an open block.")
 					}
-					depth++
-				} else if (trimmed ==~ /\/\/\?\s*}\s*/) {
-					depth--
-					if (depth < 0) {
+					if (blockStack.last().branchLines == 0) {
+						throw new GradleException("${row.path}:${index + 1} has an empty Stonecutter branch before else.")
+					}
+					if (blockStack.last().hasElse) {
+						throw new GradleException("${row.path}:${index + 1} repeats else for the same Stonecutter block.")
+					}
+					blockStack.last().hasElse = true
+					blockStack.last().branchLines = 0
+				} else if (closer) {
+					if (blockStack.isEmpty()) {
 						throw new GradleException("${row.path}:${index + 1} closes a Stonecutter block that was not opened.")
 					}
-					if (depth == 0) {
-						maxConditionalBlockLines = Math.max(maxConditionalBlockLines, blockLines)
-						if (blockLines > 40) {
-							oversizedConditionalBlocks << "${row.path}:${blockStart} (${blockLines} lines)"
-						}
+					def block = blockStack.remove(blockStack.size() - 1)
+					if (block.branchLines == 0) {
+						throw new GradleException("${row.path}:${index + 1} closes an empty Stonecutter branch.")
 					}
-				} else if (depth > 0) {
-					blockLines++
+					maxConditionalBlockLines = Math.max(maxConditionalBlockLines, block.lines as int)
+					if (block.lines > 40) {
+						oversizedConditionalBlocks << "${row.path}:${block.start} (${block.lines} lines)"
+					}
+				} else if (directive.contains("//?")) {
+					throw new GradleException("${row.path}:${index + 1} contains a malformed Stonecutter directive.")
+				} else {
+					blockStack.each { block ->
+						block.lines++
+						block.branchLines++
+					}
 				}
 			}
-			if (depth != 0) {
-				throw new GradleException("${row.path} contains an unclosed Stonecutter conditional block.")
+			if (!blockStack.isEmpty()) {
+				throw new GradleException("${row.path} contains unclosed Stonecutter conditional blocks opened at lines ${blockStack*.start.join(', ')}.")
 			}
 		}
 
@@ -1075,7 +1104,7 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 |---|---:|---:|
 ${layerRows}
 
-Classification is exclusive and precedence-ordered: root `common` is neutral common; platform and version-loader directories are loader common; remaining version-local mixin/bridge/compat paths are exact-version bridges; all other Minecraft-facing version source is version common. Aggregate bridge files/LOC include loader-owned bridge/compat files as well as the non-loader `exactVersionBridge` layer.
+Classification is exclusive and precedence-ordered: root `common` is neutral common; canonical loader roots (`fabric`, `forge`, and `neoforge`), platform directories, and version-loader directories are loader common; remaining version-local mixin/bridge/compat paths are exact-version bridges; all other Minecraft-facing version source is version common. Aggregate bridge files/LOC include canonical and platform loader-owned bridge/compat files as well as the non-loader `exactVersionBridge` layer.
 
 ## Duplicate groups
 

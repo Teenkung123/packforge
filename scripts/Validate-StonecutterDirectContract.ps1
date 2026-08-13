@@ -124,6 +124,47 @@ function Assert-SameSet([string[]] $Actual, [string[]] $Expected, [string] $Cont
     }
 }
 
+function Measure-StonecutterConditionalBlocks([string] $Text, [string] $Context) {
+    $stack = [Collections.Generic.List[object]]::new()
+    $blocks = [Collections.Generic.List[object]]::new()
+    $reader = [IO.StringReader]::new($Text)
+    $lineNumber = 0
+    while (($line = $reader.ReadLine()) -ne $null) {
+        $lineNumber++
+        $directive = $line.Trim()
+        if ($directive.StartsWith('*/', [StringComparison]::Ordinal)) { $directive = $directive.Substring(2) }
+        $opener = $directive -cmatch '^//\?\s*if\b.+\{\s*$'
+        $alternate = $directive -cmatch '^//\?\s*}\s*else\s*\{\s*$'
+        $closer = $directive -cmatch '^//\?\s*}\s*$'
+        if ($opener) {
+            $stack.Add([pscustomobject]@{ Start = $lineNumber; Lines = 0; BranchLines = 0; HasElse = $false })
+        } elseif ($alternate) {
+            if ($stack.Count -eq 0) { Fail "$Context line $lineNumber has an orphan Stonecutter else." }
+            $block = $stack[$stack.Count - 1]
+            if ($block.BranchLines -eq 0) { Fail "$Context line $lineNumber has an empty Stonecutter branch before else." }
+            if ($block.HasElse) { Fail "$Context line $lineNumber repeats Stonecutter else." }
+            $block.HasElse = $true
+            $block.BranchLines = 0
+        } elseif ($closer) {
+            if ($stack.Count -eq 0) { Fail "$Context line $lineNumber has an orphan Stonecutter close." }
+            $block = $stack[$stack.Count - 1]
+            $stack.RemoveAt($stack.Count - 1)
+            if ($block.BranchLines -eq 0) { Fail "$Context line $lineNumber closes an empty Stonecutter branch." }
+            $blocks.Add($block)
+        } elseif ($directive.Contains('//?', [StringComparison]::Ordinal)) {
+            Fail "$Context line $lineNumber contains a malformed Stonecutter directive."
+        } else {
+            foreach ($block in $stack) {
+                $block.Lines++
+                $block.BranchLines++
+            }
+        }
+    }
+    if ($stack.Count -ne 0) { Fail "$Context has unclosed Stonecutter blocks at lines $($stack.Start -join ', ')." }
+    $maxLines = if ($blocks.Count -eq 0) { 0 } else { ($blocks.Lines | Measure-Object -Maximum).Maximum }
+    return [pscustomobject]@{ Blocks = $blocks.Count; MaxLines = [int] $maxLines }
+}
+
 function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     if ([int] $Registry.schemaVersion -ne 2) { Fail "unsupported registry schema '$($Registry.schemaVersion)'." }
 
@@ -201,6 +242,34 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $rootBuild 'def expectedForgeJoptSimpleRuntimeVersions = [mc1_21_1: "5.0.4", mc1_21_4: "5.0.4"]' 'root Forge JOptSimple registry guard'
     Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java")' 'root Fabric native archive validator input'
 
+    $metricsSources = Get-Section $rootBuild 'def handwrittenProductionJava = files(' 'def sourceMetricsBuildJson =' 'source-metrics roots'
+    foreach ($loaderId in @('fabric', 'forge', 'neoforge')) {
+        $rootPattern = '(?ms)fileTree\("' + [regex]::Escape($loaderId) + '"\)\s*\{\s*include "src/main/java/\*\*/\*\.java"\s*include "src/client/java/\*\*/\*\.java"\s*\}'
+        $rootCount = ([regex]::Matches($metricsSources, $rootPattern)).Count
+        if ($rootCount -ne 1) { Fail "source metrics must contain one exact $loaderId canonical production-source root; found $rootCount." }
+    }
+    Assert-ContainsCount $rootBuild 'relativePath ==~ /(?:fabric|forge|neoforge)\/src\/.*/' 2 'canonical loader source metrics classification'
+    Assert-ContainsOnce $rootBuild 'canonical loader roots (`fabric`, `forge`, and `neoforge`)' 'source metrics classification report'
+
+    $metricsParser = Get-Section $rootBuild 'int conditionalBlocks = 0' 'def duplicateReductionPercent =' 'source-metrics Stonecutter parser'
+    foreach ($literal in @(
+        'def blockStack = []',
+        'def directive = line.trim().replaceFirst(/^\*\//, "")',
+        'boolean opener = directive ==~ /\/\/\?\s*if\b.+\{\s*/',
+        'boolean alternate = directive ==~ /\/\/\?\s*}\s*else\s*\{\s*/',
+        'boolean closer = directive ==~ /\/\/\?\s*}\s*/',
+        'blockStack << [start: index + 1, lines: 0, branchLines: 0, hasElse: false]',
+        'blockStack.last().branchLines = 0',
+        'blockStack.each { block ->',
+        'block.lines++',
+        'block.branchLines++',
+        'directive.contains("//?")',
+        'contains a malformed Stonecutter directive.',
+        'contains unclosed Stonecutter conditional blocks opened at lines'
+    )) {
+        Assert-ContainsOnce $metricsParser $literal "source-metrics Stonecutter parser '$literal'"
+    }
+
     $aggregateSections = @(
         (Get-Section $rootBuild "tasks.register('buildStonecutterAll')" "tasks.register('verifyStonecutterAll')" 'buildStonecutterAll aggregate'),
         (Get-Section $rootBuild "tasks.register('verifyStonecutterAll')" "tasks.register('verifyStonecutterParityAll')" 'verifyStonecutterAll aggregate'),
@@ -261,10 +330,16 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $nativeArchive '/*@Inject(method = "<init>", at = @At("RETURN"))' 'Fabric native archive commented legacy constructor'
     Assert-ContainsOnce $nativeArchive 'String name,' 'Fabric native archive legacy name parameter'
     Assert-ContainsOnce $nativeArchive 'boolean closeOnExit,' 'Fabric native archive legacy close parameter'
-    Assert-ContainsCount $nativeArchive 'holder.packforge$setArchive(bridge);' 2 'Fabric native archive shared capture behavior'
+    Assert-ContainsCount $nativeArchive 'this.packforge$setArchive(zipFileAccess);' 2 'Fabric native archive constructor delegation'
+    Assert-ContainsOnce $nativeArchive '@Unique' 'Fabric native archive shared helper uniqueness'
+    Assert-ContainsOnce $nativeArchive 'private void packforge$setArchive(Object zipFileAccess) {' 'Fabric native archive shared capture helper'
+    Assert-ContainsOnce $nativeArchive 'holder.packforge$setArchive(bridge);' 'Fabric native archive shared capture behavior'
     Assert-ContainsCount $nativeArchive 'private void packforge$captureArchive(' 2 'Fabric native archive constructor implementations'
     Assert-ContainsCount $nativeArchive '//? if ' 3 'Fabric native archive conditional openers'
     Assert-ContainsCount $nativeArchive '//?}' 4 'Fabric native archive conditional closers'
+    $nativeArchiveMetrics = Measure-StonecutterConditionalBlocks $nativeArchive 'Fabric native archive'
+    if ($nativeArchiveMetrics.Blocks -ne 3) { Fail "Fabric native archive must contain three Stonecutter blocks; found $($nativeArchiveMetrics.Blocks)." }
+    if ($nativeArchiveMetrics.MaxLines -gt 40) { Fail "Fabric native archive Stonecutter block spans $($nativeArchiveMetrics.MaxLines) lines; maximum is 40." }
 
     $fabricBuild = $Sources['Loader:fabric']
     $nativeTransport = Get-Section $fabricBuild 'def selectedMainJavaSources = files(selectedSources.mainJavaSources)' 'sourceSets {' 'Fabric native archive source transport'
@@ -351,6 +426,7 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-archive-range-drift' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('<=1.21.10', '<=1.21.11') } $Registry $Sources
     Assert-MutationRejected 'native-archive-constructor-seam-drift' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('>=1.20.5', '>=1.20.6') } $Registry $Sources
     Assert-MutationRejected 'native-archive-legacy-branch-active' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('/*@Inject(method = "<init>"', '@Inject(method = "<init>"') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-shared-helper-missing' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('private void packforge$setArchive(Object zipFileAccess) {', 'private void packforge$setMissing(Object zipFileAccess) {') } $Registry $Sources
     Assert-MutationRejected 'native-archive-legacy-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java', 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/Missing.java') } $Registry $Sources
     Assert-MutationRejected 'native-archive-extra-exclusion' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace("`tlegacyArchiveSources = [", "`tlegacyArchiveSources = [`n`t`tnew File(physicalRepositoryRoot, `"versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/Extra.java`"),") } $Registry $Sources
     Assert-MutationRejected 'native-archive-generated-source-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('java.srcDir(stonecutter.tasks.generatedSourcesDir.dir("main/java"))', 'java.srcDir("src/main/java")') } $Registry $Sources
@@ -359,7 +435,7 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-archive-sources-jar-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('details.exclude()', 'details.path') } $Registry $Sources
     Assert-MutationRejected 'native-archive-duplicate-source-registration' { param($r, $s) $s['Loader:fabric'] += "`nstonecutter.tasks.configureSource(sourceSets.main)" } $Registry $Sources
     Assert-MutationRejected 'native-archive-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"),', '') } $Registry $Sources
-    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 21 mutations rejected.'
+    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 22 mutations rejected.'
 }
 
 $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath,

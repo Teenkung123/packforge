@@ -8,6 +8,7 @@ import net.minecraft.server.packs.FilePackResources;
 import net.minecraft.server.packs.PackLocationInfo;
 //?}
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,30 +22,25 @@ public abstract class FilePackResourcesArchiveMixin {
         at = @At("RETURN")
     )
     private void packforge$captureArchive(
-        PackLocationInfo location,
-        @Coerce Object zipFileAccess,
-        String prefix,
-        CallbackInfo ci
+        PackLocationInfo location, @Coerce Object zipFileAccess, String prefix, CallbackInfo ci
     ) {
-        if (zipFileAccess instanceof SharedZipFileAccessBridge bridge
-            && this instanceof FilePackResourcesArchiveHolder holder) {
-            holder.packforge$setArchive(bridge);
-        }
+        this.packforge$setArchive(zipFileAccess);
     }
     //?} else {
     /*@Inject(method = "<init>", at = @At("RETURN"))
     private void packforge$captureArchive(
-        String name,
-        @Coerce Object zipFileAccess,
-        boolean closeOnExit,
-        String prefix,
-        CallbackInfo ci
+        String name, @Coerce Object zipFileAccess, boolean closeOnExit, String prefix, CallbackInfo ci
     ) {
+        this.packforge$setArchive(zipFileAccess);
+    }
+    *///?}
+
+    @Unique
+    private void packforge$setArchive(Object zipFileAccess) {
         if (zipFileAccess instanceof SharedZipFileAccessBridge bridge
             && this instanceof FilePackResourcesArchiveHolder holder) {
             holder.packforge$setArchive(bridge);
         }
     }
-    *///?}
 }
 //?}
