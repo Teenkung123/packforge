@@ -92,6 +92,39 @@ $CanonicalFabricNativeArchiveTargets = @(
     'mc1_21_10'
 )
 $CanonicalFabricNonNativeArchiveTargets = @('mc1_20_1', 'mc1_21_11', 'mc26_1_to_26_2')
+$CanonicalFabricNativeSharedZipTargets = @(
+    'mc1_20_2',
+    'mc1_20_3',
+    'mc1_20_4',
+    'mc1_20_5',
+    'mc1_20_6',
+    'mc1_21',
+    'mc1_21_1',
+    'mc1_21_2',
+    'mc1_21_3',
+    'mc1_21_4',
+    'mc1_21_5',
+    'mc1_21_6',
+    'mc1_21_7',
+    'mc1_21_8',
+    'mc1_21_9',
+    'mc1_21_10',
+    'mc1_21_11'
+)
+$CanonicalFabricNonNativeSharedZipTargets = @('mc1_20_1', 'mc26_1_to_26_2')
+$CanonicalFabricSharedZipDescriptorPaths = @(
+    'versions/mc1_20_1/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc1_20_2/common/src/main/resources/packforge.fabric.mixins.mc1_20_2.json',
+    'versions/mc1_20_3_4/common/src/main/resources/packforge.fabric.mixins.mc1_20_3_4.json',
+    'versions/mc1_20_5_6/common/src/main/resources/packforge.fabric.mixins.mc1_20_5_6.json',
+    'versions/mc1_21_1/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc1_21_4/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc1_21_5/common/src/main/resources/packforge.mc1_21_5.mixins.json',
+    'versions/mc1_21_8/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc1_21_9/common/src/main/resources/packforge.mc1_21_9_10.mixins.json',
+    'versions/mc1_21_11/common/src/main/resources/packforge.fabric.mixins.json',
+    'versions/mc26/common/src/main/resources/packforge.fabric.mixins.json'
+)
 
 function Fail([string] $Message) { throw "Stonecutter direct contract: $Message" }
 
@@ -165,6 +198,11 @@ function Measure-StonecutterConditionalBlocks([string] $Text, [string] $Context)
     return [pscustomobject]@{ Blocks = $blocks.Count; MaxLines = [int] $maxLines }
 }
 
+function Normalize-NativeStonecutterJava([string] $Text) {
+    $body = @($Text -split '\r?\n' | Where-Object { $_.Trim() -notmatch '^//\?' }) -join ''
+    return $body -replace '\s+', ''
+}
+
 function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     if ([int] $Registry.schemaVersion -ne 2) { Fail "unsupported registry schema '$($Registry.schemaVersion)'." }
 
@@ -210,6 +248,19 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     $fabricTargetKeys = @($Registry.targets | Where-Object { $null -ne $_.platforms.PSObject.Properties['fabric'] } | ForEach-Object { $_.key })
     Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cin $CanonicalFabricNativeArchiveTargets }) $CanonicalFabricNativeArchiveTargets 'Fabric native archive targets'
     Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cnotin $CanonicalFabricNativeArchiveTargets }) $CanonicalFabricNonNativeArchiveTargets 'Fabric non-native archive targets'
+    Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cin $CanonicalFabricNativeSharedZipTargets }) $CanonicalFabricNativeSharedZipTargets 'Fabric native SharedZip targets'
+    Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cnotin $CanonicalFabricNativeSharedZipTargets }) $CanonicalFabricNonNativeSharedZipTargets 'Fabric non-native SharedZip targets'
+    # This physical registry route remains the standalone/rollback implementation;
+    # the Fabric build replaces it only inside its direct Stonecutter guard.
+    $sharedZipRoutes = @($Registry.sharedJavaSources | Where-Object { $_.id -ceq 'shared-zip-access-1.20.2-through-1.21.11' })
+    if ($sharedZipRoutes.Count -ne 1) { Fail "registry must contain one frozen pre-26 SharedZip route; found $($sharedZipRoutes.Count)." }
+    $sharedZipRoute = $sharedZipRoutes[0]
+    if (($sharedZipRoute.path -cne 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java') -or
+        ($sharedZipRoute.sourceSet -cne 'main') -or
+        ($null -ne $sharedZipRoute.PSObject.Properties['platforms'])) {
+        Fail 'registry pre-26 SharedZip route path/sourceSet/platform scope drifted.'
+    }
+    Assert-SameSet @($sharedZipRoute.targets) $CanonicalFabricNativeSharedZipTargets 'registry pre-26 SharedZip route targets'
     Assert-SameSet @($joptOverrides.Keys) @($CanonicalJoptSimpleOverrides.Keys) 'JOptSimple override nodes'
     foreach ($nodePath in $CanonicalJoptSimpleOverrides.Keys) {
         if ($joptOverrides[$nodePath] -cne $CanonicalJoptSimpleOverrides[$nodePath]) {
@@ -241,6 +292,11 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $rootBuild 'if (expectedDirectNodePaths != stonecutterNodePaths*.toString().sort()) {' 'root all-direct ledger guard'
     Assert-ContainsOnce $rootBuild 'def expectedForgeJoptSimpleRuntimeVersions = [mc1_21_1: "5.0.4", mc1_21_4: "5.0.4"]' 'root Forge JOptSimple registry guard'
     Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java")' 'root Fabric native archive validator input'
+    Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java")' 'root Fabric native SharedZip validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java")' 'root retained SharedZip validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java")' 'root mc26 SharedZip validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessAccessor.java")' 'root mc26 SharedZip accessor validator input'
+    Assert-ContainsOnce $rootBuild 'fileTree("versions") { include "**/packforge*.mixins*.json" }' 'root SharedZip descriptor validator inputs'
 
     $metricsSources = Get-Section $rootBuild 'def handwrittenProductionJava = files(' 'def sourceMetricsBuildJson =' 'source-metrics roots'
     foreach ($loaderId in @('fabric', 'forge', 'neoforge')) {
@@ -341,15 +397,69 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     if ($nativeArchiveMetrics.Blocks -ne 3) { Fail "Fabric native archive must contain three Stonecutter blocks; found $($nativeArchiveMetrics.Blocks)." }
     if ($nativeArchiveMetrics.MaxLines -gt 40) { Fail "Fabric native archive Stonecutter block spans $($nativeArchiveMetrics.MaxLines) lines; maximum is 40." }
 
+    $nativeSharedZip = $Sources.FabricNativeSharedZip
+    Assert-ContainsOnce $nativeSharedZip '//? if >=1.20.2 && <=1.21.11 {' 'Fabric native SharedZip outer target guard'
+    Assert-ContainsOnce $nativeSharedZip 'package com.teenkung.packforge.mixin.loader;' 'Fabric native SharedZip package'
+    Assert-ContainsOnce $nativeSharedZip '@Mixin(targets = "net.minecraft.server.packs.FilePackResources$SharedZipFileAccess")' 'Fabric native SharedZip target'
+    Assert-ContainsOnce $nativeSharedZip 'public abstract class SharedZipFileAccessMixin implements SharedZipFileAccessBridge {' 'Fabric native SharedZip class'
+    Assert-ContainsOnce $nativeSharedZip '@Shadow @Final File file;' 'Fabric native SharedZip file shadow'
+    Assert-ContainsOnce $nativeSharedZip '@Shadow abstract ZipFile getOrCreateZipFile();' 'Fabric native SharedZip ZIP accessor shadow'
+    Assert-ContainsOnce $nativeSharedZip '@Unique private PackArchiveState packforge$state;' 'Fabric native SharedZip state'
+    Assert-ContainsOnce $nativeSharedZip '@Inject(method = "<init>(Ljava/io/File;)V", at = @At("RETURN"))' 'Fabric native SharedZip constructor hook'
+    Assert-ContainsOnce $nativeSharedZip 'this.packforge$state = new PackArchiveState();' 'Fabric native SharedZip state creation'
+    Assert-ContainsOnce $nativeSharedZip '@Override @Unique public File packforge$archiveFile() { return this.file; }' 'Fabric native SharedZip file bridge'
+    Assert-ContainsOnce $nativeSharedZip '@Override @Unique public ZipFile packforge$getOrCreateZipFile() { return this.getOrCreateZipFile(); }' 'Fabric native SharedZip ZIP bridge'
+    Assert-ContainsOnce $nativeSharedZip '@Override @Unique public PackArchiveState packforge$archiveState() { return this.packforge$state; }' 'Fabric native SharedZip state bridge'
+    Assert-ContainsOnce $nativeSharedZip '@Inject(method = "close", at = @At("HEAD"))' 'Fabric native SharedZip close hook'
+    Assert-ContainsOnce $nativeSharedZip 'this.packforge$state.close();' 'Fabric native SharedZip close behavior'
+    Assert-ContainsOnce $nativeSharedZip 'PackForge.LOGGER.warn("Failed to close PackForge ZIP state for {}; vanilla ZIP close will continue", this.file, exception);' 'Fabric native SharedZip close fallback'
+    Assert-ContainsCount $nativeSharedZip '//? if ' 1 'Fabric native SharedZip conditional openers'
+    Assert-ContainsCount $nativeSharedZip '//?}' 1 'Fabric native SharedZip conditional closers'
+    if ($nativeSharedZip.Contains('SharedZipFileAccessAccessor')) { Fail 'Fabric native SharedZip pre-26 source must not consume the mc26 accessor seam.' }
+    if ((Normalize-NativeStonecutterJava $nativeSharedZip) -cne (Normalize-NativeStonecutterJava $Sources.LegacySharedZip)) {
+        Fail 'Fabric native SharedZip body must remain exactly equal to the retained standalone/rollback implementation after directive and whitespace normalization.'
+    }
+    $nativeSharedZipMetrics = Measure-StonecutterConditionalBlocks $nativeSharedZip 'Fabric native SharedZip'
+    if ($nativeSharedZipMetrics.Blocks -ne 1) { Fail "Fabric native SharedZip must contain one Stonecutter block; found $($nativeSharedZipMetrics.Blocks)." }
+    if ($nativeSharedZipMetrics.MaxLines -gt 40) { Fail "Fabric native SharedZip Stonecutter block spans $($nativeSharedZipMetrics.MaxLines) lines; maximum is 40." }
+
+    $mc26SharedZip = $Sources.Mc26SharedZip
+    $mc26SharedZipAccessor = $Sources.Mc26SharedZipAccessor
+    Assert-ContainsOnce $mc26SharedZip '((SharedZipFileAccessAccessor) (Object) this).packforge$file()' 'mc26 SharedZip file accessor seam'
+    Assert-ContainsOnce $mc26SharedZip '((SharedZipFileAccessAccessor) (Object) this).packforge$invokeGetOrCreateZipFile()' 'mc26 SharedZip ZIP accessor seam'
+    Assert-ContainsOnce $mc26SharedZipAccessor '@Accessor("file")' 'mc26 SharedZip file accessor'
+    Assert-ContainsOnce $mc26SharedZipAccessor '@Invoker("getOrCreateZipFile")' 'mc26 SharedZip ZIP invoker'
+
+    try { $sharedZipDescriptors = $Sources.FabricSharedZipDescriptors | ConvertFrom-Json -AsHashtable } catch { Fail "Fabric SharedZip descriptor proof is invalid JSON: $($_.Exception.Message)" }
+    Assert-SameSet @($sharedZipDescriptors.Keys) $CanonicalFabricSharedZipDescriptorPaths 'Fabric SharedZip descriptor paths'
+    foreach ($descriptorPath in $CanonicalFabricSharedZipDescriptorPaths) {
+        $descriptor = $sharedZipDescriptors[$descriptorPath]
+        $sharedZipCount = @($descriptor.mixins | Where-Object { $_ -ceq 'loader.SharedZipFileAccessMixin' }).Count
+        $accessorCount = @($descriptor.mixins | Where-Object { $_ -ceq 'loader.SharedZipFileAccessAccessor' }).Count
+        if ($descriptorPath.Contains('/mc1_20_1/')) {
+            if ($sharedZipCount -ne 0 -or $accessorCount -ne 0) { Fail 'Fabric 1.20.1 descriptor must not register SharedZip mixins.' }
+        } elseif ($descriptorPath.Contains('/mc26/')) {
+            if ($sharedZipCount -ne 1 -or $accessorCount -ne 1) { Fail 'Fabric mc26 descriptor must register one physical SharedZip mixin and accessor.' }
+        } elseif ($sharedZipCount -ne 1 -or $accessorCount -ne 0) {
+            Fail "Fabric descriptor '$descriptorPath' must register one pre-26 SharedZip mixin without the mc26 accessor."
+        }
+    }
+
     $fabricBuild = $Sources['Loader:fabric']
-    $nativeTransport = Get-Section $fabricBuild 'def selectedMainJavaSources = files(selectedSources.mainJavaSources)' 'sourceSets {' 'Fabric native archive source transport'
+    $nativeTransport = Get-Section $fabricBuild 'def selectedMainJavaSources = files(selectedSources.mainJavaSources)' 'sourceSets {' 'Fabric native source transport'
     Assert-ContainsOnce $nativeTransport 'def compileMainJavaSources = selectedMainJavaSources' 'Fabric standalone selected-source preservation'
-    Assert-ContainsOnce $nativeTransport 'def legacyArchiveSources = [] as Set' 'Fabric standalone empty archive exclusion set'
-    Assert-ContainsOnce $nativeTransport 'if (stonecutterDirectNode) {' 'Fabric native archive direct-only transport'
+    Assert-ContainsOnce $nativeTransport 'def legacyNativeSources = [] as Set' 'Fabric standalone empty native exclusion set'
+    Assert-ContainsOnce $nativeTransport 'def legacySharedZipSource = stonecutterDirectNode' 'Fabric legacy SharedZip source identity'
+    Assert-ContainsOnce $nativeTransport 'def generatedSharedZipSource = stonecutterDirectNode' 'Fabric generated SharedZip source identity'
+    Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java").get().asFile.canonicalFile' 'Fabric generated SharedZip source path'
+    Assert-ContainsOnce $nativeTransport 'def nativeSharedZipActive = false' 'Fabric native SharedZip default state'
+    Assert-ContainsOnce $nativeTransport 'if (stonecutterDirectNode) {' 'Fabric native direct-only transport'
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric legacy archive exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric modern archive exclusion'
-    Assert-ContainsCount $nativeTransport 'new File(physicalRepositoryRoot, ' 2 'Fabric exact legacy archive exclusions'
-    Assert-ContainsOnce $nativeTransport 'selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyArchiveSources }' 'Fabric archive source replacement'
+    Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java' 'Fabric legacy SharedZip exclusion'
+    Assert-ContainsCount $nativeTransport 'new File(physicalRepositoryRoot, ' 3 'Fabric exact legacy native exclusions'
+    Assert-ContainsOnce $nativeTransport 'nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }' 'Fabric registry-selected SharedZip activation'
+    Assert-ContainsOnce $nativeTransport 'selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyNativeSources }' 'Fabric native source replacement'
     Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.dir("main/java")' 'Fabric generated Java compile root'
     if ($fabricBuild.Contains('stonecutter.tasks.configureSource(')) {
         Fail 'Fabric must reuse Stonecutter 0.9.7 automatic SourceSet registration instead of configuring main twice.'
@@ -365,7 +475,8 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     $fabricSourcesJar = Get-Section $fabricBuild 'tasks.named("sourcesJar") {' 'if (loaderConfig.mappingMode == "named") {' 'Fabric native archive sources JAR'
     Assert-ContainsOnce $fabricSourcesJar 'if (stonecutterDirectNode) {' 'Fabric sources JAR generation direct guard'
     Assert-ContainsOnce $fabricSourcesJar 'dependsOn(stonecutter.tasks.generate["main"])' 'Fabric sources JAR generation dependency'
-    Assert-ContainsOnce $fabricSourcesJar 'if (details.file.canonicalFile in legacyArchiveSources) {' 'Fabric sources JAR physical legacy-source filter'
+    Assert-ContainsOnce $fabricSourcesJar 'if (details.file.canonicalFile in legacyNativeSources' 'Fabric sources JAR physical legacy-source filter'
+    Assert-ContainsOnce $fabricSourcesJar '!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource' 'Fabric inactive generated SharedZip filter'
     Assert-ContainsOnce $fabricSourcesJar 'details.exclude()' 'Fabric sources JAR legacy-source exclusion'
     Assert-ContainsCount $fabricBuild 'stonecutter.tasks.generatedSourcesDir.dir("main/java")' 2 'Fabric exact generated Java root wiring'
     if ($fabricBuild.Contains('stonecutter.tasks.generatedSourcesDir.dir("main")')) {
@@ -373,8 +484,8 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     }
     Assert-ContainsCount $fabricBuild 'dependsOn(stonecutter.tasks.generate["main"])' 2 'Fabric exact generation task wiring'
     foreach ($loaderId in @('forge', 'neoforge')) {
-        if ($Sources["Loader:$loaderId"].Contains('FilePackResourcesArchiveMixin.java')) {
-            Fail "$loaderId build script must not consume the Fabric native archive pilot."
+        if ($Sources["Loader:$loaderId"].Contains('FilePackResourcesArchiveMixin.java') -or $Sources["Loader:$loaderId"].Contains('SharedZipFileAccessMixin.java')) {
+            Fail "$loaderId build script must not consume a Fabric native source pilot."
         }
     }
 
@@ -386,7 +497,7 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         Fail 'Forge build script must not hard-code JOptSimple target keys or version.'
     }
 
-    return [pscustomobject]@{ DirectCells = $nodes.Count; JoptOverrides = $joptOverrides.Count; NativeArchiveCells = $CanonicalFabricNativeArchiveTargets.Count }
+    return [pscustomobject]@{ DirectCells = $nodes.Count; JoptOverrides = $joptOverrides.Count; NativeArchiveCells = $CanonicalFabricNativeArchiveTargets.Count; NativeSharedZipCells = $CanonicalFabricNativeSharedZipTargets.Count }
 }
 
 function Copy-Registry($Registry) {
@@ -416,6 +527,7 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'delegated-default' { param($r, $s) $r.stonecutterBuildDefaults.forge = 'delegated' } $Registry $Sources
     Assert-MutationRejected 'missing-cell' { param($r, $s) $r.targets[0].platforms.PSObject.Properties.Remove('forge') } $Registry $Sources
     Assert-MutationRejected 'jopt-version-drift' { param($r, $s) $r.targets[1].platforms.forge.joptSimpleRuntimeVersion = '6.0.0' } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-registry-route-drift' { param($r, $s) $route = @($r.sharedJavaSources | Where-Object { $_.id -ceq 'shared-zip-access-1.20.2-through-1.21.11' })[0]; $route.targets = @($route.targets | Where-Object { $_ -cne 'mc1_21_11' }) } $Registry $Sources
     Assert-MutationRejected 'settings-delegated-mode' { param($r, $s) $s.Settings = $s.Settings.Replace("['direct'] as Set", "['delegated', 'direct'] as Set") } $Registry $Sources
     Assert-MutationRejected 'settings-delegated-leaf' { param($r, $s) $s.Settings += "`n'../stonecutter-build.gradle'" } $Registry $Sources
     Assert-MutationRejected 'public-build-exec' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('return tasks.register(taskName) {', 'return tasks.register(taskName, Exec) {') } $Registry $Sources
@@ -427,38 +539,71 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-archive-constructor-seam-drift' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('>=1.20.5', '>=1.20.6') } $Registry $Sources
     Assert-MutationRejected 'native-archive-legacy-branch-active' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('/*@Inject(method = "<init>"', '@Inject(method = "<init>"') } $Registry $Sources
     Assert-MutationRejected 'native-archive-shared-helper-missing' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('private void packforge$setArchive(Object zipFileAccess) {', 'private void packforge$setMissing(Object zipFileAccess) {') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-range-drift' { param($r, $s) $s.FabricNativeSharedZip = $s.FabricNativeSharedZip.Replace('<=1.21.11', '<=1.21.10') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-constructor-drift' { param($r, $s) $s.FabricNativeSharedZip = $s.FabricNativeSharedZip.Replace('<init>(Ljava/io/File;)V', '<init>') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-close-drift' { param($r, $s) $s.FabricNativeSharedZip = $s.FabricNativeSharedZip.Replace('@Inject(method = "close", at = @At("HEAD"))', '@Inject(method = "close", at = @At("RETURN"))') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-accessor-leak' { param($r, $s) $s.FabricNativeSharedZip += "`nSharedZipFileAccessAccessor" } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-rollback-parity-drift' { param($r, $s) $s.LegacySharedZip = $s.LegacySharedZip.Replace('this.packforge$state.close();', 'this.packforge$state = null;') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-mc26-seam-missing' { param($r, $s) $s.Mc26SharedZip = $s.Mc26SharedZip.Replace('SharedZipFileAccessAccessor', 'MissingAccessor') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-mc26-accessor-missing' { param($r, $s) $s.Mc26SharedZipAccessor = $s.Mc26SharedZipAccessor.Replace('@Accessor("file")', '@Accessor("missing")') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-descriptor-registration-missing' { param($r, $s) $s.FabricSharedZipDescriptors = $s.FabricSharedZipDescriptors.Replace('loader.SharedZipFileAccessMixin', 'loader.MissingSharedZipMixin') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-mc26-descriptor-accessor-missing' { param($r, $s) $s.FabricSharedZipDescriptors = $s.FabricSharedZipDescriptors.Replace('loader.SharedZipFileAccessAccessor', 'loader.MissingSharedZipAccessor') } $Registry $Sources
     Assert-MutationRejected 'native-archive-legacy-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java', 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/Missing.java') } $Registry $Sources
-    Assert-MutationRejected 'native-archive-extra-exclusion' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace("`tlegacyArchiveSources = [", "`tlegacyArchiveSources = [`n`t`tnew File(physicalRepositoryRoot, `"versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/Extra.java`"),") } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-legacy-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java', 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/MissingSharedZip.java') } $Registry $Sources
+    Assert-MutationRejected 'native-source-extra-exclusion' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace("`tlegacyNativeSources = [", "`tlegacyNativeSources = [`n`t`tnew File(physicalRepositoryRoot, `"versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/Extra.java`"),") } $Registry $Sources
     Assert-MutationRejected 'native-archive-generated-source-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('java.srcDir(stonecutter.tasks.generatedSourcesDir.dir("main/java"))', 'java.srcDir("src/main/java")') } $Registry $Sources
     Assert-MutationRejected 'native-archive-generated-root-too-high' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('stonecutter.tasks.generatedSourcesDir.dir("main/java")', 'stonecutter.tasks.generatedSourcesDir.dir("main")') } $Registry $Sources
     Assert-MutationRejected 'native-archive-compile-generation-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('dependsOn(stonecutter.tasks.generate["main"])', 'dependsOn(tasks.named("classes"))') } $Registry $Sources
     Assert-MutationRejected 'native-archive-sources-jar-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('details.exclude()', 'details.path') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-activation-drift' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }', 'nativeSharedZipActive = true') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-inactive-generated-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('|| (!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource)', '') } $Registry $Sources
     Assert-MutationRejected 'native-archive-duplicate-source-registration' { param($r, $s) $s['Loader:fabric'] += "`nstonecutter.tasks.configureSource(sourceSets.main)" } $Registry $Sources
     Assert-MutationRejected 'native-archive-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"),', '') } $Registry $Sources
-    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 22 mutations rejected.'
+    Assert-MutationRejected 'native-shared-zip-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"),', '') } $Registry $Sources
+    Assert-MutationRejected 'native-shared-zip-mc26-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"),', '') } $Registry $Sources
+    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 38 mutations rejected.'
 }
 
 $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath,
     (Join-Path $RepositoryRoot 'platform\fabric\build.gradle'),
     (Join-Path $RepositoryRoot 'platform\neoforge\build.gradle'),
     (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\FilePackResourcesArchiveMixin.java'),
+    (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessAccessor.java'),
     (Join-Path $RepositoryRoot 'stonecutter-build.gradle'),
-    (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct-parity.gradle'))
+    (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct-parity.gradle')) + @(
+        $CanonicalFabricSharedZipDescriptorPaths | ForEach-Object { Join-Path $RepositoryRoot $_ }
+    )
 foreach ($path in $requiredPaths) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Fail "missing required file '$path'." }
 }
 
 try { $registry = Get-Content -LiteralPath $RegistryPath -Raw | ConvertFrom-Json } catch { Fail "registry is not valid JSON: $($_.Exception.Message)" }
+$sharedZipDescriptorProof = [ordered]@{}
+foreach ($relativePath in $CanonicalFabricSharedZipDescriptorPaths) {
+    try {
+        $sharedZipDescriptorProof[$relativePath] = Get-Content -LiteralPath (Join-Path $RepositoryRoot $relativePath) -Raw | ConvertFrom-Json
+    } catch {
+        Fail "Fabric SharedZip descriptor '$relativePath' is invalid JSON: $($_.Exception.Message)"
+    }
+}
 $sources = @{
     Settings = Get-Content -LiteralPath $SettingsPath -Raw
     RootBuild = Get-Content -LiteralPath $RootBuildPath -Raw
     Rollback = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'stonecutter-build.gradle') -Raw
     Parity = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct-parity.gradle') -Raw
     FabricNativeArchive = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\FilePackResourcesArchiveMixin.java') -Raw
+    FabricNativeSharedZip = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java') -Raw
+    LegacySharedZip = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java') -Raw
+    Mc26SharedZip = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java') -Raw
+    Mc26SharedZipAccessor = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessAccessor.java') -Raw
+    FabricSharedZipDescriptors = $sharedZipDescriptorProof | ConvertTo-Json -Depth 20 -Compress
     'Loader:fabric' = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'platform\fabric\build.gradle') -Raw
     'Loader:forge' = Get-Content -LiteralPath $ForgeBuildPath -Raw
     'Loader:neoforge' = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'platform\neoforge\build.gradle') -Raw
 }
 $summary = Invoke-DirectContractValidation $registry $sources
 if ($SelfTest) { Invoke-SelfTests $registry $sources }
-Write-Output "Stonecutter direct contract PASS: $($summary.DirectCells) direct cells; $($summary.NativeArchiveCells) Fabric native archive cells; $($summary.JoptOverrides) registry JOptSimple overrides; delegated wrapper isolated to parity/rollback."
+Write-Output "Stonecutter direct contract PASS: $($summary.DirectCells) direct cells; $($summary.NativeArchiveCells) Fabric native archive cells; $($summary.NativeSharedZipCells) Fabric native SharedZip cells; registry legacy SharedZip route preserved for standalone/rollback; canonical replacement direct-only; $($summary.JoptOverrides) registry JOptSimple overrides."

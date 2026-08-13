@@ -1283,6 +1283,11 @@ def validateStonecutterDirectContract = tasks.register("validateStonecutterDirec
 		file("stonecutter-build.gradle"),
 		file("gradle/packforge-stonecutter-direct-parity.gradle"),
 		file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"),
+		file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"),
+		file("versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"),
+		file("versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"),
+		file("versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessAccessor.java"),
+		fileTree("versions") { include "**/packforge*.mixins*.json" },
 		file("platform/fabric/build.gradle"),
 		file("platform/forge/build.gradle"),
 		file("platform/neoforge/build.gradle")

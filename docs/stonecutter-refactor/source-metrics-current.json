@@ -11,12 +11,12 @@
         "generatedPolicy": "All build/generated/Stonecutter output lies outside handwritten source roots."
     },
     "production": {
-        "files": 211,
-        "nonblankLoc": 16366,
-        "bridgeFiles": 104,
-        "bridgeLoc": 5346,
-        "bridgePercent": 32.67,
-        "locPerExactRelease": 743.91,
+        "files": 212,
+        "nonblankLoc": 16403,
+        "bridgeFiles": 105,
+        "bridgeLoc": 5383,
+        "bridgePercent": 32.82,
+        "locPerExactRelease": 745.59,
         "layerPrecedence": [
             "neutralCommon",
             "loaderCommon",
@@ -34,8 +34,8 @@
                 "loc": 4832
             },
             "loaderCommon": {
-                "files": 16,
-                "loc": 523
+                "files": 17,
+                "loc": 560
             },
             "exactVersionBridge": {
                 "files": 85,
@@ -58,7 +58,7 @@
         "targetKeyReferences": 81,
         "platformTargetKeyReferences": 18,
         "targetVersionReferences": 15,
-        "targetKeyLiteralReferences": 85,
+        "targetKeyLiteralReferences": 87,
         "targetConditionalLines": 15
     },
     "configuration": {
@@ -103,8 +103,8 @@
         ]
     },
     "stonecutter": {
-        "conditionalBlocks": 3,
-        "maxConditionalBlockLines": 39
+        "conditionalBlocks": 4,
+        "maxConditionalBlockLines": 40
     },
     "compatibility": {
         "quickPackInternalReferencePaths": [

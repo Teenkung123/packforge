@@ -82,14 +82,23 @@ apply from: new File(packforgeRepositoryRoot, "gradle/packforge-source-selection
 def selectedSources = packforgeSelectedSources
 def selectedMainJavaSources = files(selectedSources.mainJavaSources)
 def compileMainJavaSources = selectedMainJavaSources
-def legacyArchiveSources = [] as Set
+def legacyNativeSources = [] as Set
+def legacySharedZipSource = stonecutterDirectNode
+	? new File(physicalRepositoryRoot, "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java").canonicalFile
+	: null
+def generatedSharedZipSource = stonecutterDirectNode
+	? stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java").get().asFile.canonicalFile
+	: null
+def nativeSharedZipActive = false
 if (stonecutterDirectNode) {
-	legacyArchiveSources = [
+	legacyNativeSources = [
 		new File(physicalRepositoryRoot, "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile,
-		new File(physicalRepositoryRoot, "versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile
+		new File(physicalRepositoryRoot, "versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile,
+		legacySharedZipSource
 	] as Set
+	nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }
 	compileMainJavaSources = files(
-		selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyArchiveSources },
+		selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyNativeSources },
 		// Stonecutter 0.9.7 auto-configures every SourceSet, including main.
 		stonecutter.tasks.generatedSourcesDir.dir("main/java")
 	)
@@ -315,7 +324,8 @@ tasks.named("sourcesJar") {
 	if (stonecutterDirectNode) {
 		dependsOn(stonecutter.tasks.generate["main"])
 		eachFile { details ->
-			if (details.file.canonicalFile in legacyArchiveSources) {
+			if (details.file.canonicalFile in legacyNativeSources
+				|| (!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource)) {
 				details.exclude()
 			}
 		}
