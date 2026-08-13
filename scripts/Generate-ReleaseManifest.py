@@ -51,18 +51,7 @@ def artifact_name(version: str, target: dict[str, Any], loader: str) -> str:
     return f"packforge-{loader}-{version}{suffix}-mc{artifact_minecraft}.jar"
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--artifacts-dir", type=Path)
-    parser.add_argument("--output-dir", type=Path, required=True)
-    args = parser.parse_args()
-
-    registry = load_registry()
-    properties = load_properties()
-    version = properties.get("mod_version")
-    if not version:
-        raise SystemExit("gradle.properties is missing mod_version")
-
+def build_manifest(registry: dict[str, Any], version: str, artifacts_dir: Path | None) -> dict[str, Any]:
     cells_by_target: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for cell in registry["releaseCells"]:
         cells_by_target[str(cell["targetKey"])].append(cell)
@@ -86,8 +75,8 @@ def main() -> None:
                 "maturity": str(target["maturity"]),
                 "releaseType": "release" if str(target["maturity"]) == "stable" else "beta",
             }
-            if args.artifacts_dir:
-                path = args.artifacts_dir / filename
+            if artifacts_dir:
+                path = artifacts_dir / filename
                 if not path.is_file():
                     raise SystemExit(f"missing publishable artifact: {path}")
                 data = path.read_bytes()
@@ -96,23 +85,45 @@ def main() -> None:
                 entry["sha512"] = hashlib.sha512(data).hexdigest()
             artifacts.append(entry)
 
-    if args.artifacts_dir:
-        actual = sorted(path.name for path in args.artifacts_dir.glob("packforge-*.jar"))
+    if artifacts_dir:
+        actual = sorted(path.name for path in artifacts_dir.glob("packforge-*.jar"))
         expected = sorted(entry["filename"] for entry in artifacts)
         if actual != expected:
             raise SystemExit(f"publish directory contains stale or missing artifacts: expected={expected} actual={actual}")
 
-    manifest = {
+    return {
         "schemaVersion": 1,
         "modVersion": version,
         "registrySchemaVersion": registry["schemaVersion"],
         "publishedArtifactCount": len(artifacts),
         "artifacts": artifacts,
     }
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    (args.output_dir / "manifest.json").write_text(
+
+
+def verify_existing_manifest(manifest_path: Path, registry: dict[str, Any], version: str, artifacts_dir: Path) -> None:
+    if not manifest_path.is_file():
+        raise SystemExit(f"missing release manifest: {manifest_path}")
+    try:
+        existing = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exception:
+        raise SystemExit(f"invalid release manifest: {manifest_path}: {exception}") from exception
+
+    expected = build_manifest(registry, version, artifacts_dir)
+    if existing != expected:
+        raise SystemExit(
+            "release manifest is stale or does not match the registry-derived artifacts: "
+            f"{manifest_path}"
+        )
+
+
+def write_manifest(output_dir: Path, manifest: dict[str, Any]) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
+
+    version = str(manifest["modVersion"])
+    artifacts = manifest["artifacts"]
 
     table = [
         "# PackForge release matrix",
@@ -128,8 +139,38 @@ def main() -> None:
             f"{', '.join(entry['gameVersions'])} | {entry['maturity']} | "
             f"`{entry.get('sha256', 'not-checked')}` |"
         )
-    (args.output_dir / "release-table.md").write_text("\n".join(table) + "\n", encoding="utf-8")
-    print(f"Generated release manifest: artifacts={len(artifacts)} output={args.output_dir}")
+    (output_dir / "release-table.md").write_text("\n".join(table) + "\n", encoding="utf-8")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--artifacts-dir", type=Path)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument(
+        "--verify-existing",
+        action="store_true",
+        help="Verify the existing manifest.json without rewriting it or release-table.md.",
+    )
+    args = parser.parse_args()
+
+    registry = load_registry()
+    properties = load_properties()
+    version = properties.get("mod_version")
+    if not version:
+        raise SystemExit("gradle.properties is missing mod_version")
+
+    if args.verify_existing:
+        if args.artifacts_dir is None or args.output_dir is None:
+            parser.error("--verify-existing requires --artifacts-dir and --output-dir")
+        verify_existing_manifest(args.output_dir / "manifest.json", registry, version, args.artifacts_dir)
+        print(f"Verified release manifest: {args.output_dir / 'manifest.json'}")
+        return
+
+    if args.output_dir is None:
+        parser.error("--output-dir is required unless --verify-existing is used")
+    manifest = build_manifest(registry, version, args.artifacts_dir)
+    write_manifest(args.output_dir, manifest)
+    print(f"Generated release manifest: artifacts={len(manifest['artifacts'])} output={args.output_dir}")
 
 
 if __name__ == "__main__":

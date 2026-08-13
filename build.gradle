@@ -1879,6 +1879,15 @@ tasks.register("verifyExistingArtifacts") {
 	}
 }
 
+tasks.register("verifyReleaseManifest", Exec) {
+	group = "verification"
+	description = "Verifies the existing registry-derived release manifest without regenerating it."
+	dependsOn tasks.named("verifyExistingArtifacts")
+	commandLine "python", "scripts/Generate-ReleaseManifest.py", "--verify-existing",
+		"--artifacts-dir", layout.buildDirectory.dir("libs").get().asFile,
+		"--output-dir", layout.buildDirectory.dir("libs/release").get().asFile
+}
+
 platformBuilds.findAll { targetSupports(selectedTarget, it) }.each { platform ->
 	tasks.register("run${platform.name}TargetClient") {
 		group = "run"
