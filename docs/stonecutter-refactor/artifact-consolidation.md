@@ -1,5 +1,7 @@
 # Artifact consolidation baseline
 
+> **Current-evidence notice (2026-08-13): HISTORICAL / INVALIDATED FOR CURRENT DIRECT-BUILD BYTES.** The artifact counts, hashes, structural checks, same-artifact runtime results, and manifest statements below preserve evidence from their named historical checkpoints. Phase E changed artifact production to the direct Stonecutter graph, and those resulting JAR bytes have not received an equivalent final 20-artifact build, hash binding, manifest verification, or 62-cell runtime pass. The registry still declares a 20-artifact publication topology, but this document is not current release-ready proof.
+
 Baseline published/build artifact count was 17:
 
 - Fabric: 6
@@ -63,9 +65,9 @@ packforge-neoforge-1.3.4-mc26.1-26.2.jar fd849db6a6c849d270fb4c1682134f786639234
 
 At this historical checkpoint, the exact 1.20.2/1.20.3/1.20.4 artifacts were deliberately absent from the public release set pending same-binary range proof.
 
-## Expanded exact target evidence
+## Historical expanded exact target evidence
 
-The following final distribution hashes are the most recent exact target artifacts used by the legacy production harnesses:
+The following historical distribution hashes were the most recent exact target artifacts used by the legacy production harnesses at their named checkpoints; they do not identify current direct-build bytes:
 
 ```text
 packforge-fabric-1.3.4-beta.3-mc1.20.2.jar ABAF4C151DF806B616617326E8D4B63A18ECDA4E2A3DE42760F62CA150B1B8CF
@@ -90,7 +92,7 @@ The exact 1.20.5 through 1.21.10 family hashes are recorded in their phase entri
 - Recorded manifest SHA-256: `380769b566afa9e768c82e1337fa3af3052aea47c7a9fe09d2c5a96edcef2e6c`
 - Verification: `scripts/Verify-Mojang-ReleaseSequence.ps1` PASS; all 22 required release IDs present and ordered.
 - Generated matrix counts at this checkpoint: 19 build targets, 62 exact smoke cells, 26 public-anchor smoke cells, 17 publication rows.
-- Current root `build --no-daemon --console plain --stacktrace`: PASS in 4m22s (`87 actionable tasks: 24 executed, 63 up-to-date`); current 26.x NeoForge all-in-one output embeds MixinExtras exactly once and passes the focused 26.x artifact verifier.
+- Historical root `build --no-daemon --console plain --stacktrace`: PASS in 4m22s (`87 actionable tasks: 24 executed, 63 up-to-date`); the checkpoint's 26.x NeoForge all-in-one output embedded MixinExtras exactly once and passed the focused 26.x artifact verifier.
 
 The 17-artifact hashes after that build are recorded below. They are local build checksums, not marketplace checksums:
 
@@ -140,11 +142,11 @@ packforge-neoforge-1.3.4-beta.2-mc1.20.6-1.21.1.jar 969BFADD9B219932FAB7040839CA
 
 Fabric passed 1.20.5, 1.20.6, 1.21, and 1.21.1; Forge and NeoForge each passed 1.20.6, 1.21, and 1.21.1. Every cell used the unchanged loader artifact, completed two deterministic reloads, emitted semantic/resource evidence, and exited cleanly. The Fabric artifact additionally passed ten requested reloads with the real Quick Pack 1.5.0 JAR and `status=MODULE_HANDOFF`.
 
-The final clean build passed in 8m49s and reproduced every tested hash. Current generated counts are 19 build targets, 62 exact smoke cells, 42 publication-smoke cells, and 20 publication rows. `Generate-ReleaseManifest.py` accepts exactly 20 JARs. Seven non-anchor pre-26 releases remain to be consolidated; the intended final 20-artifact layout remains within the plan's evidence-backed ceiling.
+The historical clean build passed in 8m49s and reproduced every tested hash. At that checkpoint, generated counts were 19 build targets, 62 exact smoke cells, 42 publication-smoke cells, and 20 publication rows, and `Generate-ReleaseManifest.py` accepted exactly 20 JARs. Seven non-anchor pre-26 releases remained to be consolidated; the intended final 20-artifact layout remained within the plan's evidence-backed ceiling.
 
-## Final 20-artifact layout
+## HISTORICAL — final 20-artifact layout invalidated for current bytes
 
-The historical sections above show incremental promotion. At checkpoint `a3402866b217ac159d6a3cec70d3585028f79732`, all range families are proven and publication-smoke coverage is 62/62. The authoritative hashes are:
+The historical sections above show incremental promotion. At checkpoint `a3402866b217ac159d6a3cec70d3585028f79732`, all range families were proven and publication-smoke coverage was 62/62. These hashes were authoritative only for that checkpoint and are invalidated as evidence for current direct-build bytes:
 
 ```text
 fabric   1.20.1             3dafe7d9e341e15a3849dc95728fe88cb9ef40751ce1c9b0679c5024b341b864
@@ -169,4 +171,4 @@ forge    26.1-26.2           447d6c727406bde34d81a3b0df17b554f43f924e28cc805b13a
 neoforge 26.1-26.2           7e946799ea1b3c81b068acb9048a93f8cfa6907316c08ef886a87b32d321aba6
 ```
 
-This is 69.70% below the naïve 66-artifact Cartesian expansion and remains below the evidence-backed ceiling of 21. All 20 pass structural verification and every exact release claimed by their metadata passed the same final loader artifact. `build/libs/release/manifest.json` and `release-table.md` are regenerated from this set.
+At checkpoint `a3402866`, this was 69.70% below the naïve 66-artifact Cartesian expansion and below the evidence-backed ceiling of 21. At that checkpoint only, all 20 passed structural verification, every exact release claimed by their metadata passed the same final loader artifact, and `build/libs/release/manifest.json` plus `release-table.md` were regenerated from the set. None of those unqualified hash/runtime/manifest claims transfers to current direct-build bytes without fresh final-artifact evidence.

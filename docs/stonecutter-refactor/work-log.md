@@ -285,3 +285,23 @@
 - Verification: direct contract AST/self-test baseline plus 10 mutations PASS; direct task PASS; `validateTargetRegistry` dry-run PASS in 31 seconds without compilation; independent review PASS.
 - Status: `PHASE_E_STRUCTURAL_VERIFIED_PARTIAL`. Nested Gradle remains parity rollback oracle. No all-53 build/structural/package parity, Java 17/21/25 proof, remap/JarJar proof, runtime, or true Stonecutter-preprocessed source proof.
 - Rollback: revert later dependants, then `git revert 3c01a50`.
+
+## Phase 21 — current-evidence documentation reconciliation
+
+- Date: 2026-08-13
+- Commit SHA: `d833747749ed665595231b6e72acc22f469b7e1a`; parent `e6246082eda901dc7d202a067bcec432843209bd`
+- Status: `PARTIAL_NOT_RELEASE_READY`
+- Scope: reconcile the README, compatibility/version matrices, current-state audit, final validation, implementation report, library decisions, Quick Pack evidence, and source inventory with the current implementation and evidence boundaries.
+- Verification: focused documentation consistency inspection and independent documentation review passed.
+- Limits: no build, compile, package, final-JAR verification, compatibility-profile execution, or Minecraft runtime was run. Historical 20-artifact hashes and runtime proofs do not validate current direct-build bytes; release readiness remains open.
+- Rollback: revert `07b087fa1e3c862f086a25e29bab68eec37477d2` first, then `git revert d833747749ed665595231b6e72acc22f469b7e1a`.
+
+## Phase 22 — authoritative static implementation-contract gate
+
+- Date: 2026-08-13
+- Commit SHA: `07b087fa1e3c862f086a25e29bab68eec37477d2`; parent `d833747749ed665595231b6e72acc22f469b7e1a`
+- Status: `STATIC_CONTRACTS_VERIFIED`; not release-ready evidence.
+- Scope: add root tasks for the configuration-screen, compatibility-profile catalog, default-off candidate catalog, and deterministic fixture contracts; aggregate them under `validateImplementationContracts`; attach that gate to registry validation and CI; require `--verify-existing` after release-manifest generation in publication CI.
+- Verification: `validateImplementationContracts` passed 4/4 contracts in 36.9 seconds without compilation; the focused Python release-manifest test passed; independent review passed. Workflow YAML received focused static inspection because a YAML parser was unavailable.
+- Limits: no compile, package build, final-JAR manifest verification, compatibility-profile execution, or Minecraft runtime was run.
+- Rollback: `git revert 07b087fa1e3c862f086a25e29bab68eec37477d2`.

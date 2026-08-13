@@ -540,3 +540,23 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: direct contract AST/self-test passed baseline plus 10 rejected mutations; direct task passed; `validateTargetRegistry` dry-run passed in 31 seconds without compilation; independent review passed.
 - Limits: nested Gradle remains only as parity rollback oracle. No all-53 build, broad structural/package parity, Java 17/21/25 proof, remap/JarJar proof, Minecraft runtime, or true Stonecutter-preprocessed source proof occurred.
 - Rollback: revert later dependants, then `git revert 3c01a50`.
+
+## Current-evidence documentation reconciliation
+
+- Date: 2026-08-13
+- Commit SHA: `d833747749ed665595231b6e72acc22f469b7e1a`
+- Parent SHA: `e6246082eda901dc7d202a067bcec432843209bd`
+- Scope: reconcile the README and eight Stonecutter-refactor evidence documents with the implemented direct-build, compatibility-profile, default-candidate, manifest, source-inventory, and validation state; remove stale release-ready language and distinguish historical runtime/hash proof from current direct-build bytes.
+- Verification: focused documentation consistency inspection and independent documentation review passed. No build, compile, package, final-JAR verification, compatibility-profile execution, or Minecraft runtime was run.
+- Status: `PARTIAL_NOT_RELEASE_READY`; this checkpoint corrects evidence claims only. Current direct-build artifacts still require final-JAR rebuild, manifest verification, exact same-artifact runtime coverage, and compatibility-profile execution before release readiness can be claimed.
+- Rollback: revert `07b087fa1e3c862f086a25e29bab68eec37477d2` first, then `git revert d833747749ed665595231b6e72acc22f469b7e1a` to restore the prior documentation state.
+
+## Authoritative static implementation-contract gate
+
+- Date: 2026-08-13
+- Commit SHA: `07b087fa1e3c862f086a25e29bab68eec37477d2`
+- Parent SHA: `d833747749ed665595231b6e72acc22f469b7e1a`
+- Scope: aggregate the configuration-screen, compatibility-profile catalog, default-off candidate catalog, and deterministic fixture validators under `validateImplementationContracts`; require that gate from registry validation and CI; verify an existing generated release manifest before publication upload.
+- Verification: `validateImplementationContracts` passed all 4/4 contracts in 36.9 seconds without compilation; the focused Python release-manifest test passed; independent review passed. A YAML parser was unavailable, so workflow YAML received focused static inspection only.
+- Status: `STATIC_CONTRACTS_VERIFIED`; no compilation, package build, final-JAR manifest verification, compatibility-profile execution, or Minecraft runtime was run. This is not release-ready evidence.
+- Rollback: `git revert 07b087fa1e3c862f086a25e29bab68eec37477d2` removes the aggregate static gate and publication verify-existing step while retaining the reconciled evidence documentation.
