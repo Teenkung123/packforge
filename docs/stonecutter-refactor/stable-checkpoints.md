@@ -470,3 +470,33 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: focused Fabric `mc26_1_to_26_2` `FeaturePolicyTest` and `PackForgeConfigScreenModelTest` passed 19 tests in 11 seconds. Independent review found no blocker. No clean, full build, Minecraft runtime, shader profile, benchmark, or default promotion was run.
 - Status: `PHASE_J_ATLAS_RETRY_POLICY_VERIFIED`; atlas retry remains opt-in and Phase J promotion evidence remains incomplete.
 - Rollback: after reverting later documentation-only checkpoints, `git revert 943354a4897011b62b4c4cab958afbc92fd16035` restores startup-time config mutation and the prior UI effective-state mapping.
+
+## Default-off candidate dispositions
+
+- Date: 2026-08-13
+- Commit SHA: `3168c0f713a475151b57d5ba1b735263a1121c34`
+- Parent SHA: `5693964fde112af22ec60ffdd29d50da9bdfd49c`
+- Scope: freeze the 11 Phase J candidates, their config keys and parent guards, current configured/effective defaults, implementation reachability, six promotion gates, and one required disposition per candidate.
+- Verification: the static validator accepted the catalog and rejected 14 mutations. Independent review confirmed 5 `SAFE_KEEP_DEFAULT_OFF`, 6 `FAILED_WITH_REASON`, 0 promotions, and no unsupported benchmark/runtime claim. CodeGraph found no production consumer for atlas mip scheduling or the model optimizer load methods.
+- Status: `PHASE_J_VERIFIED_COMPLETE_CONSERVATIVE`; the disposition gate is complete and no promotion was attempted. Every runtime/performance gate remains `NOT_RUN`; this checkpoint is not benchmark, compatibility-profile, final-JAR, or Minecraft proof.
+- Rollback: after reverting later documentation-only checkpoints, `git revert 3168c0f713a475151b57d5ba1b735263a1121c34` removes the frozen disposition catalog and restores the older claims-only matrix.
+
+## Runtime compatibility profile reporting
+
+- Date: 2026-08-13
+- Commit SHA: `5ee5f34bc8e56f28f134edab5f311f8797dea557`
+- Parent SHA: `3168c0f713a475151b57d5ba1b735263a1121c34`
+- Scope: add an environment-gated runtime profile marker that records loader-observed mod presence, exact Quick Pack ownership, and the effective state of all 29 capability paths; normal runs remain dormant.
+- Verification: focused Fabric 1.21.1 reporter tests passed three tests in 10 seconds. The parser contract, exact six overlap capabilities, 23 retained capabilities, sorted mod status, and no-request behavior are asserted; independent review passed after those invariants were made exhaustive.
+- Status: `PHASE_I_REPORTER_STRUCTURAL_VERIFIED`; no third-party JAR, smoke client, resource fixture, or compatibility profile was executed.
+- Rollback: `git revert 5ee5f34bc8e56f28f134edab5f311f8797dea557` before reverting `3168c0f` removes the harness-only runtime marker and core initialization call.
+
+## Compatibility profile metadata pins
+
+- Date: 2026-08-13
+- Commit SHA: `2eccf28c7486c037b31465d8330e59a8ea907736`
+- Parent SHA: `5ee5f34bc8e56f28f134edab5f311f8797dea557`
+- Scope: record exact release URLs, versions, and SHA-256 pins for Quick Pack and ImmediatelyFast on Fabric, Forge, and NeoForge 1.21.1 plus the Fabric combined profile; record public-source unavailability evidence for three Resource Pack Unbounded 1.21.1 cells; replace synthetic markers with the runtime reporter contract.
+- Verification: catalog validation passed 36 frozen recipes; the positive `AVAILABLE` control and 19 invalid mutations passed. Independent review confirmed 7 `AVAILABLE`/`UNTESTED`, 26 `PENDING_METADATA`/`UNTESTED`, 3 `UNAVAILABLE`, and no synthetic marker or executed-result claim.
+- Status: `PHASE_I_METADATA_PARTIAL_VERIFIED`; metadata availability is not execution. No artifact was downloaded, materialized, launched, or marked PASS, so Phase I remains incomplete.
+- Rollback: `git revert 2eccf28c7486c037b31465d8330e59a8ea907736` first, then `5ee5f34`, to restore the all-pending catalog foundation.
