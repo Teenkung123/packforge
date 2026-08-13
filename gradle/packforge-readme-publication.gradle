@@ -1,0 +1,48 @@
+def publicationContract = project.ext.packforgeReadmePublicationContract
+if (!(publicationContract instanceof Map)) {
+	throw new GradleException("packforgeReadmePublicationContract must be configured before applying the README publication validator.")
+}
+
+def publicationReadme = publicationContract.readmeFile as File
+def expectedArtifactCount = publicationContract.artifactCount as int
+def expectedTargetKeys = (publicationContract.targetKeys as List)*.toString().sort()
+
+tasks.named("validateTargetRegistry") {
+	inputs.file publicationReadme
+	doLast {
+		def readmeLines = publicationReadme.readLines("UTF-8")
+		def publicationMarker = "<!-- packforge-publication-registry"
+		def markerIndexes = []
+		readmeLines.eachWithIndex { line, index ->
+			if (line == publicationMarker) {
+				markerIndexes.add(index)
+			}
+		}
+		if (markerIndexes.size() != 1) {
+			throw new GradleException("README.md must declare packforge-publication-registry exactly once.")
+		}
+
+		def markerIndex = markerIndexes.first() as int
+		if (markerIndex + 3 >= readmeLines.size()) {
+			throw new GradleException("README.md has a truncated packforge-publication-registry block.")
+		}
+		def artifactLine = readmeLines[markerIndex + 1]
+		def targetLine = readmeLines[markerIndex + 2]
+		if (readmeLines[markerIndex + 3] != "-->" ||
+			!artifactLine.startsWith("artifact-count: ") ||
+			!targetLine.startsWith("target-keys: ")) {
+			throw new GradleException("README.md has a malformed packforge-publication-registry block.")
+		}
+
+		def declaredArtifactCount
+		try {
+			declaredArtifactCount = artifactLine.substring("artifact-count: ".length()).toInteger()
+		} catch (NumberFormatException exception) {
+			throw new GradleException("README publication artifact-count must be an integer.", exception)
+		}
+		def declaredTargetKeys = targetLine.substring("target-keys: ".length()).tokenize(',').sort()
+		if (declaredArtifactCount != expectedArtifactCount || declaredTargetKeys != expectedTargetKeys) {
+			throw new GradleException("README publication declaration is stale: expected artifacts=${expectedArtifactCount}, targets=${expectedTargetKeys}; declared artifacts=${declaredArtifactCount}, targets=${declaredTargetKeys}.")
+		}
+	}
+}

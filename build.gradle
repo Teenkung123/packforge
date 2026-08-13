@@ -14,7 +14,6 @@ version = project.mod_version
 group = project.maven_group
 
 def registryFile = file("gradle/minecraft-targets.json")
-def readmeFile = file("README.md")
 def registry = new JsonSlurper().parse(registryFile)
 if (registry.schemaVersion != 2) {
 	throw new GradleException("Unsupported PackForge target registry schema: ${registry.schemaVersion}")
@@ -1131,7 +1130,6 @@ tasks.register("validateTargetRegistry") {
 	description = "Validates the PackForge target registry and adapter declarations."
 	dependsOn reportSourceMetrics
 	inputs.file registryFile
-	inputs.file readmeFile
 	inputs.files(fileTree("versions") {
 		include "**/*Mixin.java"
 		include "**/packforge.fabric.mixins.json"
@@ -1540,21 +1538,15 @@ tasks.register("validateTargetRegistry") {
 				throw new GradleException("${descriptor} still registers the removed CompositePackResources mixin.")
 			}
 		}
-		def publicationDeclaration = readmeFile.getText("UTF-8") =~ /(?m)^<!-- packforge-publication-registry\r?\nartifact-count: (\d+)\r?\ntarget-keys: ([a-z0-9_,-]+)\r?\n-->$/
-		if (!publicationDeclaration.find()) {
-			throw new GradleException("README.md must declare the machine-readable packforge-publication-registry block.")
-		}
-		def declaredArtifactCount = publicationDeclaration.group(1) as int
-		def declaredTargetKeys = publicationDeclaration.group(2).tokenize(',').sort()
-		if (publicationDeclaration.find()) {
-			throw new GradleException("README.md must declare packforge-publication-registry exactly once.")
-		}
-		def expectedPublicationTargetKeys = publishedTargets.collect { it.key.toString() }.sort()
-		if (declaredArtifactCount != expectedArtifactNames.size() || declaredTargetKeys != expectedPublicationTargetKeys) {
-			throw new GradleException("README publication declaration is stale: expected artifacts=${expectedArtifactNames.size()}, targets=${expectedPublicationTargetKeys}; declared artifacts=${declaredArtifactCount}, targets=${declaredTargetKeys}.")
-		}
 	}
 }
+
+ext.packforgeReadmePublicationContract = [
+	readmeFile: file("README.md"),
+	artifactCount: expectedArtifactNames.size(),
+	targetKeys: publishedTargets.collect { it.key.toString() }.sort().asImmutable()
+]
+apply from: file("gradle/packforge-readme-publication.gradle")
 
 if (!rootProject.ext.has('packforgeStonecutterNodePaths')) {
 	throw new GradleException('Settings did not provide the registry-derived Stonecutter node paths.')
