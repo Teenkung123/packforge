@@ -246,3 +246,23 @@
 - Quick Pack evidence: final Fabric hash `AAD7C8126DEFDA7A9FB115675841C4F2210607F722CA4141BC3C23BECED6E71A` plus Quick Pack 1.5.0 hash `7E93E08D5ADA815DB6874D5BCCA750A12A2AC97F3B80143ED47EF6D70FE32EE1` PASS with ten reloads, module handoff, and natural clean exit.
 - Unrelated state: `.github/ISSUE_TEMPLATE/bug-report.yml` remains modified and unstaged; `.codegraph/` remains untracked and excluded.
 - Rollback: `git revert a3402866b217ac159d6a3cec70d3585028f79732`.
+
+## Phase 17 — deterministic compatibility fixtures
+
+- Date: 2026-08-13
+- Commit SHA: `458616fb1d3eaa96623ce86dfed41749daf60e38`; parent `d186ab0d1687f7b6cca5f7d11121c77e8028ddca`
+- Status: `STRUCTURAL_VERIFIED`
+- Scope: generate nine deterministic 1.21.1 compatibility fixture ZIPs plus manifest contracts for normal, high-entry-count, overlay/namespace/duplicate, font-heavy, model-heavy, mipmap-heavy, and malformed-but-ZIP-readable paths.
+- Verification: `python scripts/Generate-CompatibilityFixtures.py --self-test` passed; repeated generation kept fixture IDs, bytes, CRCs, and contract manifest identical. Unsupported Minecraft versions reject before generation.
+- Limits: no Gradle build, Minecraft launch, final-JAR load, reload/cancellation run, semantic hash, third-party profile, or cross-version fixture proof occurred. These fixtures are inputs for later Phase I/K execution.
+- Rollback: `git revert 458616fb1d3eaa96623ce86dfed41749daf60e38` after reverting the later metrics snapshot.
+
+## Phase 18 — source-metrics snapshot refresh
+
+- Date: 2026-08-13
+- Commit SHA: `b1161295bd3a41a0349841fd67ff3f0c1634c3bd`; parent `458616fb1d3eaa96623ce86dfed41749daf60e38`
+- Status: `FOCUSED_VERIFIED`
+- Scope: update checked-in `source-metrics-current.md` and `source-metrics-current.json` from the deterministic source inventory after current structural work.
+- Verification: `./gradlew.bat reportSourceMetrics --no-daemon --console=plain` PASS in 36 seconds: 210 production Java files, 16,323 nonblank LOC, zero exact/normalized duplicate groups, 15 target-key/version conditional lines, three renderer bodies, two adapters, and 20 publication artifacts.
+- Limits: no compile, package, artifact verification, third-party profile, or Minecraft runtime was run. Metric refresh does not revalidate older final-artifact evidence.
+- Rollback: `git revert b1161295bd3a41a0349841fd67ff3f0c1634c3bd`.

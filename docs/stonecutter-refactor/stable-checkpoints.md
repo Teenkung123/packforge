@@ -500,3 +500,23 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: catalog validation passed 36 frozen recipes; the positive `AVAILABLE` control and 19 invalid mutations passed. Independent review confirmed 7 `AVAILABLE`/`UNTESTED`, 26 `PENDING_METADATA`/`UNTESTED`, 3 `UNAVAILABLE`, and no synthetic marker or executed-result claim.
 - Status: `PHASE_I_METADATA_PARTIAL_VERIFIED`; metadata availability is not execution. No artifact was downloaded, materialized, launched, or marked PASS, so Phase I remains incomplete.
 - Rollback: `git revert 2eccf28c7486c037b31465d8330e59a8ea907736` first, then `5ee5f34`, to restore the all-pending catalog foundation.
+
+## Deterministic compatibility fixtures
+
+- Date: 2026-08-13
+- Commit SHA: `458616fb1d3eaa96623ce86dfed41749daf60e38`
+- Parent SHA: `d186ab0d1687f7b6cca5f7d11121c77e8028ddca`
+- Scope: add a deterministic generator and manifest for the nine required 1.21.1 fixture identities, including normal, high-entry-count, overlay/namespace/duplicate, font-heavy, model-heavy, mipmap-heavy, and malformed-but-ZIP-readable coverage contracts.
+- Verification: `python scripts/Generate-CompatibilityFixtures.py --self-test` passed, proving repeat generation yields the same fixture IDs, bytes, CRCs, and contract manifest. Unsupported Minecraft versions are rejected by the generator. No Gradle build, third-party JAR materialization, Minecraft launch, reload, semantic-hash, cancellation, cross-version, or final-JAR proof was run.
+- Status: `PHASE_I_K_FIXTURE_INPUTS_STRUCTURAL_VERIFIED`; these are deterministic test inputs and execution scenarios, not compatibility or exact-matrix results.
+- Rollback: after reverting `b1161295bd3a41a0349841fd67ff3f0c1634c3bd` and later documentation checkpoints, `git revert 458616fb1d3eaa96623ce86dfed41749daf60e38` removes the fixture generator without changing runtime behavior.
+
+## Source-metrics checkpoint refresh
+
+- Date: 2026-08-13
+- Commit SHA: `b1161295bd3a41a0349841fd67ff3f0c1634c3bd`
+- Parent SHA: `458616fb1d3eaa96623ce86dfed41749daf60e38`
+- Scope: refresh only the checked-in deterministic source-metrics Markdown and JSON snapshot after the compatibility reporter and fixture work.
+- Verification: `./gradlew.bat reportSourceMetrics --no-daemon --console=plain` passed in 36 seconds with 210 production Java files, 16,323 nonblank LOC, zero exact and normalized duplicate groups, 15 target-key/version conditional lines, three renderer bodies plus two adapters, and 20 publication artifacts. No compile, package, artifact verification, or Minecraft runtime was run.
+- Status: `PHASE_A_METRICS_SNAPSHOT_REFRESHED`; this is a source-inventory checkpoint, not a broader build or release verification.
+- Rollback: `git revert b1161295bd3a41a0349841fd67ff3f0c1634c3bd` restores the prior checked-in metric snapshot only.
