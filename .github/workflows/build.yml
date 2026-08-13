@@ -19,9 +19,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up static-validation Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
       - name: Verify Mojang stable release ledger
         shell: pwsh
         run: ./scripts/Verify-Mojang-ReleaseSequence.ps1
+
+      - name: Validate implementation contracts
+        run: |
+          chmod +x gradlew
+          ./gradlew validateImplementationContracts --no-daemon --stacktrace
 
       - name: Generate target matrix from registry
         id: generate
@@ -61,7 +72,7 @@ jobs:
         run: |
           chmod +x gradlew
           for attempt in 1 2 3; do
-            if ./gradlew buildTarget -Ppackforge_target=${{ matrix.target }} --no-daemon --stacktrace; then
+            if ./gradlew buildTarget -Ppackforge_target=${{ matrix.target }} -x validateImplementationContracts --no-daemon --stacktrace; then
               exit 0
             fi
             if [[ "$attempt" -eq 3 ]]; then

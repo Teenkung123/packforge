@@ -108,7 +108,9 @@ jobs:
           fi
 
       - name: Generate registry-derived release manifest
-        run: python scripts/Generate-ReleaseManifest.py --artifacts-dir build/libs --output-dir build/libs/release
+        run: |
+          python scripts/Generate-ReleaseManifest.py --artifacts-dir build/libs --output-dir build/libs/release
+          python scripts/Generate-ReleaseManifest.py --artifacts-dir build/libs --output-dir build/libs/release --verify-existing
 
       - name: Upload verified artifacts
         uses: actions/upload-artifact@v4

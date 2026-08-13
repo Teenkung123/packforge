@@ -80,6 +80,21 @@ def resolvePowerShellExecutable = {
 	}
 	executable.canonicalPath
 }
+def resolvePythonExecutable = {
+	def executableNames = isWindows ? ["python.exe", "python", "py.exe", "py"] : ["python3", "python"]
+	def pathValue = System.getenv("PATH") ?: System.getenv("Path") ?: ""
+	def pathEntries = pathValue
+		.split(java.util.regex.Pattern.quote(File.pathSeparator))
+		.collect { entry -> entry.trim().replaceAll(/^"(.*)"$/, '$1') }
+		.findAll { entry -> !entry.isBlank() }
+	def executable = executableNames
+		.collectMany { executableName -> pathEntries.collect { entry -> new File(entry, executableName) } }
+		.find { candidate -> candidate.isFile() && (isWindows || candidate.canExecute()) }
+	if (executable == null) {
+		throw new GradleException("PackForge fixture validation requires Python; searched ${executableNames} on PATH.")
+	}
+	executable.canonicalPath
+}
 def platformBuilds = [
 	[name: "Fabric", id: "fabric", path: "platform/fabric"],
 	[name: "NeoForge", id: "neoforge", path: "platform/neoforge"],
@@ -1155,6 +1170,71 @@ tasks.register("updateSourceMetricsCheckpoint") {
 }
 
 def stonecutterDirectContractScript = file("scripts/Validate-StonecutterDirectContract.ps1")
+def configScreenContractScript = file("scripts/Validate-ConfigScreenContract.ps1")
+def compatibilityProfileContractScript = file("scripts/Validate-CompatibilityProfileCatalog.ps1")
+def defaultOffCandidateContractScript = file("scripts/Validate-DefaultOffCandidateCatalog.ps1")
+def compatibilityFixtureGenerator = file("scripts/Generate-CompatibilityFixtures.py")
+
+def validateConfigScreenContract = tasks.register("validateConfigScreenContract", Exec) {
+	group = "verification"
+	description = "Validates configuration-screen ownership, routing, and entry-point contracts."
+	workingDir projectDir
+	inputs.files(configScreenContractScript, registryFile)
+	inputs.files(fileTree("common") { include "**/PackForgeConfigScreenModel.java" })
+	inputs.files(fileTree("versions") { include "**/PackForgeConfigScreen*.java" })
+	inputs.files(
+		file("platform/fabric/src/client/java/com/teenkung/packforge/client/config/PackForgeModMenuApi.java"),
+		file("platform/forge/src/main/java/com/teenkung/packforge/forge/PackForgeForge.java"),
+		file("platform/neoforge/src/main/java/com/teenkung/packforge/neoforge/PackForgeNeoForge.java")
+	)
+	doFirst {
+		commandLine resolvePowerShellExecutable(), "-NoProfile", "-NonInteractive", "-File", configScreenContractScript.absolutePath
+	}
+}
+
+def validateCompatibilityProfileCatalog = tasks.register("validateCompatibilityProfileCatalog", Exec) {
+	group = "verification"
+	description = "Validates the frozen compatibility-profile catalog without running mutation self-tests."
+	workingDir projectDir
+	inputs.files(compatibilityProfileContractScript, file("gradle/compatibility-profiles.json"), registryFile)
+	doFirst {
+		commandLine resolvePowerShellExecutable(), "-NoProfile", "-NonInteractive", "-File", compatibilityProfileContractScript.absolutePath
+	}
+}
+
+def validateDefaultOffCandidateCatalog = tasks.register("validateDefaultOffCandidateCatalog", Exec) {
+	group = "verification"
+	description = "Validates the frozen default-off candidate catalog without running mutation self-tests."
+	workingDir projectDir
+	inputs.files(
+		defaultOffCandidateContractScript,
+		file("gradle/default-off-candidates.json"),
+		file("common/src/main/java/com/teenkung/packforge/config/PackForgeConfig.java")
+	)
+	doFirst {
+		commandLine resolvePowerShellExecutable(), "-NoProfile", "-NonInteractive", "-File", defaultOffCandidateContractScript.absolutePath
+	}
+}
+
+def validateCompatibilityFixtures = tasks.register("validateCompatibilityFixtures", Exec) {
+	group = "verification"
+	description = "Runs the deterministic compatibility-fixture generator self-test."
+	workingDir projectDir
+	inputs.file compatibilityFixtureGenerator
+	doFirst {
+		commandLine resolvePythonExecutable(), compatibilityFixtureGenerator.absolutePath, "--self-test"
+	}
+}
+
+def validateImplementationContracts = tasks.register("validateImplementationContracts") {
+	group = "verification"
+	description = "Runs all authoritative implementation-contract validators once."
+	dependsOn validateConfigScreenContract
+	dependsOn validateCompatibilityProfileCatalog
+	dependsOn validateDefaultOffCandidateCatalog
+	dependsOn validateCompatibilityFixtures
+}
+
 def validateStonecutterDirectContract = tasks.register("validateStonecutterDirectContract", Exec) {
 	group = "verification"
 	description = "Validates the frozen direct-only Stonecutter graph and rollback/parity isolation."
@@ -1178,6 +1258,7 @@ def validateStonecutterDirectContract = tasks.register("validateStonecutterDirec
 tasks.register("validateTargetRegistry") {
 	group = "verification"
 	description = "Validates the PackForge target registry and adapter declarations."
+	dependsOn validateImplementationContracts
 	dependsOn validateStonecutterDirectContract
 	dependsOn reportSourceMetrics
 	inputs.file registryFile
