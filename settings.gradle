@@ -1,18 +1,38 @@
 import groovy.json.JsonSlurper
 
 pluginManagement {
-	 repositories {
-		 gradlePluginPortal()
-		 mavenCentral()
-		 maven { url = 'https://maven.fabricmc.net/' }
-		 maven { url = 'https://maven.minecraftforge.net' }
-		 maven { url = 'https://maven.neoforged.net/releases' }
-		 maven { url = 'https://maven.kikugie.dev/releases' }
-	 }
+	def pluginRegistry = new JsonSlurper().parse(new File(settingsDir, 'gradle/minecraft-targets.json'))
+	def directFabricCells = pluginRegistry.targets.findAll { target ->
+		target.platforms.fabric?.stonecutterBuildMode?.toString() == 'direct'
+	}
+	def fabricLoomVersions = directFabricCells
+		.collect { target -> target.platforms.fabric?.loomVersion?.toString() }
+		.findAll { version -> version != null && !version.isBlank() }
+		.toSet()
+	if (!directFabricCells.isEmpty() && fabricLoomVersions.size() != 1) {
+		throw new GradleException("Direct Stonecutter Fabric cells require exactly one registry Loom version; cells=${directFabricCells*.key}, found=${fabricLoomVersions.sort()}.")
+	}
+	def fabricLoomVersion = fabricLoomVersions.isEmpty() ? null : fabricLoomVersions.first()
+
+	repositories {
+		gradlePluginPortal()
+		mavenCentral()
+		maven { url = 'https://maven.fabricmc.net/' }
+		maven { url = 'https://maven.minecraftforge.net' }
+		maven { url = 'https://maven.neoforged.net/releases' }
+		maven { url = 'https://maven.kikugie.dev/releases' }
+	}
+
+	plugins {
+		if (fabricLoomVersion != null) {
+			id 'fabric-loom' version fabricLoomVersion
+			id 'net.fabricmc.fabric-loom' version fabricLoomVersion
+		}
+	}
 }
 
 plugins {
-	 id 'dev.kikugie.stonecutter' version '0.9.7'
+	id 'dev.kikugie.stonecutter' version '0.9.7'
 }
 
 def registryFile = file('gradle/minecraft-targets.json')
@@ -49,14 +69,27 @@ if (expectedStonecutterSourceAnchors.collect { it.target }.size() != expectedSto
 }
 
 def loaderIds = new LinkedHashSet<String>()
+def allowedStonecutterBuildModes = ['delegated', 'direct'] as Set
 registry.targets.each { target ->
 	if (!(target.platforms instanceof Map) || target.platforms.isEmpty()) {
 		throw new GradleException("PackForge target '${target.key}' must declare at least one loader platform.")
 	}
-	target.platforms.keySet().each { loaderId -> loaderIds.add(loaderId.toString()) }
+	target.platforms.each { loaderId, platform ->
+		loaderId = loaderId.toString()
+		loaderIds.add(loaderId)
+		def buildMode = (platform.stonecutterBuildMode ?: 'delegated').toString()
+		if (buildMode !in allowedStonecutterBuildModes) {
+			throw new GradleException("PackForge target '${target.key}' loader '${loaderId}' has unsupported Stonecutter build mode '${buildMode}'; allowed=${allowedStonecutterBuildModes.sort()}.")
+		}
+		def directBuildscript = new File(settingsDir, "platform/${loaderId}/build.gradle")
+		if (buildMode == 'direct' && !directBuildscript.isFile()) {
+			throw new GradleException("PackForge target '${target.key}' loader '${loaderId}' requests direct Stonecutter build without '${directBuildscript}'.")
+		}
+	}
 }
 
 def expectedStonecutterNodePaths = []
+def expectedDirectStonecutterNodePaths = []
 stonecutter {
 	kotlinController = false
 	centralScript = 'stonecutter-build.gradle'
@@ -65,8 +98,16 @@ stonecutter {
 			branch(loaderId) {
 				registry.targets.findAll { target -> target.platforms[loaderId] != null }.each { target ->
 					def targetKey = target.key.toString()
-					version(targetKey, target.minecraftVersion.toString()).buildscript('../stonecutter-build.gradle')
-					expectedStonecutterNodePaths.add(":${loaderId}:${targetKey}")
+					def nodePath = ":${loaderId}:${targetKey}"
+					def buildMode = (target.platforms[loaderId].stonecutterBuildMode ?: 'delegated').toString()
+					def buildscriptPath = buildMode == 'direct'
+						? "../platform/${loaderId}/build.gradle"
+						: '../stonecutter-build.gradle'
+					version(targetKey, target.minecraftVersion.toString()).buildscript(buildscriptPath)
+					expectedStonecutterNodePaths.add(nodePath)
+					if (buildMode == 'direct') {
+						expectedDirectStonecutterNodePaths.add(nodePath)
+					}
 				}
 			}
 		}
@@ -101,6 +142,7 @@ if (actualDistributionCounts != expectedDistributionCounts) {
 // repository-level registry and release aggregation tasks available at root.
 gradle.rootProject {
 	ext.packforgeStonecutterNodePaths = expectedStonecutterNodePaths.asImmutable()
+	ext.packforgeStonecutterDirectNodePaths = expectedDirectStonecutterNodePaths.sort().asImmutable()
 	ext.packforgeStonecutterLoaderBranches = expectedLoaderBranches.asImmutable()
 	ext.packforgeStonecutterSourceAnchors = expectedStonecutterSourceAnchors.collect { it.asImmutable() }.asImmutable()
 	apply from: file('build.gradle')

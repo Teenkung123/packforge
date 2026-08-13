@@ -1,11 +1,33 @@
+import groovy.json.JsonSlurper
+
 plugins {
 	id "fabric-loom" apply false
 	id "net.fabricmc.fabric-loom" apply false
 	id "maven-publish"
 }
 
+def physicalPlatformRoot = project.buildFile.parentFile.canonicalFile
+def physicalRepositoryRoot = physicalPlatformRoot.parentFile.parentFile.canonicalFile
+def stonecutterDirectNode = rootProject != project
+if (stonecutterDirectNode) {
+	def pathSegments = project.path.tokenize(':')
+	if (pathSegments != ['fabric', project.name]) {
+		throw new GradleException("Direct Fabric build script requires a :fabric:<target> Stonecutter leaf; found '${project.path}'.")
+	}
+	if (rootProject.projectDir.canonicalFile != physicalRepositoryRoot) {
+		throw new GradleException("Direct Fabric node repository mismatch: root=${rootProject.projectDir}, physical=${physicalRepositoryRoot}.")
+	}
+	def currentTargetKey = stonecutter.current.project.toString()
+	if (currentTargetKey != project.name) {
+		throw new GradleException("Direct Fabric node target mismatch: path=${project.name}, Stonecutter=${currentTargetKey}.")
+	}
+	ext.packforgeRepositoryRootOverride = physicalRepositoryRoot
+	ext.packforgeTargetKeyOverride = currentTargetKey
+}
+
 ext.packforgePlatformId = "fabric"
-apply from: "../../gradle/packforge-target.gradle"
+ext.packforgePlatformSourceRoot = physicalPlatformRoot
+apply from: new File(physicalRepositoryRoot, "gradle/packforge-target.gradle")
 apply plugin: packforgePlatform.mappingMode == "named" ? "fabric-loom" : "net.fabricmc.fabric-loom"
 
 version = packforgeModVersion
@@ -54,7 +76,7 @@ loom {
 def mainJavaDirs = [
 	new File(packforgeCommonRoot, "src/main/java"),
 	new File(packforgeAdapterCommonRoot, "src/main/java"),
-	file("src/main/java"),
+	new File(packforgePlatformSourceRoot, "src/main/java"),
 	new File(packforgeAdapterPlatformRoot, "src/main/java")
 ]
 if (target.key == "mc1_21_5") {
@@ -66,7 +88,7 @@ if (target.key in ["mc1_21_9", "mc1_21_10"]) {
 def mainResourceDirs = [
 	new File(packforgeCommonRoot, "src/main/resources"),
 	new File(packforgeAdapterCommonRoot, "src/main/resources"),
-	file("src/main/resources"),
+	new File(packforgePlatformSourceRoot, "src/main/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/main/resources")
 ]
 if (target.key == "mc1_21_5") {
@@ -84,7 +106,7 @@ if (target.key in ["mc1_20_5", "mc1_20_6"]) {
 def clientJavaDirs = [
 	new File(packforgeCommonRoot, "src/client/java"),
 	new File(packforgeAdapterCommonRoot, "src/client/java"),
-	file("src/client/java"),
+	new File(packforgePlatformSourceRoot, "src/client/java"),
 	new File(packforgeAdapterPlatformRoot, "src/client/java")
 ]
 if (target.key in ["mc1_20_5", "mc1_20_6"]) {
@@ -150,7 +172,7 @@ mainJavaSources.addAll(packforgeSharedMainJavaSources)
 def clientResourceDirs = [
 	new File(packforgeCommonRoot, "src/client/resources"),
 	new File(packforgeAdapterCommonRoot, "src/client/resources"),
-	file("src/client/resources"),
+	new File(packforgePlatformSourceRoot, "src/client/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/client/resources")
 ]
 if (target.key in ["mc1_21_9", "mc1_21_10"]) {
@@ -159,7 +181,7 @@ if (target.key in ["mc1_21_9", "mc1_21_10"]) {
 def testJavaDirs = [
 	new File(packforgeCommonRoot, "src/test/java"),
 	new File(packforgeAdapterCommonRoot, "src/test/java"),
-	file("src/test/java"),
+	new File(packforgePlatformSourceRoot, "src/test/java"),
 	new File(packforgeAdapterPlatformRoot, "src/test/java")
 ]
 if (target.key in ["mc1_20_5", "mc1_20_6"]) {
@@ -168,7 +190,7 @@ if (target.key in ["mc1_20_5", "mc1_20_6"]) {
 def testResourceDirs = [
 	new File(packforgeCommonRoot, "src/test/resources"),
 	new File(packforgeAdapterCommonRoot, "src/test/resources"),
-	file("src/test/resources"),
+	new File(packforgePlatformSourceRoot, "src/test/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/test/resources")
 ]
 def testJavaSources = testJavaDirs.collect { root ->
@@ -421,11 +443,12 @@ java {
 
 jar {
 	inputs.property "projectName", project.name
+	inputs.property "licenseArtifactIdentity", "packforge-${packforgePlatformId}"
 	duplicatesStrategy = DuplicatesStrategy.FAIL
 	archiveFileName = "packforge-fabric-${project.version}-mc${packforgeArtifactMinecraft}.jar"
 
-	from("../../LICENSE") {
-		rename { "${it}_${project.name}" }
+	from(new File(packforgeRepositoryRoot, "LICENSE")) {
+		rename { "${it}_packforge-${packforgePlatformId}" }
 	}
 }
 
@@ -454,5 +477,158 @@ publishing {
 		}
 	}
 	repositories {
+	}
+}
+
+if (stonecutterDirectNode) {
+	// Retain Phase D's nested-build path as an explicit rollback and parity oracle
+	// while this leaf proves the loader plugin directly in the root Gradle graph.
+	apply from: new File(packforgeRepositoryRoot, "stonecutter-build.gradle")
+
+	def expectedDirectArtifactName = "packforge-fabric-${project.version}-mc${packforgeArtifactMinecraft}.jar"
+	def finalRemapTask = tasks.named("remapJar")
+	def directArtifact = finalRemapTask.flatMap { task -> task.archiveFile }
+	def delegatedArtifactForParity = new File(
+		packforgePlatformSourceRoot,
+		"build/${target.key}/libs/${expectedDirectArtifactName}"
+	)
+
+	def hashStream = { InputStream input ->
+		def digest = java.security.MessageDigest.getInstance("SHA-256")
+		byte[] buffer = new byte[8192]
+		int count
+		while ((count = input.read(buffer)) != -1) {
+			digest.update(buffer, 0, count)
+		}
+		return java.util.HexFormat.of().formatHex(digest.digest())
+	}
+	def expectedStonecutterManifestAttributes = [
+		"Stonecutter-Plugin-Version": "0.9.7",
+		"Stonecutter-Gradle-Version": gradle.gradleVersion,
+		"Stonecutter-Node-Project": project.name,
+		"Stonecutter-Node-Version": stonecutter.current.version.toString()
+	]
+	def normalizedManifestHash = { InputStream input, boolean directManifest ->
+		def manifest = new java.util.jar.Manifest(input)
+		def normalizeAttributes = { attributes ->
+			def normalized = new TreeMap<String, String>()
+			attributes.each { key, value ->
+				normalized[key.toString()] = value.toString()
+			}
+			return normalized
+		}
+		def mainAttributes = normalizeAttributes(manifest.mainAttributes)
+		def actualStonecutterAttributes = mainAttributes.findAll { name, value -> name.startsWith("Stonecutter-") }
+		def expectedAttributes = directManifest ? expectedStonecutterManifestAttributes : [:]
+		if (actualStonecutterAttributes != expectedAttributes) {
+			throw new GradleException("Fabric artifact manifest Stonecutter attributes mismatch: expected=${expectedAttributes}, actual=${actualStonecutterAttributes}.")
+		}
+		expectedStonecutterManifestAttributes.keySet().each { name -> mainAttributes.remove(name) }
+		def sections = new TreeMap<String, Map<String, String>>()
+		manifest.entries.each { name, attributes -> sections[name] = normalizeAttributes(attributes) }
+		def canonical = groovy.json.JsonOutput.toJson([
+			main: mainAttributes,
+			sections: sections
+		])
+		return new ByteArrayInputStream(canonical.getBytes("UTF-8")).withCloseable(hashStream)
+	}
+	def inspectArtifact = { File artifact, boolean directManifest ->
+		if (!artifact.isFile()) {
+			throw new GradleException("Missing Fabric parity artifact: ${artifact}.")
+		}
+		def entryHashes = new TreeMap<String, List<String>>()
+		def zip = new java.util.zip.ZipFile(artifact)
+		try {
+			zip.entries().each { entry ->
+				def hashes = entryHashes.computeIfAbsent(entry.name) { ignored -> [] }
+				if (entry.directory) {
+					hashes.add("<directory>")
+				} else if (entry.name == "META-INF/MANIFEST.MF") {
+					// Stonecutter adds build-provenance attributes only to in-graph JARs.
+					// Require the exact known values, then compare every remaining main and section attribute.
+					hashes.add(zip.getInputStream(entry).withCloseable { input ->
+						normalizedManifestHash(input, directManifest)
+					})
+				} else {
+					hashes.add(zip.getInputStream(entry).withCloseable(hashStream))
+				}
+			}
+		} finally {
+			zip.close()
+		}
+		def duplicates = entryHashes.findAll { name, hashes -> hashes.size() != 1 }.keySet().toList().sort()
+		if (!duplicates.isEmpty()) {
+			throw new GradleException("Fabric artifact '${artifact.name}' contains duplicate ZIP entries: ${duplicates}.")
+		}
+		return entryHashes.asImmutable()
+	}
+
+	def directBuild = tasks.register("buildStonecutterDirectNode") {
+		group = "build"
+		description = "Builds ${project.path} directly in the root Stonecutter graph."
+		dependsOn(tasks.named("build"))
+		doLast {
+			def artifact = directArtifact.get().asFile
+			if (artifact.name != expectedDirectArtifactName || !artifact.isFile()) {
+				throw new GradleException("Direct Fabric node artifact mismatch: expected=${expectedDirectArtifactName}, actual=${artifact}.")
+			}
+		}
+	}
+
+	finalRemapTask.configure {
+		mustRunAfter(tasks.named("buildStonecutterDelegatedNode"))
+	}
+
+	tasks.register("verifyStonecutterDirectNode") {
+		group = "verification"
+		description = "Compares the direct final remapped JAR with the standalone Fabric artifact by ZIP entry content."
+		dependsOn(":validateTargetRegistry")
+		dependsOn(tasks.named("buildStonecutterDelegatedNode"))
+		dependsOn(directBuild)
+		doLast {
+			def directFile = directArtifact.get().asFile
+			def directEntries = inspectArtifact(directFile, true)
+			def delegatedEntries = inspectArtifact(delegatedArtifactForParity, false)
+			if (directEntries != delegatedEntries) {
+				def directNames = directEntries.keySet()
+				def delegatedNames = delegatedEntries.keySet()
+				def missing = delegatedNames.findAll { name -> !directNames.contains(name) }.sort()
+				def extra = directNames.findAll { name -> !delegatedNames.contains(name) }.sort()
+				def changed = directNames.intersect(delegatedNames)
+					.findAll { name -> directEntries[name] != delegatedEntries[name] }
+					.sort()
+				throw new GradleException("Direct Fabric artifact differs from standalone artifact: missing=${missing}, extra=${extra}, changed=${changed}.")
+			}
+
+			def zip = new java.util.zip.ZipFile(directFile)
+			try {
+				def metadataEntry = zip.getEntry("fabric.mod.json")
+				def capabilitiesEntry = zip.getEntry("packforge-capabilities.properties")
+				def requiredEntries = [
+					metadataEntry,
+					capabilitiesEntry,
+					zip.getEntry("packforge.accesswidener"),
+					zip.getEntry(mainMixinConfig),
+					zip.getEntry(clientMixinConfig)
+				]
+				if (requiredEntries.any { entry -> entry == null }) {
+					throw new GradleException("Direct Fabric artifact is missing required metadata, mixin, or access-widener entries.")
+				}
+				def metadata = new JsonSlurper().parse(zip.getInputStream(metadataEntry))
+				def capabilities = new Properties()
+				zip.getInputStream(capabilitiesEntry).withCloseable { input -> capabilities.load(input) }
+				if (metadata.id != "packforge"
+					|| metadata.version?.toString() != project.version.toString()
+					|| metadata.depends?.minecraft?.toString() != loaderConfig.minecraftDependency.toString()
+					|| metadata.depends?.fabricloader?.toString() != loaderConfig.loaderDependency.toString()
+					|| capabilities.getProperty("target") != target.key.toString()
+					|| capabilities.getProperty("minecraft") != packforgeArtifactMinecraft) {
+					throw new GradleException("Direct Fabric artifact metadata does not match registry target '${target.key}'.")
+				}
+			} finally {
+				zip.close()
+			}
+			logger.lifecycle("Direct Fabric node parity verified: ${directFile.name} (${directEntries.size()} ZIP entries)")
+		}
 	}
 }

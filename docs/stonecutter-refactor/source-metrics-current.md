@@ -12,7 +12,7 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 | Bridge LOC | 5303 (32.88%) |
 | Exact duplicate groups | 0 |
 | Normalized version duplicate groups | 0 |
-| Platform `target.key` references | 80 |
+| Platform `target.key` references | 83 |
 | Target-key/version conditional lines | 85 |
 | Version-specific configuration renderers | 4 |
 | Exact release cells | 22 |

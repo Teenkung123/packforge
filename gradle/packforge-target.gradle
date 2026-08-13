@@ -1,6 +1,9 @@
 import groovy.json.JsonSlurper
 
-def repositoryRoot = rootProject.file("../..").canonicalFile
+def extraProperties = project.extensions.extraProperties
+def repositoryRoot = (extraProperties.has("packforgeRepositoryRootOverride")
+	? project.file(extraProperties.get("packforgeRepositoryRootOverride"))
+	: rootProject.file("../..")).canonicalFile
 def registryFile = new File(repositoryRoot, "gradle/minecraft-targets.json")
 if (!registryFile.isFile()) {
 	throw new GradleException("PackForge target registry is missing: ${registryFile}")
@@ -17,7 +20,12 @@ if (rootPropertiesFile.isFile()) {
 	rootPropertiesFile.withInputStream { rootProperties.load(it) }
 }
 
-def targetKey = project.findProperty("packforge_target") ?: rootProperties.getProperty("packforge_target") ?: registry.defaultTarget
+def targetKey = extraProperties.has("packforgeTargetKeyOverride")
+	? extraProperties.get("packforgeTargetKeyOverride")?.toString()
+	: project.findProperty("packforge_target") ?: rootProperties.getProperty("packforge_target") ?: registry.defaultTarget
+if (targetKey == null || targetKey.isBlank()) {
+	throw new GradleException("PackForge target override must be a non-blank registry key.")
+}
 def target = registry.targets.find { it.key == targetKey }
 if (target == null) {
 	def validTargets = registry.targets.collect { it.key }.join(", ")

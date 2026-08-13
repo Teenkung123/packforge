@@ -55,8 +55,8 @@
         "normalizedGroupReductionPercent": 100.00
     },
     "buildBranches": {
-        "targetKeyReferences": 137,
-        "platformTargetKeyReferences": 80,
+        "targetKeyReferences": 143,
+        "platformTargetKeyReferences": 83,
         "targetVersionReferences": 15,
         "targetKeyLiteralReferences": 319,
         "targetConditionalLines": 85

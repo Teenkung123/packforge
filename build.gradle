@@ -63,6 +63,18 @@ def platformBuilds = [
 ]
 
 def targetSupports = { target, platform -> target.platforms[platform.id] != null }
+def stonecutterBuildMode = { target, platform ->
+	(target.platforms[platform.id].stonecutterBuildMode ?: "delegated").toString()
+}
+def stonecutterNodePath = { target, platform -> ":${platform.id}:${target.key}" }
+def directStonecutterArtifactDirectory = { target, platform ->
+	project(stonecutterNodePath(target, platform)).layout.buildDirectory.dir("libs")
+}
+def artifactSourceDirectory = { target, platform ->
+	stonecutterBuildMode(target, platform) == "direct"
+		? directStonecutterArtifactDirectory(target, platform)
+		: file("${platform.path}/build/${target.key}/libs")
+}
 def publishedTargetKeys = registry.releaseCells
 	.groupBy { it.targetKey.toString() }
 	.findAll { targetKey, cells -> cells.every { it.buildStatus.toString() == "existing" } }
@@ -1523,7 +1535,11 @@ tasks.register("validateTargetRegistry") {
 if (!rootProject.ext.has('packforgeStonecutterNodePaths')) {
 	throw new GradleException('Settings did not provide the registry-derived Stonecutter node paths.')
 }
+if (!rootProject.ext.has('packforgeStonecutterDirectNodePaths')) {
+	throw new GradleException('Settings did not provide the registry-derived direct Stonecutter node paths.')
+}
 def stonecutterNodePaths = rootProject.ext.packforgeStonecutterNodePaths as List
+def stonecutterDirectNodePaths = (rootProject.ext.packforgeStonecutterDirectNodePaths as List)*.toString().sort()
 def stonecutterSourceAnchors = rootProject.ext.packforgeStonecutterSourceAnchors as List
 def stonecutterValidationPreparationTasks = stonecutterNodePaths.collectMany { nodePath ->
 	["stonecutterPrepare", "stonecutterPrepareTest"].collect { taskName ->
@@ -1539,6 +1555,14 @@ tasks.register("validateStonecutterRegistry") {
 	description = "Validates the registry-derived Stonecutter loader branches and target-node bijection."
 	dependsOn tasks.named("validateTargetRegistry")
 	doLast {
+		def expectedDirectNodePaths = targets.collectMany { target ->
+			platformBuilds.findAll { platform ->
+				targetSupports(target, platform) && stonecutterBuildMode(target, platform) == "direct"
+			}.collect { platform -> stonecutterNodePath(target, platform) }
+		}.sort()
+		if (stonecutterDirectNodePaths != expectedDirectNodePaths) {
+			throw new GradleException("Stonecutter direct-node ledger mismatch: expected=${expectedDirectNodePaths}, actual=${stonecutterDirectNodePaths}.")
+		}
 		def expectedNodeCount = targets.sum { target -> target.platforms.size() } as int
 		if (stonecutterNodePaths.size() != expectedNodeCount
 			|| stonecutterNodePaths.size() != stonecutterNodePaths.toSet().size()) {
@@ -1598,14 +1622,26 @@ tasks.register("printResolvedMatrix") {
 	}
 }
 
+def registerPlatformBuildTask = { String taskName, target, platform ->
+	if (stonecutterBuildMode(target, platform) == "direct") {
+		return tasks.register(taskName) {
+			group = "build"
+			description = "Builds the ${platform.name} PackForge jar for ${target.artifactMinecraft} directly in the Stonecutter graph."
+			dependsOn tasks.named("validateTargetRegistry")
+			dependsOn "${stonecutterNodePath(target, platform)}:buildStonecutterDirectNode"
+		}
+	}
+	return tasks.register(taskName, Exec) {
+		group = "build"
+		description = "Builds the ${platform.name} PackForge jar for ${target.artifactMinecraft}."
+		dependsOn tasks.named("validateTargetRegistry")
+		commandLine nestedCommand(platform, target, "build")
+	}
+}
+
 platformBuilds.each { platform ->
 	if (targetSupports(selectedTarget, platform)) {
-		tasks.register("build${platform.name}Platform", Exec) {
-			group = "build"
-			description = "Builds the ${platform.name} PackForge jar for ${selectedTarget.artifactMinecraft}."
-			dependsOn tasks.named("validateTargetRegistry")
-			commandLine nestedCommand(platform, selectedTarget, "build")
-		}
+		registerPlatformBuildTask("build${platform.name}Platform", selectedTarget, platform)
 
 		tasks.register("run${platform.name}Client", Exec) {
 			group = "run"
@@ -1624,14 +1660,29 @@ targets.each { target ->
 	def targetBuildTasks = []
 
 	platformBuilds.findAll { targetSupports(target, it) }.each { platform ->
-		def buildTask = tasks.register("build${platform.name}${target.taskSuffix}Platform", Exec) {
-			group = "build"
-			description = "Builds the ${platform.name} PackForge jar for ${target.artifactMinecraft}."
-			dependsOn tasks.named("validateTargetRegistry")
-			commandLine nestedCommand(platform, target, "build")
-		}
+		def buildTask = registerPlatformBuildTask("build${platform.name}${target.taskSuffix}Platform", target, platform)
 		targetBuildTasks << buildTask
 		buildTasksByPlatform[platform.id] << buildTask
+		if (stonecutterBuildMode(target, platform) == "direct") {
+			def directCollectTask = tasks.register("collect${platform.name}${target.taskSuffix}DirectJar", Copy) {
+				group = "build"
+				description = "Collects the direct ${platform.name} artifact for ${target.artifactMinecraft} into root build/libs."
+				dependsOn buildTask
+				duplicatesStrategy = DuplicatesStrategy.FAIL
+				from(artifactSourceDirectory(target, platform)) {
+					include artifactName(target, platform)
+				}
+				into layout.buildDirectory.dir("libs")
+			}
+			tasks.register("verify${platform.name}${target.taskSuffix}DirectArtifact") {
+				group = "verification"
+				description = "Validates the collected direct ${platform.name} artifact for ${target.artifactMinecraft}."
+				dependsOn directCollectTask
+				doLast {
+					verifyArtifact(target, platform, layout.buildDirectory.file("libs/${artifactName(target, platform)}").get().asFile)
+				}
+			}
+		}
 
 		tasks.register("run${platform.name}${target.taskSuffix}Client", Exec) {
 			group = "run"
@@ -1648,7 +1699,7 @@ targets.each { target ->
 		duplicatesStrategy = DuplicatesStrategy.FAIL
 
 		platformBuilds.findAll { targetSupports(target, it) }.each { platform ->
-			from("${platform.path}/build/${target.key}/libs") {
+			from(artifactSourceDirectory(target, platform)) {
 				include artifactName(target, platform)
 			}
 		}
@@ -1761,7 +1812,7 @@ tasks.register("collectPlatformJars", Copy) {
 	dependsOn selectedBuildTasks
 	duplicatesStrategy = DuplicatesStrategy.FAIL
 	platformBuilds.findAll { targetSupports(selectedTarget, it) }.each { platform ->
-		from("${platform.path}/build/${selectedTarget.key}/libs") {
+		from(artifactSourceDirectory(selectedTarget, platform)) {
 			include artifactName(selectedTarget, platform)
 		}
 	}
@@ -1795,6 +1846,7 @@ tasks.register("build") {
 tasks.register("clean") {
 	group = "build"
 	description = "Cleans root and platform build outputs."
+	dependsOn stonecutterDirectNodePaths.collect { nodePath -> "${nodePath}:clean" }
 	doLast {
 		delete layout.buildDirectory
 		platformBuilds.each { platform -> delete file("${platform.path}/build") }
