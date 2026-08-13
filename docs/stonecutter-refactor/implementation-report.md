@@ -1,109 +1,93 @@
 # Implementation report
 
-This file starts as the baseline report and is extended after each verified phase. Executed baseline evidence remains in `baseline.md`, `artifact-consolidation.md`, and `compatibility-matrix.md`.
+Date: 2026-08-13
 
-Current status: implementation is complete on `codex/packforge-stonecutter-refactor`. The registry contains all 22 exact releases, every Java 21 family is consolidated and range-tested, the final manifest contains 20 artifacts, all 62 applicable release/loader cells pass final-artifact production smoke, and the required Quick Pack 1.5.0 profile passes the exact final Fabric artifact. Final evidence is in `final-validation.md`; older sections below remain chronological history.
+Current status: **PARTIAL** on `codex/packforge-stonecutter-refactor`; **NOT RELEASE READY**.
 
-Phase 1 evidence: `validateTargetRegistry` and `printResolvedMatrix` pass with 22 exact release cells; a focused all-loader `mc1_21_1` build and artifact verification pass. The first focused attempt found and repaired the child-build schema guard; no functional artifact change was intended.
+This report describes current implementation state. Earlier full-matrix and Quick Pack runs are preserved below as historical evidence, but later direct-build and artifact changes invalidate them as current final-JAR proof. See `final-validation.md` for current acceptance gaps.
 
-Phase 2 evidence: Stonecutter 0.9.7 generates `:mc1_21_1`, and `verifyStonecutterCurrentTarget` builds the three standalone loader projects and checks the exact current artifact set. The first delegation was intentionally rejected as a recursive task graph and replaced with direct platform invocations. Follow-up commit `80a35d7bff2a186bf62a3696dc54dcf2dc639e14` restores the repository-level registry/release tasks on the Stonecutter root and wires the pilot verifier to the registry guard.
+## Current phase status
 
-Phase 5 evidence: `FeaturePolicy` now owns capability/config gating and copies the live config at a policy boundary. `ReloadFeatureSnapshot.capture()` uses one policy instance, while the unchanged `FeatureFlags` facade preserves existing callers. The focused Fabric suite passes with 106 tests.
+| Phase | Status | Implemented | Still required |
+|---|---|---|---|
+| A — audit and source gates | `VERIFIED_COMPLETE` | Deterministic source inventory, duplicate checks, ownership/category metrics, conditional counts, renderer-family counts, and registry/publication counts. | Rerun after later structural changes. |
+| B — Quick Pack ownership | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Exactly six overlap capabilities are handed off; 23 capabilities remain PackForge-owned; mixed non-overlap behavior is retained; UI reports configured/effective ownership. | Current final-JAR profiles on required loaders. |
+| C — optional-mod detection | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Loader-neutral runtime detection and environment-gated profile reporter exist; detection failures fail conservatively. | Current Forge/NeoForge profile launches and retained evidence. |
+| D — registry graph | `STRUCTURAL_VERIFIED` | Registry generates 19 source anchors, 53 loader distributions, and a separate 62-cell exact runtime ledger. | Keep registry/direct-node bijection mandatory as graph evolves. |
+| E — authoritative direct build | `PARTIAL` | All 53 loader distributions are authoritative direct cells; public graph is direct-only; contract validation is mandatory. | All-53 compile/package parity, Java 17/21/25 proof, remap/refmap/JarJar proof, runtime, true preprocessing decision/proof, then removal of nested parity oracle. |
+| F — source ownership | `PARTIAL` | Zero exact/normalized duplicate groups; 15 target/version conditionals; registry-backed source policy; deterministic metric snapshot. | Raw LOC reduction target is not met; retain justification and prevent branch/duplicate regression. |
+| G — configuration renderers | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Unknown fields survive save; integer validation is shared; renderer families reduced to three bodies plus two adapters; atlas retry configured/effective state is separated. | Live UI parity across renderer families and shader/atlas runtime behavior. |
+| H — range artifacts | `IMPLEMENTED_UNVERIFIED` | Registry expresses seven publication anchors and 20 loader artifacts without crossing maturity boundaries. | Rebuild current bytes and repeat same-JAR proof for every exact release in each range. |
+| I — compatibility profiles | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | 36-profile catalog, pinned available inputs, unavailability evidence, profile reporter, schema-2 materializer, three-loader transport, and deterministic fixtures. | Downloads/launches and current final-JAR PASS evidence. |
+| J — default-off evaluation | `VERIFIED_COMPLETE_CONSERVATIVE` | Eleven candidates frozen: five `SAFE_KEEP_DEFAULT_OFF`, six `FAILED_WITH_REASON`, zero promoted. | Runtime/performance gates only if a future promotion is proposed. |
+| K — exact final-artifact matrix | `PARTIAL` | Existing-manifest verifier, exact-cell controller, provenance transport, and nine deterministic fixtures exist. | Current 20-JAR manifest plus full 62-cell runtime/reload/fixture/exit proof. |
+| L — final reconciliation | `PARTIAL` | Current-status docs no longer present historical 62-cell, Quick Pack, manifest, or hashes as current proof. | Final evidence and rollback checkpoint after H/K and required profiles pass. |
 
-Phase 6 evidence: the identical 1.21.1/1.21.4/1.21.8 `FilePackResourcesMixin`, `SharedZipFileAccessMixin`, and `ReloadableResourceManagerMixin` implementations now live in `versions/mc1_21_shared/common/src/main/java`. Fabric, Forge, and NeoForge source sets include that root for the three proven targets, while the registry verifier resolves effective ownership and keeps 1.21.11 version-local. Full three-platform target builds and artifact verification pass for all three affected targets.
+## Current build architecture
 
-Phase 6b evidence: the exact duplicate 1.21.1/1.21.4/1.21.8 `PackForgeClient` reset bootstrap now lives in the shared 1.21 client root. The registry verifier enforces one effective owner per target, and all nine affected loader/target builds pass.
+`gradle/minecraft-targets.json` remains schema v2 and records 22 exact Minecraft releases. Registry generation creates 19 source anchors and 53 loader-specific direct distributions. The 62-cell ledger is a runtime acceptance matrix, not a build-node count.
 
-The earlier open-work list above is historical baseline context. The final evidence and remaining explicit limits are recorded at the end of this report.
+Direct loader leaves are authoritative and public aggregate tasks are direct-only. `validateStonecutterDirectContract` rejects delegation in public leaves and checks registry metadata. Nested Gradle still exists as a temporary parity rollback oracle. Therefore current architecture must not be described as a complete Stonecutter preprocessing migration: true preprocessing proof and full all-cell parity remain open.
 
-## Historical checkpoint: registry, Quick Pack seams, and the 1.20.2 feasibility cell
+## Current source and configuration evidence
 
-The current branch now has a schema-v2 registry with 22 checked-in exact release rows and twelve source families. The registry distinguishes planned cells from the six public anchor targets; planned cells do not enter `buildAllSupported` or the 17-artifact release verifier. Stonecutter generates the exact target projects used by the build and smoke matrices, including the focused legacy nodes.
-
-The unified configuration schema/effective-state model and native screen adapters are committed. Quick Pack detection is clean-room metadata detection only, with strict ownership of overlapping index, ZIP pool, font preselection, atlas-mip, loading-fade, and status-overlay paths. Version metadata is informational only: any loaded Quick Pack version receives the same six-module handoff, and unreadable metadata fails safely to that handoff. The real Quick Pack 1.5.0 Fabric profile passed ten reloads and clean exit; 1.4 and older remain best-effort/not guaranteed, and unrelated third-party pairwise profiles remain `UNTESTED`.
-
-The 1.20.2 source-family feasibility cell is now build/package/runtime verified for Fabric, Forge, and NeoForge with the thin constructor/sprite/UI bridge. The earlier ModDev/NeoGradle failures remain historical toolchain evidence; the repaired legacy NeoGradle route now produces a final all-loader result. No 1.20.2 artifact is published or counted in the 17-artifact set because range-publication proof is still separate from exact-cell proof.
-
-Final current-matrix evidence at checkpoint `862022c40249155f1d43fb55d97f3c4cb132c136`: `buildAllSupported --rerun-tasks --no-daemon --stacktrace` PASS in 5m31s; `verifyAllArtifacts --no-daemon --stacktrace` PASS in 5m18s; 17 artifacts collected and structurally verified. These are build/package results, not production startup or resource-reload acceptance. The remaining exact-release, Quick Pack combined-runtime, and candidate-promotion cells are explicitly unexecuted.
-
-## Exact 1.20.3/1.20.4 focused evidence
-
-Checkpoint `948e437` adds separate exact `mc1_20_3` and `mc1_20_4` targets under the shared `mc1_20_3_4` source family. `validateTargetRegistry` passes. The exact 1.20.4 Fabric, Forge, and NeoForge builds pass and `verifyMc1_20_4Artifacts` passes. The exact 1.20.3 Fabric and Forge builds pass; NeoForge 20.3.8-beta fails before source compilation because the official artifact does not expose the `neoforge-moddev-bundle` capability required by ModDev 2.0.141. These are build/package results only: no exact 1.20.3/1.20.4 startup, deterministic reload, semantic hash, Quick Pack, or clean-exit claim is made, and neither exact cell enters publication.
-
-## Exact 1.20.5/1.20.6 focused evidence
-
-Checkpoint `21524f3` adds exact `mc1_20_5` and `mc1_20_6` targets under the shared `mc1_20_5_6` Java21 source family. `validateTargetRegistry` passes. The 1.20.5 Fabric build and artifact verifier pass. The 1.20.6 Fabric, Forge, and NeoForge builds and artifact verifier pass. The family reuses the proven 1.21 shared archive/reload/client implementations and keeps only the 1.20.x `ResourceLocation` and Fabric test constructor helpers version-local. The final JARs contain the family client mixin and archive/reload hooks; loader metadata and the access widener are present where applicable. These are build/package results only: no exact 1.20.5/1.20.6 startup, deterministic reload, semantic hash, Quick Pack, or clean-exit claim is made, and neither exact cell enters publication.
-
-## Exact 1.21/1.21.2/1.21.3 focused evidence
-
-Checkpoint `71de8fe` adds exact `mc1_21`, `mc1_21_2`, and `mc1_21_3` targets while retaining the existing adapter families. `validateTargetRegistry` passes. The exact 1.21 and 1.21.3 Fabric, Forge, and NeoForge builds and artifact verifiers pass. The exact 1.21.2 Fabric and NeoForge builds and artifact verifier pass; Forge is not declared because no official Forge 1.21.2 line is available. The eight final JARs package the shared archive/reload hooks, client bootstrap, `PackSelectionScreenMixin`, and the correct loader metadata. These are build/package results only: no exact 1.21/1.21.2/1.21.3 startup, deterministic reload, semantic hash, Quick Pack, or clean-exit claim is made, and no exact cell enters publication.
-
-## Historical exact-target evidence before range promotion
-
-The exact release implementation is complete for the required 22-row ledger. `gradle/minecraft-targets.json` now marks the early 1.20.2/1.20.3/1.20.4 rows and source families `planned-verified`; they remain outside the public 17-artifact aggregation by policy. The current public set therefore remains six target anchors and 17 loader artifacts, while the expanded target artifacts are independently built and checked.
-
-Recorded exact-release runtime evidence covers 62 officially declared loader cells across the 22 releases. Each recorded base cell passed startup, deterministic resource reload, semantic/resource evidence where supported, and clean exit. The standard runtime controller requested two reloads. These are exact-target evidence; they do not by themselves prove that one representative binary can claim a wider publication range. The repaired legacy NeoForge production cells are:
+Latest deterministic snapshot:
 
 ```text
-1.20.2  NeoForge 20.2.93       6742DF5281A60D580AC6C7BC5A2275398836DCBEB6FD6A7A1E56208BA587711C
-1.20.3  NeoForge 20.3.8-beta   7FB0A87F52CE61440452F5D9C1D90976A485653A844870C07EBD7F631B9AE73A
-1.20.4  NeoForge 20.4.251      666A7DF5BB402C0551F7572534AD0D2923BA6724180A57E6E7C447ABA2C98203
+productionFiles=210
+productionLoc=16323
+exactDuplicateGroups=0
+normalizedDuplicateGroups=0
+targetVersionConditionalLines=15
+rendererBodies=3
+rendererAdapters=2
+publicationArtifacts=20
 ```
 
-The exact 26.x hotfix loader coordinates are now registry data (`requiredExactSmokeLoaderVersions`) rather than workflow literals. The registry-generated matrix emits 19 build targets, 62 exact smoke cells, 26 public-anchor smoke cells, and 17 publication rows. The official Mojang manifest guard also passes for all 22 release IDs with recorded SHA-256 provenance.
+These metrics prove checked-in source shape only. They do not prove all target compilation or current artifact runtime.
 
-## Quick Pack and default-off decisions
+Configuration persistence preserves unknown JSON fields. Shared renderer/model code centralizes categories, option state, validation, configured/effective values, ownership, and save behavior. Atlas retry remains default-off and its configured value is preserved; shader presence guards effective availability instead of mutating saved configuration. Focused tests passed, but no live renderer-family or shader profile was run.
 
-The real Quick Pack 1.5.0 Fabric JAR for 1.21.1 passed a ten-reload production profile beside the final PackForge range artifact. The log reports `status=MODULE_HANDOFF`; version `1.5.0` is diagnostic only. The six overlap capabilities are externally owned, ten requested reloads completed, and the client exited cleanly. Unit tests prove identical handoff for old, future, malformed, and missing version strings. `Smoke-Fabric-Production.ps1` accepts optional additional profile JARs and records their SHA-256 values in provenance without adding a runtime dependency.
+## Current compatibility harness
 
-Every §16 performance candidate has a recorded `SAFE_KEEP_DEFAULT_OFF` verdict. No candidate was promoted without its controlled performance gate; explicit user configuration remains preserved. Timings, diagnostics, fade, and toast preferences remain outside the performance-candidate table.
+The compatibility catalog contains 36 recipes:
 
-## CI/publication wiring
+- Seven `AVAILABLE`/`UNTESTED` recipes: Quick Pack and ImmediatelyFast isolated on Fabric, Forge, and NeoForge 1.21.1, plus combined Quick Pack + ImmediatelyFast on Fabric 1.21.1.
+- Three ResourcePackUnbounded 1.21.1 recipes marked `UNAVAILABLE` with dated public-source evidence for Fabric, Forge, and NeoForge.
+- Twenty-six recipes remain `PENDING_METADATA`/`UNTESTED`.
 
-`scripts/Generate-CiMatrix.py` is the single workflow matrix generator. Build, full exact-release runtime smoke, publication smoke, and Modrinth publication rows all consume `gradle/minecraft-targets.json`; the previous manually duplicated release lists were removed. ForgeGradle’s Linux userdev limitation is recorded in the workflows: Forge source smoke remains a correctness check there, while final SRG artifact acceptance stays in the Windows production harness.
+Every available recipe is pinned by URL/version/SHA-256 and requires runtime evidence markers. `CompatibilityProfileReporter` reports profile ID, loader, target, observed mods, Quick Pack state, six handed-off capabilities, and 23 retained capabilities only when profile environment variables are present.
 
-## Pre-final limits (historical)
+Schema-2 materialization validates the catalog before resolving inputs, uses a hash-addressed cache, derives safe decoded basenames, verifies SHA-256, transports fixture and expected-marker metadata, and rejects unsupported paths. Offline materialization and AST tests pass. No network request, dependency download, Gradle build, or Minecraft launch belongs to this evidence. ImmediatelyFast-only path proof and nonempty configuration overrides currently fail closed.
 
-At the pre-final checkpoint, the exact base matrix and the required Quick Pack profile were proven. Pairwise profiles for unrelated third-party optimization/render mods were not executed and remain `UNTESTED`; no claim is made for them. The 1.20.2-1.20.4 and 1.20.5-1.21.1 rows were promoted only after same-JAR runtime proof on every applicable loader cell. Seven non-anchor pre-26 release rows still had `planned-verified` status, so Java 21 artifact consolidation was incomplete. The rebuilt modern NeoForge all-in-one package also still needed a fresh production smoke on that byte set.
+Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected-textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy packs. Manifest contracts also cover overlay/namespace/duplicate and malformed-but-ZIP-readable entries. Fixture generation is deterministic; runtime, repeated reload, and cancellation evidence remain open.
 
-The paragraph above records the state before final range promotion. At checkpoint `a3402866b217ac159d6a3cec70d3585028f79732`, all formerly planned rows are promoted, every publication-smoke row is generated, and modern NeoForge 26.x is included in the final 62-cell result. Only unrelated third-party pairwise profiles remain `UNTESTED`.
+## Current default-off decisions
 
-## First proven range artifact: 1.20.2-1.20.4
+No production default changed. Candidate catalog contains exactly 11 entries:
 
-Checkpoint `fbd7b3208347230ae17e90f822bde2e100e82992` widens the 1.20.2 anchor into one beta range artifact per loader. Fabric uses legacy `supported_formats` metadata for pack formats 18-22. Forge packages both reload-observer variants and selects the Forge 48 or Forge 49 hook from `FMLLoader.versionInfo().mcVersion()` before mixin application.
+- Five `SAFE_KEEP_DEFAULT_OFF`: ZIP read pool, font bitmap cache, sprite decode, startup executor, and atlas retry.
+- Six `FAILED_WITH_REASON`: atlas mip parallelism is `NOT_STARTED`; adaptive/duplicate model work and three startup async paths are `PARTIAL`.
+- Zero promoted candidates.
 
-All nine exact production cells used the same final JAR for their loader, completed two deterministic reloads, emitted semantic/resource evidence, and exited cleanly:
+All six required runtime/performance evidence classes remain `NOT_RUN`. `SAFE_KEEP_DEFAULT_OFF` means conservative non-promotion, not successful benchmark or compatibility proof.
 
-```text
-Fabric   1.20.2, 1.20.3, 1.20.4  77D690FF0D9956271196CBD96406962C052656AAC8B26FF42AD78B40954F4B1A
-Forge    1.20.2, 1.20.3, 1.20.4  88F4BB16DD9BEDCEA21100827B7A53794050939F936422F8180B86C451C90547
-NeoForge 1.20.2, 1.20.3, 1.20.4  24460EEFB3D33F1B6AD5154758A2E829394138ECD65017C8E19F39F5A1D2BC48
-```
+## Current release boundary
 
-`gradlew.bat clean build --no-daemon --console=plain` passed in 13m16s with 107 executed tasks. Rebuilding `buildMc1_20_2` after the clean build reproduced all three tested SHA-256 values exactly. Registry promotion then produced matrix counts `build=19`, `smoke=62`, `publish-smoke=35`, and `publish=20`; release-manifest verification accepted exactly 20 staged artifacts.
+Registry metadata still expects 20 artifacts and 62 exact runtime cells. Existing-manifest verification is implemented and mutation-tested, but no complete current 20-JAR manifest has been verified since direct artifact changes. No current same-binary range, full exact matrix, or release-ready hash list is claimed.
 
-## Second proven range artifact: 1.20.5-1.21.1
+## Historical implementation evidence
 
-Checkpoint `5ed1480540162547b3de475e0e9a51e7965d968c` makes the `mc1_21_1` anchor publish one Fabric artifact for 1.20.5-1.21.1 and one Forge/NeoForge artifact for 1.20.6-1.21.1, matching official loader availability. Pack metadata uses supported formats 32-34. Forge uses explicit loader-specific Java-17-compatible mixin descriptors while the compiled code remains Java 21; descriptor ownership is registry data rather than a hard-coded target list.
+Historical records remain useful for regressions and design intent:
 
-All ten applicable production cells used the same final JAR for their loader, completed two deterministic reloads, emitted semantic/resource evidence, and exited cleanly:
+- Early focused exact-target builds established source-family feasibility across required loader/version boundaries.
+- Checkpoint `fbd7b3208347230ae17e90f822bde2e100e82992` recorded same-JAR 1.20.2-1.20.4 runtime proof.
+- Checkpoint `5ed1480540162547b3de475e0e9a51e7965d968c` recorded same-JAR 1.20.5-1.21.1 proof and a real Fabric Quick Pack 1.5.0 ten-reload run.
+- Checkpoint `051aaaca42bdc980a3260d1a6c6fcd4404f228b7` recorded 62/62 exact cells and 20 publication artifacts.
+- Checkpoint `a3402866b217ac159d6a3cec70d3585028f79732` recorded source consolidation, 18/20 artifact hash continuity, four affected Forge reruns, and a final Quick Pack rerun.
 
-```text
-Fabric   1.20.5, 1.20.6, 1.21, 1.21.1  99D38B658B6D8A19294ADB4D5986BB714016A67C697B91C8FAB01EC7DE5B4E72
-Forge    1.20.6, 1.21, 1.21.1          CA9F0EEAF1B382BA13518C7B5C24149BDA6031C33AA4473A8A08CD510ED78FFA
-NeoForge 1.20.6, 1.21, 1.21.1          969BFADD9B219932FAB7040839CA6ADAB075EC8B0E941CDED829A22C3A41D5AE
-```
+Those results bind to older artifact bytes. They must not be used as current release claims after the direct-build cutover and later source/configuration changes.
 
-The final Fabric artifact also passed a real Quick Pack 1.5.0 profile with ten requested reloads, `status=MODULE_HANDOFF`, all six overlap capabilities delegated, and clean exit. The compatibility policy does not branch on Quick Pack version; 1.4 and older are documented as best-effort/not guaranteed.
+## Definition of done
 
-`gradlew.bat clean build --no-daemon --console=plain` passed in 8m49s. The clean build reproduced all three runtime-tested SHA-256 values exactly. Registry generation now produces `build=19`, `smoke=62`, `publish-smoke=42`, and `publish=20`; release-manifest verification accepts exactly 20 artifacts.
-
-## Final implementation checkpoint
-
-Checkpoint `a3402866b217ac159d6a3cec70d3585028f79732` completes the remaining 1.21.2-1.21.4, 1.21.5-1.21.8, and 1.21.9-1.21.11 range families, exact capability/mixin floors, module-level Quick Pack handoff, registry-derived publication, resumable exact-production matrix, and canonical shared-source ownership.
-
-`reportSourceMetrics` now gates CI through `validateTargetRegistry`: 16,209 production LOC, 5,426 bridge LOC (33.48%), zero normalized duplicate production classes, and 100% reduction from the recorded 20-group baseline. The total LOC reduction is 3.73% rather than 25% because support expands from six anchors to 22 exact releases; the exact per-area explanation and 73.74% LOC-per-release reduction are in `final-validation.md`.
-
-Final matrices are `build=7`, `smoke=62`, `publish-smoke=62`, and `publish=20`. Eighteen final artifacts remained byte-identical to the full 62-cell-tested set. The two legacy Forge hashes changed only because refmap key order changed; their four exact cells were rerun and passed. Quick Pack 1.5.0 then passed ten reloads against final Fabric SHA-256 `AAD7C8126DEFDA7A9FB115675841C4F2210607F722CA4141BC3C23BECED6E71A` with natural clean exit.
-
-The latest fully verified stable checkpoint and rollback point is `a3402866b217ac159d6a3cec70d3585028f79732`. No checkpoint history was squashed, amended, rebased, or force-pushed.
+Implementation is complete only after all 53 direct distributions pass required build/package checks, current 20 artifacts pass manifest verification, all 62 exact cells pass current final-JAR runtime acceptance, required available profiles execute with retained evidence, same-binary range proof is current, and a new final checkpoint records exact commands, hashes, limitations, and rollback order.

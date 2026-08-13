@@ -1,32 +1,50 @@
 # Source inventory
 
-Baseline production inventory is recorded in `baseline.md`.
+Date: 2026-08-13
+
+Baseline production inventory remains in `baseline.md`. Current deterministic snapshot is checked in under the source-metrics reports.
 
 ## Current architecture
 
-- Root `common` contains loader-neutral algorithms, config, policy inputs, diagnostics, and tests.
-- `versions/<adapter>` contains Minecraft-facing shared/client code, mixins, descriptors, access wideners, and loader-specific legacy shims.
-- `platform/fabric`, `platform/forge`, and `platform/neoforge` are standalone Gradle builds assembled from common, selected adapter, and loader sources.
-- `gradle/minecraft-targets.json` selects exactly one adapter per target.
+- Root `common` contains loader-neutral algorithms, configuration, ownership policy, compatibility reporting, diagnostics, and tests.
+- `versions/shared` and version-family roots contain canonical Minecraft-facing implementations plus thin API/descriptor bridges.
+- `platform/fabric`, `platform/forge`, and `platform/neoforge` retain loader build logic and loader-specific integration.
+- `gradle/minecraft-targets.json` owns release, loader, Java, source-policy, capability, metadata, and publication selections.
+- Registry generation creates 19 source anchors and 53 authoritative direct loader distributions. Public aggregate graph is direct-only.
+- Nested Gradle remains a temporary parity oracle; it is not authoritative production ownership.
 
-## Core seams to preserve
+This is a direct registry-derived build graph. It is not yet proven as true Stonecutter-preprocessed source, and full all-53 build/package parity remains open.
 
-- `PackIndex`, `PackArchiveState`, `ZipReadPool`, and `ZipFilePools` own ZIP indexing/lifecycle.
+## Core seams
+
+- `PackIndex`, `PackArchiveState`, `ZipReadPool`, and `ZipFilePools` own ZIP indexing and lifecycle.
 - `OrderedAsync`, `CoalescingExecutor`, and `ModelSchedulingPlan` own bounded ordered work.
-- `PackForgeConfig`, `PackForgeConfigScreenModel`, `PackForgeConfigDraft`, `PackForgeCapabilityProfile`, `FeatureFlags`, and `ReloadFeatureSnapshot` own current config/capability decisions.
-- `ReloadExecutionContext`, `ReloadLifecycle`, `ReloadHooks`, and `ReloadSessionTracker` own reload identity/lifecycle.
-- Root artifact checks in `build.gradle` enforce narrow operation-level hooks, bridge packaging, refmaps, metadata, class floors, and capability declarations.
+- `PackForgeConfig`, `PackForgeConfigScreenModel`, `PackForgeConfigDraft`, `PackForgeCapabilityProfile`, `FeaturePolicy`, `FeatureFlags`, and `ReloadFeatureSnapshot` own config/capability decisions.
+- `ReloadExecutionContext`, `ReloadLifecycle`, `ReloadHooks`, and `ReloadSessionTracker` own reload identity and lifecycle.
+- `QuickPackCompatibility` owns six-capability handoff policy; `CompatibilityProfileReporter` owns opt-in runtime profile evidence.
+- Root validation enforces source ownership, direct-node contracts, metadata, class floors, artifact declarations, renderer structure, and duplicate limits.
 
-## Duplication evidence
+## Current deterministic metrics
 
-Normalized exact-file comparison found 20 duplicate groups across version production sources. Highest-value migration seams are repeated `ForgeModListCompat`, reload manager mixins, config screens, `PackForgeClient`, `RuntimeResourceHash`, and shared ZIP access mixins. This inventory is evidence for later capability-by-capability deduplication; it is not permission to delete adapters before parity tests pass.
+| Metric | Current |
+|---|---:|
+| Production Java files | 210 |
+| Production nonblank LOC | 16,323 |
+| Exact duplicate groups | 0 |
+| Normalized duplicate groups | 0 |
+| Target/version conditional lines | 15 |
+| Renderer bodies | 3 |
+| Renderer adapters | 2 |
+| Registry publication artifacts | 20 |
 
-## Version-specific boundaries
+Baseline was 212 production files and 16,837 LOC with 20 normalized duplicate groups. Current source removes all measured duplicate groups and 514 LOC, a 3.05% raw LOC reduction. It does not meet a 20-25% raw shrink target; added registry, compatibility, validation, and reporter capabilities must remain explicitly justified rather than recast as shrink proof.
 
-Keep Minecraft class names/descriptors, mixin targets, native widget differences, access wideners, and loader remap/refmap behavior in thin bridges. Move only loader-neutral algorithms and policy into shared sources after a focused parity test.
+Three renderer bodies plus two adapters are measured structure, not live UI parity. Twenty publication artifacts is registry output, not proof that 20 current JARs were built or verified.
 
-## Final source inventory
+## Version-specific boundary
 
-Checkpoint `a3402866b217ac159d6a3cec70d3585028f79732` replaces copied version classes with registry-selected files under `versions/shared`. The final deterministic metrics are 202 files / 16,209 LOC, including 126 version files / 9,650 LOC and 99 bridge files / 5,426 LOC. Bridge code is 33.48% of production logic.
+Keep Minecraft class names/descriptors, mixin targets, native widget differences, access wideners, remap/refmap behavior, and loader packaging in thin bridges. Shared roots own loader-neutral behavior. New target-key branches or copied production classes must fail the metric/ownership gates unless a documented adapter boundary requires them.
 
-Comment/whitespace-normalized comparison now finds zero duplicate production classes across version families, down from 20 groups at baseline. `reportSourceMetrics` enforces zero duplicate groups, bridge minority, and bounded Stonecutter conditional blocks as part of `validateTargetRegistry`. Full per-area evidence is in `final-validation.md`.
+## Remaining proof
+
+Run current all-53 compilation/package checks, prove Java 17/21/25 and remap/JarJar output, decide/prove preprocessing ownership, remove the nested parity oracle, and then refresh metrics. Runtime and release acceptance remain separate from this inventory.

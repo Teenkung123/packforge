@@ -67,32 +67,32 @@ The feature can be configured through `config/packforge.json` or PackForge's in-
 
 ## Supported Versions
 
-| Minecraft | Java | Fabric | Forge | NeoForge | Feature level |
+| Minecraft | Java | Fabric | Forge | NeoForge | Declared maturity / current branch evidence |
 |---|---:|---|---|---|---|
-| 1.20.1 | 17 | Yes | Yes | No | Beta, exact smoke verified |
-| 1.20.2 | 17 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.20.3 | 17 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.20.4 | 17 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.20.5 | 21 | Yes | No | No | Beta, exact smoke verified |
-| 1.20.6 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.1 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.2 | 21 | Yes | No | Yes | Beta, exact smoke verified |
-| 1.21.3 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.4 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.5 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.6 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.7 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.8 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.9 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.10 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 1.21.11 | 21 | Yes | Yes | Yes | Beta, exact smoke verified |
-| 26.1 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
-| 26.1.1 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
-| 26.1.2 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
-| 26.2 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
+| 1.20.1 | 17 | Yes | Yes | No | Beta; runtime revalidation pending |
+| 1.20.2 | 17 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.20.3 | 17 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.20.4 | 17 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.20.5 | 21 | Yes | No | No | Beta; runtime revalidation pending |
+| 1.20.6 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.1 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.2 | 21 | Yes | No | Yes | Beta; runtime revalidation pending |
+| 1.21.3 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.4 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.5 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.6 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.7 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.8 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.9 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.10 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 1.21.11 | 21 | Yes | Yes | Yes | Beta; runtime revalidation pending |
+| 26.1 | 25 | Yes | Yes | Yes | Stable; runtime revalidation pending |
+| 26.1.1 | 25 | Yes | Yes | Yes | Stable; runtime revalidation pending |
+| 26.1.2 | 25 | Yes | Yes | Yes | Stable; runtime revalidation pending |
+| 26.2 | 25 | Yes | Yes | Yes | Stable; runtime revalidation pending |
 
-Choose the JAR whose filename matches both your mod loader and Minecraft version. Exact legacy builds do not claim support for unlisted Minecraft releases. The registry-derived release manifest publishes seven consolidated targets as 20 loader-specific artifacts; the support table above records loader gaps for exact Minecraft releases.
+Choose the JAR whose filename matches both your mod loader and Minecraft version. Exact legacy builds do not claim support for unlisted Minecraft releases. Registry metadata defines seven consolidated publication targets and 20 loader-specific artifacts, but the current direct-build branch has not completed final-JAR runtime revalidation. See [`docs/stonecutter-refactor/final-validation.md`](docs/stonecutter-refactor/final-validation.md) for current evidence.
 
 <!-- packforge-publication-registry
 artifact-count: 20
@@ -101,7 +101,7 @@ target-keys: mc1_20_1,mc1_20_2,mc1_21_1,mc1_21_4,mc1_21_8,mc1_21_11,mc26_1_to_26
 
 ### Minimum Loader Versions
 
-PackForge is compiled and tested against the exact lower bound shown for each Minecraft release. Newer loader builds in the same Minecraft line remain supported, but users do not need the latest patch release just for PackForge.
+The registry pins the intended lower-bound loader for each Minecraft release. Current direct artifacts still require full lower-bound runtime revalidation; newer loader builds must not be assumed to replace that proof.
 
 | Minecraft | Fabric Loader | Forge | NeoForge |
 |---|---:|---:|---:|
@@ -167,7 +167,7 @@ The Large Atlas Fixer and Startup Optimizer tabs remain exclusive to current 26.
 
 ## Compatibility
 
-PackForge is designed to work alongside commonly used client optimization and resource-pack mods, including:
+PackForge includes compatibility seams for commonly used client optimization and resource-pack mods, including:
 
 - Sodium
 - Iris
@@ -177,7 +177,7 @@ PackForge is designed to work alongside commonly used client optimization and re
 - Continuity
 - CIT Resewn
 
-Compatibility can depend on the exact Minecraft version, loader, and mod combination. If a combination is not listed, that does not necessarily mean it is incompatible.
+Compatibility depends on exact Minecraft version, loader, mod versions, and PackForge artifact. Current profile results are tracked in [`docs/stonecutter-refactor/compatibility-matrix.md`](docs/stonecutter-refactor/compatibility-matrix.md); unexecuted combinations remain `UNTESTED`.
 
 OptiFine and OptiFabric are not officially supported and have not been fully tested.
 
@@ -225,7 +225,7 @@ Build every supported target with:
 gradlew.bat buildAllSupported --no-daemon
 ```
 
-The full build produces 20 artifacts and verifies filenames, Java class versions, mixin compatibility, loader ranges, Minecraft ranges, generated pack metadata, and target capability metadata.
+Registry expects 20 artifacts. Current authoritative graph contains 53 direct loader distributions, but full all-53 compilation/package parity is still pending. Targeted builds and structural checks do not substitute for current full artifact or runtime proof.
 
 ## License
 

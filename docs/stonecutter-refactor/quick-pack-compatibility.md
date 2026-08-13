@@ -1,33 +1,51 @@
 # Quick Pack compatibility
 
+Date: 2026-08-13
+
 ## Clean-room boundary
 
-PackForge is MIT-licensed and Quick Pack is GPLv3. PackForge may detect public mod ID/version metadata, observe public behavior, and implement independent ownership rules. It must not copy Quick Pack source/mixins, import internal interfaces, shade Quick Pack, or depend on unstable internal APIs.
+PackForge is MIT-licensed and Quick Pack is GPLv3. PackForge may detect public mod ID/version metadata, observe public behavior, and implement independent ownership rules. It must not copy Quick Pack source or mixins, import internal interfaces, shade Quick Pack, or depend on unstable internal APIs.
 
-## Implemented state
+## Current ownership policy
 
-- Quick Pack runtime detection uses public loader metadata only.
-- Existing loader-neutral presence seam: `PackForgePlatform.isModLoaded`.
-- Existing compatibility probes cover Sodium/Embeddium, Iris/Oculus, Smooth Boot variants, ImmediatelyFast, and Fabric Model Loading API.
-- The ownership policy is active on Fabric, Forge, and NeoForge.
+`QuickPackCompatibility` reads only loader-provided public metadata for mod ID `quick-pack`. It reports `ABSENT`, `MODULE_HANDOFF`, or `DETECTION_FAILED`. Version text is diagnostic only; missing, malformed, old, current, and future strings do not select different code paths. Metadata-read failure conservatively hands off the same overlap set.
 
-Required profile: whenever Quick Pack is present, it owns only the six known overlapping modules. PackForge retains independently proven decode, model, cap/recovery, startup, and diagnostics behavior. Quick Pack version text is diagnostic only and never selects a different compatibility branch.
+Quick Pack owns exactly six overlapping capabilities when present:
 
-## Implemented compatibility seam
+- `RESOURCE_PACK_INDEX`
+- `ZIP_READ_POOL`
+- `FONT_PROVIDER_PRESELECTION`
+- `ATLAS_MIP_PARALLEL`
+- `LOADING_FADE_CONTROL`
+- `LOADING_STATUS_OVERLAY`
 
-`QuickPackCompatibility` reads only the public loader mod-presence/version seam for mod ID `quick-pack`; it does not reference Quick Pack classes, copy GPL code, shade the mod, or add a runtime dependency. It reports `ABSENT`, `MODULE_HANDOFF`, or `DETECTION_FAILED`. Version strings—including missing, malformed, old, and future versions—do not alter ownership. A metadata-read failure also fails safely by handing off the same overlap set.
+The other 23 PackForge capabilities remain governed by normal capability/config policy. Loader mixin selection and runtime guards preserve non-overlap diagnostics and behavior. Configuration UI shows configured value, effective value, owner, and reason without overwriting saved choices.
 
-The ownership set is explicit: `RESOURCE_PACK_INDEX`, `ZIP_READ_POOL`, `FONT_PROVIDER_PRESELECTION`, `ATLAS_MIP_PARALLEL`, `LOADING_FADE_CONTROL`, and `LOADING_STATUS_OVERLAY`. Fabric, Forge, and NeoForge early mixin plugins suppress the overlapping main/client hooks before Mixin applies them. The central effective-state UI shows configured value, effective value, owner, and reason while preserving the configured value. Non-overlapping PackForge modules remain enabled according to normal capability/config policy.
+This policy deliberately avoids Quick Pack internal classes and configuration keys. PackForge hands off an overlap capability whenever Quick Pack is loaded, even if that Quick Pack capability is locally disabled. Correct coexistence is preferred over retaining duplicate optimization work.
 
-This deliberately avoids probing Quick Pack internal classes or configuration keys. Such probes would create the frequent maintenance burden this policy is intended to remove. PackForge therefore hands off an overlapping module whenever Quick Pack is loaded, even if that Quick Pack module is locally disabled. This prefers correctness and broad coexistence over retaining every duplicate optimization.
+## Current evidence
 
-Unit policy tests and final-JAR packaging checks pass. The required real-mod profile also passes:
+- Unit tests cover absent, present, old, current, future, malformed, missing-version, and detection-failure policy states.
+- Packaging/structural checks cover ownership boundaries.
+- `CompatibilityProfileReporter` can emit profile ID, loader/target, loader-observed mod presence, Quick Pack state, six handed-off capabilities, and 23 retained capabilities.
+- Catalog has pinned Quick Pack 1.21.1 isolated recipes for Fabric, Forge, and NeoForge, plus a pinned Fabric Quick Pack + ImmediatelyFast recipe.
+- Schema-2 materialization can hash-verify and stage profile dependencies through all three loader wrappers.
 
-- Profile: Fabric 1.21.1, Fabric Loader 0.19.3, Quick Pack `1.5.0`.
-- Quick Pack SHA-1: `71b3ff38a163651c76e707087c00c9bfc41a5987`.
-- PackForge final artifact SHA-256: `AAD7C8126DEFDA7A9FB115675841C4F2210607F722CA4141BC3C23BECED6E71A`.
-- Quick Pack staged-JAR SHA-256: `7E93E08D5ADA815DB6874D5BCCA750A12A2AC97F3B80143ED47EF6D70FE32EE1`.
-- Command: `scripts/Smoke-Fabric-Production.ps1` with `-AdditionalModPaths`, `-ReloadCount 10`, and `-AllowControlledTermination`.
-- Result: `PASS`; `status=MODULE_HANDOFF`, `version=1.5.0` (diagnostic only), the six overlap capabilities are externally owned, ten requested reloads completed, and the client exited naturally with `cleanExit=true` and `controlledTermination=false`.
+All four Quick Pack-containing catalog recipes remain `UNTESTED`. No current final-JAR Minecraft launch, reload, resource/semantic result, or clean-exit result exists. `AVAILABLE` describes pinned materializable inputs, not compatibility PASS.
 
-The PackForge log contains `PackForge Quick Pack compatibility: status=MODULE_HANDOFF` and the expected ownership set. Unit tests cover `1.4.0`, `1.5.0`, future major versions, malformed text, and missing version metadata with the same module-level result. The real runtime proof is Quick Pack 1.5.0; Quick Pack 1.4 and older remain best-effort and are not guaranteed. Other third-party pairwise profiles are separate scheduled work and are not claimed by this result.
+Quick Pack 1.4 and older remain best-effort/not guaranteed. Unit policy equality across version strings proves ownership selection only; it does not prove those versions run correctly.
+
+## Historical runtime evidence
+
+Checkpoint `a3402866b217ac159d6a3cec70d3585028f79732` recorded this older-artifact profile:
+
+- Fabric 1.21.1, Fabric Loader 0.19.3, Quick Pack 1.5.0.
+- Quick Pack SHA-256 `7E93E08D5ADA815DB6874D5BCCA750A12A2AC97F3B80143ED47EF6D70FE32EE1`.
+- PackForge SHA-256 `AAD7C8126DEFDA7A9FB115675841C4F2210607F722CA4141BC3C23BECED6E71A`.
+- `MODULE_HANDOFF`, six external owners, ten reloads, natural clean exit.
+
+This remains useful regression evidence for design behavior. Later direct-build and source changes invalidate it as proof for current PackForge bytes.
+
+## Required current proof
+
+Rebuild current artifacts, execute each available Quick Pack profile, retain profile/materialization provenance, verify exact reporter ownership, exercise required fixtures and reload count, reject fatal/mixin markers, and record exact clean exit. Until then, result stays `UNTESTED`.
