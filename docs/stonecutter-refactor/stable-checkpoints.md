@@ -580,3 +580,23 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Status: `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED`. The baseline is checked against every Java initializer, permits only the documented smoke-observability deltas, and is JSON/SHA-256 stable.
 - Limits: no Gradle task, network request, artifact download, Minecraft launch, runtime profile, reload, or release proof was run.
 - Rollback: newest-first—revert later dependent checkpoints first, then `git revert eb14498` to remove full configuration transport and return nonempty profile overrides to their prior fail-closed behavior.
+
+## Phase G — exact shared configuration-screen routes
+
+- Date: 2026-08-13
+- Commit SHA: `5d8deab`; parent `ebdb90d`
+- Status: `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED`.
+- Scope: bind the exact shared configuration-screen base/wrapper contract and PackSelection entry routes so each supported version-family route resolves to the canonical shared implementation.
+- Verification: AST validation, normal contract validation, focused self-test with mutation rejection, and independent review passed.
+- Limits: no Gradle task, build, Minecraft launch, live UI/runtime, artifact verification, or release proof was run.
+- Rollback: revert later dependants first, then `git revert 5d8deab` to restore the preceding screen-route contract.
+
+## Phase K — hash-bound resumable exact-production PASS evidence
+
+- Date: 2026-08-13
+- Commit SHA: `aa452ac`; parent `5d8deab`
+- Status: `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED`.
+- Scope: bind resumable exact-production PASS records to the current cell/release/loader/target/coordinate/artifact/fixture/fingerprint, exact production PASS-line tokens, and SHA-256-verified log/provenance evidence; precompute matrix evidence and scan prior records once; fail safely on numeric overflow or evidence I/O; make cumulative evidence failure fail the controller exit.
+- Verification: PowerShell AST validation; data-only self-test accepted a valid controlled graceful exit and rejected 17 mutations, including malformed numeric/hash/evidence cases; valid-then-later-invalid chronology and final-summary failure behavior passed; independent review passed.
+- Limits: no Gradle task, Minecraft launch, network request, or matrix execution was run.
+- Rollback: revert later dependants first, then `git revert aa452ac` to restore the preceding resumable-PASS handling.
