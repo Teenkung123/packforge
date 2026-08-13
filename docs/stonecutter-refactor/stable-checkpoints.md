@@ -400,3 +400,23 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: static golden source-selection comparison and independent read-only review passed. `validateStonecutterRegistry` passed in 34 seconds with 53 direct leaves and 62 exact loader cells. No compile, package, ZIP parity, or Minecraft runtime executed.
 - Status: `PHASE_F_CONFIGURATION_VERIFIED`; not full build or runtime verification.
 - Rollback: `git revert 4c76d6520080834a3c278bbefd7c0ce31189da84` restores loader-local source selection after reverting later dependants.
+
+## Shared modern configuration renderer
+
+- Date: 2026-08-13
+- Commit SHA: `839928cb7ee2be3ebcab73db859e0c2a5fc34a84`
+- Parent SHA: `cc9f51282b3d7d1b98cb6fa526ac5d394d288946`
+- Scope: extract the shared modern native configuration renderer while retaining version-specific wrappers and entry points.
+- Verification: Fabric `mc1_21_10 compileClientJava` and `mc1_21_11 compileClientJava` each passed in 10 seconds. Independent static review passed.
+- Status: `PHASE_G_STRUCTURAL_CONTRACT_VERIFIED`; no live UI screenshot or Minecraft client runtime was executed.
+- Rollback: after reverting later documentation and dependent checkpoints, `git revert 839928cb7ee2be3ebcab73db859e0c2a5fc34a84` restores version-local modern renderers.
+
+## Integer validation parity and screen contract
+
+- Date: 2026-08-13
+- Commit SHA: `35a6b4ca39b8afc0a9d1a096a76780b463ff2b5e`
+- Parent SHA: `839928cb7ee2be3ebcab73db859e0c2a5fc34a84`
+- Scope: shared transient integer-input validation across legacy, shared modern, and 26.x renderers; Done/apply guards; reset/rebuild invalid-state lifecycle; structural screen-contract validation.
+- Verification: focused Fabric `mc1_21_10` test passed in 13 seconds with five tests, zero failures, zero errors, and compilation. `mc1_20_1 compileClientJava` passed in 11 seconds; `mc26 compileClientJava` passed in 10 seconds. `Validate-ConfigScreenContract` passed with `bodies=3`, `wrappers=2`, `entryPoints=9`, and `sharedTargets=14`. Independent static reviews passed.
+- Status: `PHASE_G_VERIFIED_COMPLETE_STRUCTURAL`; the plan explicitly permits structural renderer tests in place of screenshots, so the Phase G completion gate is met. No live UI screenshot or Minecraft client runtime was executed, and those must not be inferred from this checkpoint.
+- Rollback: after reverting later documentation and dependants, revert `35a6b4ca39b8afc0a9d1a096a76780b463ff2b5e` first, then `839928cb7ee2be3ebcab73db859e0c2a5fc34a84`.
