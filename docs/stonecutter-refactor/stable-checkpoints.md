@@ -570,3 +570,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: normal catalog validation and self-test passed all 36 recipes and 19 rejected mutations. Twenty unique new pins were independently verified against SHA-256 and embedded loader metadata; verification downloads were not retained.
 - Status: `PHASE_I_METADATA_EXPANDED_RUNTIME_UNTESTED`; no Minecraft client, compatibility runtime, or PASS profile was produced. The repository remains `PARTIAL_NOT_RELEASE_READY`.
 - Rollback: revert the documentation checkpoint first, then `git revert a80a83e77ed8190ad4de1e0c07665264af48f1c9` to restore the seven-available catalog.
+
+## Schema-2 compatibility-profile configuration contract
+
+- Date: 2026-08-13
+- Commit SHA: `eb14498`; parent `a15c4e0`
+- Scope: add one shared, full `PackForgeConfig.Cfg` v12 (50 serialized fields) smoke baseline to schema-2 profile materialization and all loader wrappers. Exactly five safe boolean override keys are accepted: ZIP read pool, font bitmap cache, atlas decode batching, atlas retry, and startup executor tuning. No production default or default-off candidate is promoted.
+- Verification: seven-script AST validation passed; normal catalog validation accepted all 36 frozen recipes; self-test rejected 22 catalog mutations plus Java default drift; offline Fabric/Forge/NeoForge schema-2 transport passed in 22.1 seconds; independent review passed.
+- Status: `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED`. The baseline is checked against every Java initializer, permits only the documented smoke-observability deltas, and is JSON/SHA-256 stable.
+- Limits: no Gradle task, network request, artifact download, Minecraft launch, runtime profile, reload, or release proof was run.
+- Rollback: newest-first—revert later dependent checkpoints first, then `git revert eb14498` to remove full configuration transport and return nonempty profile overrides to their prior fail-closed behavior.
