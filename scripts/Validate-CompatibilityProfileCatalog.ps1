@@ -195,6 +195,23 @@ function Assert-Evidence($Evidence, [string] $Context) {
     if (-not $hasArtifactRecord) { Fail "$Context evidence requires an existing immutable result path plus matching SHA-256; provenance alone does not prove execution." }
 }
 
+function Assert-AvailabilityEvidence($Evidence, [string] $Context) {
+    Assert-JsonObject $Evidence "$Context availabilityEvidence" | Out-Null
+    $checkedOn = Assert-NonPlaceholderText $Evidence 'checkedOn' "$Context availabilityEvidence"
+    $parsedDate = [datetime]::MinValue
+    if (-not [datetime]::TryParseExact($checkedOn, 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref] $parsedDate)) {
+        Fail "$Context availabilityEvidence has invalid checkedOn date."
+    }
+    $sources = Assert-JsonArray (Value $Evidence 'sources') "$Context availabilityEvidence.sources"
+    if ($sources.Count -eq 0) { Fail "$Context availabilityEvidence.sources must not be empty." }
+    foreach ($source in $sources) {
+        Assert-JsonObject $source "$Context availabilityEvidence source" | Out-Null
+        Assert-NonPlaceholderHttpsUrl $source 'sourceUrl' "$Context availabilityEvidence source" | Out-Null
+        Assert-NonPlaceholderText $source 'query' "$Context availabilityEvidence source" | Out-Null
+        Assert-NonPlaceholderText $source 'result' "$Context availabilityEvidence source" | Out-Null
+    }
+}
+
 function Assert-Reason($Profile, [string] $Context) {
     $reason = Require-Text $Profile 'reason' $Context
     if (Test-PlaceholderText $reason) { Fail "$Context reason is placeholder text." }
@@ -242,6 +259,11 @@ function Invoke-CatalogValidation($Catalog, $Registry) {
         if ($availability -eq 'UNAVAILABLE' -and $result -ne 'UNAVAILABLE') { Fail "profile '$id' unavailable metadata must be UNAVAILABLE." }
         if ($availability -eq 'AVAILABLE' -and $result -eq 'UNAVAILABLE') { Fail "profile '$id' available metadata cannot be UNAVAILABLE." }
         if ($availability -ne 'AVAILABLE' -or $result -eq 'FAILED') { Assert-Reason $profile "profile '$id'" }
+        if ($availability -eq 'UNAVAILABLE') {
+            Assert-AvailabilityEvidence (Value $profile 'availabilityEvidence') "profile '$id'"
+        } elseif ($null -ne (Value $profile 'availabilityEvidence')) {
+            Fail "profile '$id' only permits availabilityEvidence when availability is UNAVAILABLE."
+        }
 
         $mods = Assert-JsonArray (Value $profile 'externalMods') "profile '$id' externalMods"
         if ($mods.Count -eq 0) { Fail "profile '$id' must declare at least one external mod." }
@@ -251,6 +273,11 @@ function Invoke-CatalogValidation($Catalog, $Registry) {
         $dependencies = Assert-JsonArray (Value $profile 'dependencies') "profile '$id' dependencies"
         [void] (Assert-UniqueStrings @($dependencies | ForEach-Object { Require-Text $_ 'id' "profile '$id' dependency" }) "profile '$id' dependency ids")
         foreach ($dependency in $dependencies) { Assert-PinState $dependency $availability "profile '$id' dependency '$($dependency.id)'" }
+        $runtimeModIds = @(
+            $mods | ForEach-Object { [string] $_.id }
+            $dependencies | ForEach-Object { [string] $_.id }
+        )
+        [void] (Assert-UniqueStrings $runtimeModIds "profile '$id' runtime mod ids")
         $featureOverrides = Value $profile 'featureOverrides'
         Assert-JsonObject $featureOverrides "profile '$id' featureOverrides" | Out-Null
 
@@ -259,8 +286,23 @@ function Invoke-CatalogValidation($Catalog, $Registry) {
         if ($path -notin $successfulResults) { Fail "profile '$id' has unsupported expectedPath '$path'." }
         $expectedMarkers = Assert-UniqueStrings (Value $profile 'expectedLogMarkers') "profile '$id' expectedLogMarkers"
         $forbiddenMarkers = Assert-UniqueStrings (Value $profile 'forbiddenLogMarkers') "profile '$id' forbiddenLogMarkers"
+        $reporterMarker = "PackForge compatibility profile: id=$id"
+        if (-not $expectedMarkers.Contains($reporterMarker)) {
+            Fail "profile '$id' must require its exact compatibility reporter marker."
+        }
+        foreach ($marker in @($expectedMarkers) + @($forbiddenMarkers)) {
+            if ($marker -match '^profile:') { Fail "profile '$id' contains synthetic marker '$marker'." }
+        }
         foreach ($marker in $expectedMarkers) {
             if ($forbiddenMarkers.Contains($marker)) { Fail "profile '$id' marker '$marker' is both expected and forbidden." }
+        }
+        if ($availability -eq 'AVAILABLE') {
+            foreach ($runtimeModId in @($runtimeModIds | Sort-Object)) {
+                $modMarker = "${runtimeModId}:true:"
+                if (-not $expectedMarkers.Contains($modMarker)) {
+                    Fail "profile '$id' available metadata must require loader-observed mod marker '$modMarker'."
+                }
+            }
         }
         if ($fixture -eq $path -or $expectedMarkers.Contains($fixture) -or $forbiddenMarkers.Contains($fixture)) { Fail "profile '$id' fixture overlaps its path or marker contract." }
 
@@ -281,13 +323,6 @@ function Copy-JsonObject($Object) {
     return ($Object | ConvertTo-Json -Depth 100 | ConvertFrom-Json)
 }
 
-function Set-CompletePin($Mod) {
-    $Mod | Add-Member -NotePropertyName coordinate -NotePropertyValue 'modrinth:immutable-project' -Force
-    $Mod | Add-Member -NotePropertyName sourceUrl -NotePropertyValue 'https://cdn.modrinth.com/data/immutable-project/versions/1.2.3/immutable-project.jar' -Force
-    $Mod | Add-Member -NotePropertyName version -NotePropertyValue '1.2.3' -Force
-    $Mod | Add-Member -NotePropertyName sha256 -NotePropertyValue '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08' -Force
-}
-
 function Assert-MutationRejected([string] $Name, [scriptblock] $Mutation, $Catalog, $Registry) {
     $candidate = Copy-JsonObject $Catalog
     & $Mutation $candidate
@@ -303,8 +338,6 @@ function Invoke-SelfTests($Catalog, $Registry) {
 	Invoke-CatalogValidation $Catalog $Registry | Out-Null
 	$positive = Copy-JsonObject $Catalog
 	$positiveProfile = $positive.profiles[0]
-	$positiveProfile.availability = 'AVAILABLE'
-	Set-CompletePin $positiveProfile.externalMods[0]
 	$positiveProfile.result = $positiveProfile.expectedPath
 	$validatorRelativePath = [IO.Path]::GetRelativePath($RepositoryRoot, $PSCommandPath).Replace('\', '/')
 	$validatorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
@@ -317,17 +350,22 @@ function Invoke-SelfTests($Catalog, $Registry) {
     Assert-MutationRejected 'catalog-can-add-noncanonical-profile' { param($c) $c.profiles[0].id = 'fabric-untracked-profile' } $Catalog $Registry
     Assert-MutationRejected 'dependencies-must-be-array' { param($c) $c.profiles[0].dependencies = [pscustomobject]@{} } $Catalog $Registry
     Assert-MutationRejected 'feature-overrides-must-be-object' { param($c) $c.profiles[0].featureOverrides = 'enabled' } $Catalog $Registry
-    Assert-MutationRejected 'available-pins-must-be-complete' { param($c) $c.profiles[0].availability = 'AVAILABLE' } $Catalog $Registry
-    Assert-MutationRejected 'pending-pins-cannot-be-partial' { param($c) $c.profiles[0].externalMods[0] | Add-Member -NotePropertyName coordinate -NotePropertyValue 'modrinth:quick-pack' } $Catalog $Registry
-    Assert-MutationRejected 'sha-cannot-be-zero' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.externalMods[0].sha256 = ('0' * 64) } $Catalog $Registry
-    Assert-MutationRejected 'sha-cannot-repeat-pattern' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.externalMods[0].sha256 = ('ABCDEF01' * 8) } $Catalog $Registry
-    Assert-MutationRejected 'pin-cannot-use-reserved-host' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.externalMods[0].sourceUrl = 'https://example.invalid/mod.jar' } $Catalog $Registry
-    Assert-MutationRejected 'pin-cannot-use-weak-coordinate-or-version' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.externalMods[0].coordinate = 'latest'; $p.externalMods[0].version = 'latest' } $Catalog $Registry
-    Assert-MutationRejected 'successful-result-requires-evidence' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.result = $p.expectedPath } $Catalog $Registry
-    Assert-MutationRejected 'evidence-must-exist' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'missing-profile-result.json'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08' }) -Force } $Catalog $Registry
-    Assert-MutationRejected 'evidence-hash-must-match-file' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'scripts/Validate-CompatibilityProfileCatalog.ps1'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08'; provenance = [pscustomobject]@{ commit = ('A' * 40) } }) -Force } $Catalog $Registry
-    Assert-MutationRejected 'failed-result-requires-reason-and-evidence' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.result = 'FAILED'; $p.PSObject.Properties.Remove('reason') } $Catalog $Registry
-	Write-Output 'Compatibility profile catalog self-test PASS: positive AVAILABLE control accepted; 14 mutations rejected.'
+    Assert-MutationRejected 'available-pins-must-be-complete' { param($c) $p = $c.profiles[0]; $p.externalMods[0].PSObject.Properties.Remove('sha256') } $Catalog $Registry
+    Assert-MutationRejected 'available-requires-reporter-marker' { param($c) $c.profiles[0].expectedLogMarkers = @($c.profiles[0].expectedLogMarkers | Where-Object { $_ -notlike 'PackForge compatibility profile: id=*' }) } $Catalog $Registry
+    Assert-MutationRejected 'available-requires-loader-observed-mod' { param($c) $c.profiles[0].expectedLogMarkers = @($c.profiles[0].expectedLogMarkers | Where-Object { $_ -ne 'quick-pack:true:' }) } $Catalog $Registry
+    Assert-MutationRejected 'synthetic-profile-marker-is-forbidden' { param($c) $c.profiles[1].forbiddenLogMarkers += ('profile' + ':fabric-sodium:failed') } $Catalog $Registry
+    Assert-MutationRejected 'unavailable-requires-availability-evidence' { param($c) $p = $c.profiles[0]; $p.availability = 'UNAVAILABLE'; $p.result = 'UNAVAILABLE'; $p | Add-Member -NotePropertyName reason -NotePropertyValue 'No compatible artifact was published.' -Force } $Catalog $Registry
+    Assert-MutationRejected 'unavailable-evidence-requires-safe-source' { param($c) ($c.profiles | Where-Object id -eq 'fabric-resource-pack-unbounded').availabilityEvidence.sources[0].sourceUrl = 'https://example.invalid/release' } $Catalog $Registry
+    Assert-MutationRejected 'pending-pins-cannot-be-partial' { param($c) $c.profiles[1].externalMods[0] | Add-Member -NotePropertyName coordinate -NotePropertyValue 'modrinth:sodium' } $Catalog $Registry
+    Assert-MutationRejected 'sha-cannot-be-zero' { param($c) $p = $c.profiles[0]; $p.externalMods[0].sha256 = ('0' * 64) } $Catalog $Registry
+    Assert-MutationRejected 'sha-cannot-repeat-pattern' { param($c) $p = $c.profiles[0]; $p.externalMods[0].sha256 = ('ABCDEF01' * 8) } $Catalog $Registry
+    Assert-MutationRejected 'pin-cannot-use-reserved-host' { param($c) $p = $c.profiles[0]; $p.externalMods[0].sourceUrl = 'https://example.invalid/mod.jar' } $Catalog $Registry
+    Assert-MutationRejected 'pin-cannot-use-weak-coordinate-or-version' { param($c) $p = $c.profiles[0]; $p.externalMods[0].coordinate = 'latest'; $p.externalMods[0].version = 'latest' } $Catalog $Registry
+    Assert-MutationRejected 'successful-result-requires-evidence' { param($c) $p = $c.profiles[0]; $p.result = $p.expectedPath } $Catalog $Registry
+    Assert-MutationRejected 'evidence-must-exist' { param($c) $p = $c.profiles[0]; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'missing-profile-result.json'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08' }) -Force } $Catalog $Registry
+    Assert-MutationRejected 'evidence-hash-must-match-file' { param($c) $p = $c.profiles[0]; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'scripts/Validate-CompatibilityProfileCatalog.ps1'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08'; provenance = [pscustomobject]@{ commit = ('A' * 40) } }) -Force } $Catalog $Registry
+    Assert-MutationRejected 'failed-result-requires-reason-and-evidence' { param($c) $p = $c.profiles[0]; $p.result = 'FAILED'; $p.PSObject.Properties.Remove('reason') } $Catalog $Registry
+	Write-Output 'Compatibility profile catalog self-test PASS: positive AVAILABLE control accepted; 19 mutations rejected.'
 }
 
 foreach ($path in @($CatalogPath, $RegistryPath)) {
