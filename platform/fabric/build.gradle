@@ -93,11 +93,19 @@ def generatedSharedZipSource = stonecutterDirectNode
 	? stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java").get().asFile.canonicalFile
 	: null
 def nativeSharedZipActive = false
+def legacyReloadManagerSource = stonecutterDirectNode
+	? new File(physicalRepositoryRoot, "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java").canonicalFile
+	: null
+def generatedReloadManagerSource = stonecutterDirectNode
+	? stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java").get().asFile.canonicalFile
+	: null
+def nativeReloadManagerActive = false
 if (stonecutterDirectNode) {
 	legacyNativeSources = [
 		new File(physicalRepositoryRoot, "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile,
 		new File(physicalRepositoryRoot, "versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile,
-		legacySharedZipSource
+		legacySharedZipSource,
+		legacyReloadManagerSource
 	] as Set
 	legacyNativeClientSources = [
 		new File(physicalRepositoryRoot, "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java").canonicalFile,
@@ -105,6 +113,7 @@ if (stonecutterDirectNode) {
 		new File(physicalRepositoryRoot, "versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java").canonicalFile
 	] as Set
 	nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }
+	nativeReloadManagerActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyReloadManagerSource }
 	compileMainJavaSources = files(
 		selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyNativeSources },
 		// Stonecutter 0.9.7 auto-configures every SourceSet, including main.
@@ -344,7 +353,8 @@ tasks.named("sourcesJar") {
 		eachFile { details ->
 			if (details.file.canonicalFile in legacyNativeSources
 				|| details.file.canonicalFile in legacyNativeClientSources
-				|| (!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource)) {
+				|| (!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource)
+				|| (!nativeReloadManagerActive && details.file.canonicalFile == generatedReloadManagerSource)) {
 				details.exclude()
 			}
 		}
