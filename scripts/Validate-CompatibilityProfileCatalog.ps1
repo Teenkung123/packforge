@@ -99,17 +99,17 @@ function Assert-NonPlaceholderHttpsUrl($Object, [string] $Name, [string] $Contex
     $url = Assert-NonPlaceholderText $Object $Name $Context
     try { $uri = [Uri] $url } catch { Fail "$Context has invalid URL '$Name'." }
     if (-not $uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or [string]::IsNullOrWhiteSpace($uri.Host)) { Fail "$Context requires HTTPS '$Name'." }
-    $host = $uri.DnsSafeHost.ToLowerInvariant()
-    if ($host -in @('localhost', 'localhost.localdomain', 'local') -or $host -match '(?:^|\.)?(?:example|invalid|test|localhost|local)(?:\.|$)') {
-        Fail "$Context has reserved or local host '$host' in '$Name'."
-    }
-    $address = $null
-    if ([Net.IPAddress]::TryParse($host, [ref] $address)) {
+	$urlHost = $uri.DnsSafeHost.ToLowerInvariant()
+	if ($urlHost -in @('localhost', 'localhost.localdomain', 'local') -or $urlHost -match '(?:^|\.)?(?:example|invalid|test|localhost|local)(?:\.|$)') {
+		Fail "$Context has reserved or local host '$urlHost' in '$Name'."
+	}
+	$address = $null
+	if ([Net.IPAddress]::TryParse($urlHost, [ref] $address)) {
         $bytes = $address.GetAddressBytes()
         $isLocalAddress = $address.Equals([Net.IPAddress]::IPv6Loopback) -or
             ($bytes.Length -eq 4 -and ($bytes[0] -eq 10 -or $bytes[0] -eq 127 -or ($bytes[0] -eq 169 -and $bytes[1] -eq 254) -or ($bytes[0] -eq 172 -and $bytes[1] -ge 16 -and $bytes[1] -le 31) -or ($bytes[0] -eq 192 -and $bytes[1] -eq 168))) -or
             ($bytes.Length -eq 16 -and (($bytes[0] -eq 0xFE -and ($bytes[1] -band 0xC0) -eq 0x80) -or ($bytes[0] -band 0xFE) -eq 0xFC))
-        if ($isLocalAddress) { Fail "$Context has local IP host '$host' in '$Name'." }
+		if ($isLocalAddress) { Fail "$Context has local IP host '$urlHost' in '$Name'." }
     }
     return $url
 }
@@ -300,7 +300,19 @@ function Assert-MutationRejected([string] $Name, [scriptblock] $Mutation, $Catal
 }
 
 function Invoke-SelfTests($Catalog, $Registry) {
-    Invoke-CatalogValidation $Catalog $Registry | Out-Null
+	Invoke-CatalogValidation $Catalog $Registry | Out-Null
+	$positive = Copy-JsonObject $Catalog
+	$positiveProfile = $positive.profiles[0]
+	$positiveProfile.availability = 'AVAILABLE'
+	Set-CompletePin $positiveProfile.externalMods[0]
+	$positiveProfile.result = $positiveProfile.expectedPath
+	$validatorRelativePath = [IO.Path]::GetRelativePath($RepositoryRoot, $PSCommandPath).Replace('\', '/')
+	$validatorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
+	$positiveProfile | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{
+		resultsPath = $validatorRelativePath
+		resultsSha256 = $validatorSha256
+	}) -Force
+	Invoke-CatalogValidation $positive $Registry | Out-Null
     Assert-MutationRejected 'catalog-can-drop-required-id' { param($c) $c.requiredRecipeIds = @($c.requiredRecipeIds | Select-Object -Skip 1) } $Catalog $Registry
     Assert-MutationRejected 'catalog-can-add-noncanonical-profile' { param($c) $c.profiles[0].id = 'fabric-untracked-profile' } $Catalog $Registry
     Assert-MutationRejected 'dependencies-must-be-array' { param($c) $c.profiles[0].dependencies = [pscustomobject]@{} } $Catalog $Registry
@@ -315,7 +327,7 @@ function Invoke-SelfTests($Catalog, $Registry) {
     Assert-MutationRejected 'evidence-must-exist' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'missing-profile-result.json'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08' }) -Force } $Catalog $Registry
     Assert-MutationRejected 'evidence-hash-must-match-file' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.result = $p.expectedPath; $p | Add-Member -NotePropertyName evidence -NotePropertyValue ([pscustomobject]@{ resultsPath = 'scripts/Validate-CompatibilityProfileCatalog.ps1'; resultsSha256 = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08'; provenance = [pscustomobject]@{ commit = ('A' * 40) } }) -Force } $Catalog $Registry
     Assert-MutationRejected 'failed-result-requires-reason-and-evidence' { param($c) $p = $c.profiles[0]; $p.availability = 'AVAILABLE'; Set-CompletePin $p.externalMods[0]; $p.result = 'FAILED'; $p.PSObject.Properties.Remove('reason') } $Catalog $Registry
-    Write-Output 'Compatibility profile catalog self-test PASS: 14 mutations rejected.'
+	Write-Output 'Compatibility profile catalog self-test PASS: positive AVAILABLE control accepted; 14 mutations rejected.'
 }
 
 foreach ($path in @($CatalogPath, $RegistryPath)) {
