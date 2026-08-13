@@ -520,3 +520,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: `./gradlew.bat reportSourceMetrics --no-daemon --console=plain` passed in 36 seconds with 210 production Java files, 16,323 nonblank LOC, zero exact and normalized duplicate groups, 15 target-key/version conditional lines, three renderer bodies plus two adapters, and 20 publication artifacts. No compile, package, artifact verification, or Minecraft runtime was run.
 - Status: `PHASE_A_METRICS_SNAPSHOT_REFRESHED`; this is a source-inventory checkpoint, not a broader build or release verification.
 - Rollback: `git revert b1161295bd3a41a0349841fd67ff3f0c1634c3bd` restores the prior checked-in metric snapshot only.
+
+## Compatibility profile materialization transport
+
+- Date: 2026-08-13
+- Commit SHA: `6257c35d50d04e4d874b1175d4808af52fbacdb1`
+- Parent SHA: `f15e8575536706570b415a2307dd0d1d76415de3`
+- Scope: wire schema-2 compatibility-profile materialization through `Run-Exact-ProductionMatrix.ps1`, all three loader production-smoke wrappers, and `Test-ExactProductionMatrixProfiles.ps1`, including pinned-mod staging, fixture transport, expected markers, and fail-closed override/path handling.
+- Verification: the offline focused profile self-test passed in 15.7 seconds; AST validation passed for all five scripts; independent review passed.
+- Status: `PHASE_I_MATERIALIZER_STRUCTURAL_VERIFIED`; no network request, artifact download, Gradle task, Minecraft launch, or compatibility runtime was executed. All seven metadata-`AVAILABLE` profiles remain `UNTESTED`; ImmediatelyFast-only profiles fail closed until a dedicated runtime path marker exists, and nonempty configuration overrides fail closed until override transport is implemented.
+- Rollback: after reverting later documentation and profile-runner dependants, `git revert 6257c35d50d04e4d874b1175d4808af52fbacdb1` removes schema-2 profile materialization and restores selector-only profile handling.

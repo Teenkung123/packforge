@@ -266,3 +266,13 @@
 - Verification: `./gradlew.bat reportSourceMetrics --no-daemon --console=plain` PASS in 36 seconds: 210 production Java files, 16,323 nonblank LOC, zero exact/normalized duplicate groups, 15 target-key/version conditional lines, three renderer bodies, two adapters, and 20 publication artifacts.
 - Limits: no compile, package, artifact verification, third-party profile, or Minecraft runtime was run. Metric refresh does not revalidate older final-artifact evidence.
 - Rollback: `git revert b1161295bd3a41a0349841fd67ff3f0c1634c3bd`.
+
+## Phase 19 — compatibility profile materialization transport
+
+- Date: 2026-08-13
+- Commit SHA: `6257c35d50d04e4d874b1175d4808af52fbacdb1`; parent `f15e8575536706570b415a2307dd0d1d76415de3`
+- Status: `STRUCTURAL_VERIFIED`; all seven metadata-`AVAILABLE` profiles remain `UNTESTED`.
+- Scope: add schema-2 compatibility-profile materialization to `Run-Exact-ProductionMatrix.ps1`, `Smoke-Fabric-Production.ps1`, `Smoke-Forge-Production.ps1`, `Smoke-NeoForge-Production.ps1`, and `Test-ExactProductionMatrixProfiles.ps1`; transport the catalog/profile identity, pinned mod paths, fixture metadata, expected markers, and expected evidence path through the loader wrappers with fail-closed checks.
+- Verification: the offline focused materialization self-test passed in 15.7 seconds; AST validation passed for all five scripts; independent review passed.
+- Limits: no network request, dependency download, Gradle task, Minecraft launch, or compatibility runtime was executed. The seven metadata-`AVAILABLE` profiles are still not PASS results. ImmediatelyFast-only execution fails closed because no dedicated path marker is yet available, and any nonempty configuration override fails closed because override transport is not implemented.
+- Rollback: revert later documentation/profile dependants first, then `git revert 6257c35d50d04e4d874b1175d4808af52fbacdb1` to restore selector-only profile handling.
