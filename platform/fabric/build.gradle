@@ -107,6 +107,16 @@ def generatedRuntimeResourceHashSource = stonecutterDirectNode
 	? stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/loader/RuntimeResourceHash.java").get().asFile.canonicalFile
 	: null
 def nativeRuntimeResourceHashActive = false
+def legacyLoadingOverlayToastSources = stonecutterDirectNode
+	? [
+		new File(physicalRepositoryRoot, "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java").canonicalFile,
+		new File(physicalRepositoryRoot, "versions/shared/modern/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java").canonicalFile
+	] as Set
+	: [] as Set
+def generatedLoadingOverlayToastSource = stonecutterDirectNode
+	? stonecutter.tasks.generatedSourcesDir.file("client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java").get().asFile.canonicalFile
+	: null
+def nativeLoadingOverlayToastActive = false
 if (stonecutterDirectNode) {
 	legacyNativeSources = [
 		new File(physicalRepositoryRoot, "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile,
@@ -120,9 +130,11 @@ if (stonecutterDirectNode) {
 		new File(physicalRepositoryRoot, "versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java").canonicalFile,
 		new File(physicalRepositoryRoot, "versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java").canonicalFile
 	] as Set
+	legacyNativeClientSources.addAll(legacyLoadingOverlayToastSources)
 	nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }
 	nativeReloadManagerActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyReloadManagerSource }
 	nativeRuntimeResourceHashActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyRuntimeResourceHashSource }
+	nativeLoadingOverlayToastActive = selectedClientJavaSources.files.any { source -> source.canonicalFile in legacyLoadingOverlayToastSources }
 	compileMainJavaSources = files(
 		selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyNativeSources },
 		// Stonecutter 0.9.7 auto-configures every SourceSet, including main.
@@ -364,7 +376,8 @@ tasks.named("sourcesJar") {
 				|| details.file.canonicalFile in legacyNativeClientSources
 				|| (!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource)
 				|| (!nativeReloadManagerActive && details.file.canonicalFile == generatedReloadManagerSource)
-				|| (!nativeRuntimeResourceHashActive && details.file.canonicalFile == generatedRuntimeResourceHashSource)) {
+				|| (!nativeRuntimeResourceHashActive && details.file.canonicalFile == generatedRuntimeResourceHashSource)
+				|| (!nativeLoadingOverlayToastActive && details.file.canonicalFile == generatedLoadingOverlayToastSource)) {
 				details.exclude()
 			}
 		}
