@@ -17,8 +17,8 @@ Audited continuation checkpoints through authoritative direct-graph Phase 20. Ov
 | Evidence class | Current result |
 |---|---|
 | Registry | Schema v2; 22 exact releases; 12 source families; 19 registry build targets (direct source nodes); 53 direct loader distributions; 62 exact runtime cells; seven publication anchors; 20 expected loader artifacts. |
-| Direct build ownership | Public graph is direct-only; 53 leaves authoritative; direct contract AST/self-test and task PASS; registry dry-run PASS. Native Stonecutter preprocessing is proven only for Fabric archive capture on 16 targets. Nested Gradle remains parity oracle. |
-| Source metrics | 211 production Java files; 16,366 LOC; 104 bridge files / 5,346 LOC (32.67%); zero exact/normalized duplicate groups; 15 target/version conditional lines; three Stonecutter conditional blocks (maximum 39 lines); three renderer bodies; two adapters. |
+| Direct build ownership | Public graph is direct-only; 53 leaves authoritative; direct contract AST/self-test and task PASS; registry dry-run PASS. Fabric native preprocessing has focused proof for archive capture on 16 targets and SharedZip access on 17 targets (1.20.2 through 1.21.11); mc26 retains its physical accessor seam. Nested Gradle remains parity oracle. |
+| Source metrics | 212 production Java files; 16,403 LOC; 105 bridge files / 5,383 LOC (32.82%); zero exact/normalized duplicate groups; 15 target/version conditional lines; four Stonecutter conditional blocks (maximum 40 lines); three renderer bodies; two adapters. |
 | Configuration | Unknown-field preservation, shared integer validation, shared modern renderer, and configured/effective atlas-retry policy have focused evidence. No live full renderer/shader proof. |
 | Compatibility profiles | 36 recipes; 21 `AVAILABLE`/`UNTESTED`; three `UNAVAILABLE`; 12 `PENDING_METADATA`/`UNTESTED`; no PASS profiles. Twenty unique new artifact pins were independently checked against SHA-256 and embedded metadata. |
 | Profile transport | Schema-2 materializer and three loader wrappers structurally verified offline; no downloads or launches. |

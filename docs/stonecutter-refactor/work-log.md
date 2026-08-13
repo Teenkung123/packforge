@@ -365,3 +365,13 @@
 - Verification: direct-contract self-test passed 22 mutations; metrics checkpoint passed in 34 seconds: 211 files, 16,366 LOC, 104 bridge files / 5,346 LOC (32.67%), zero duplicate groups, three blocks / maximum 39 lines. Boundary compile passed in 30 seconds; `sourcesJar` passed in 24 seconds; fresh `devlibs` was 67 files / 59 Java with canonical `BEAFDA...` SHA matching generated output. Independent review passed.
 - Limits: no runtime, full build, matrix, release verification, or Minecraft acceptance. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert 4f82154`; then `git revert b54a40f` if needed.
+
+## Phase E — canonical preprocessed SharedZip Fabric seam
+
+- Date: 2026-08-13
+- Commit SHA: `7efd43f`; parent `deaf765`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: canonical SharedZip preprocessing for Fabric 1.20.2 through 1.21.11 (17 targets), normalized parity with retained standalone shared source, registry-derived activation without a new target-key branch, and retained mc26 physical accessor seam; 1.20.1 has no native SharedZip activation.
+- Verification: direct-contract self-test passed 38 mutations; metrics passed in 26 seconds: 212 files / 16,403 LOC, 105 bridge files / 5,383 LOC (32.82%), zero duplicates, four blocks / maximum 40 lines, and 18 platform target-key references. Combined compile/sourceJar passed in 31 seconds across 14 tasks; follow-up sourceJar UP-TO-DATE PASS in 24 seconds. Exact SHAs: active `C4694D...`, mc26 mixin `1D281C...`, accessor `F7131E...`.
+- Limits: no runtime, full build, matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert 7efd43f`; then `4f82154`, then `b54a40f` if needed.

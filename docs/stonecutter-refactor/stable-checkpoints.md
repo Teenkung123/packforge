@@ -620,3 +620,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: direct-contract self-test passed 22 mutations. `reportSourceMetrics updateSourceMetricsCheckpoint` passed in 34 seconds: 211 production files, 16,366 LOC, 104 bridge files / 5,346 LOC (32.67%), zero exact/normalized duplicate groups, three Stonecutter conditional blocks with maximum 39 lines. Offline boundary compile passed in 30 seconds; `sourcesJar` passed in 24 seconds with fresh `devlibs` at 67 files / 59 Java sources and canonical SHA-256 `BEAFDA...` matching generated output. Independent review passed.
 - Limits: no runtime, full build, full matrix, release verification, or Minecraft acceptance was run. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert 4f82154`; next revert `b54a40f` if the native Fabric archive-capture pilot must also be removed.
+
+## Phase E — canonical preprocessed SharedZip Fabric seam
+
+- Date: 2026-08-13
+- Commit SHA: `7efd43f`; parent `deaf765`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: canonical preprocessed Fabric `SharedZipFileAccessMixin` for 17 active targets from 1.20.2 through 1.21.11, normalized exact parity with the retained standalone shared source, registry-derived activation without a new `target.key` branch, and retained mc26 physical accessor/invoker seam. Minecraft 1.20.1 has no native SharedZip activation.
+- Verification: direct-contract self-test passed 38 mutations. Source metrics passed in 26 seconds: 212 production files, 16,403 LOC, 105 bridge files / 5,383 LOC (32.82%), zero duplicate groups, four Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused combined compile/sourceJar passed in 31 seconds across 14 tasks; follow-up sourceJar was UP-TO-DATE PASS in 24 seconds. Exact generated checksums matched: active SharedZip `C4694D...`, mc26 mixin `1D281C...`, and mc26 accessor `F7131E...`.
+- Limits: no Minecraft runtime, full build, full matrix, release verification, or cross-loader native preprocessing proof was run. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert 7efd43f`; then revert `4f82154` and `b54a40f` in order if removing the preceding Fabric native pilot work.

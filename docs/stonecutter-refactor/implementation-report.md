@@ -34,16 +34,16 @@ Direct loader leaves are authoritative and public aggregate tasks are direct-onl
 Latest deterministic snapshot:
 
 ```text
-productionFiles=211
-productionLoc=16366
-bridgeFiles=104
-bridgeLoc=5346
-bridgePercent=32.67
+productionFiles=212
+productionLoc=16403
+bridgeFiles=105
+bridgeLoc=5383
+bridgePercent=32.82
 exactDuplicateGroups=0
 normalizedDuplicateGroups=0
 targetVersionConditionalLines=15
-stonecutterConditionalBlocks=3
-maxStonecutterConditionalBlockLines=39
+stonecutterConditionalBlocks=4
+maxStonecutterConditionalBlockLines=40
 rendererBodies=3
 rendererAdapters=2
 publicationArtifacts=20
