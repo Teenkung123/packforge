@@ -1,6 +1,7 @@
 package com.teenkung.packforge;
 
 import com.teenkung.packforge.compat.RuntimeMinecraftVersion;
+import com.teenkung.packforge.config.CompatibilityProfileReporter;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.config.PackForgeCapabilities;
 import com.teenkung.packforge.config.PackForgeConfig;
@@ -30,6 +31,7 @@ public final class PackForgeCore {
 		PackForgeConfig.load();
 		StartupTimings.recordDuration("packforge_config_load", System.nanoTime() - configStartNs);
 		QuickPackCompatibility.detectAndLog();
+		CompatibilityProfileReporter.reportIfRequested();
 		StartupTimings.event("packforge_config_loaded");
 		PackForge.LOGGER.info("PackForge capabilities: target={} available={} unavailable={}",
 			PackForgeCapabilities.target(), PackForgeCapabilities.available(), PackForgeCapabilities.unavailable());
