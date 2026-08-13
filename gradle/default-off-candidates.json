@@ -1,0 +1,349 @@
+{
+  "schemaVersion": 1,
+  "requiredCandidateIds": [
+    "zip-read-pool",
+    "font-bitmap-provider-cache",
+    "atlas-mipmap-parallelization",
+    "sprite-decode-batching",
+    "model-adaptive-batching",
+    "model-duplicate-parse-cache",
+    "startup-executor-tuning",
+    "startup-async-data-parsing",
+    "startup-async-class-scan",
+    "startup-async-font-atlas",
+    "atlas-retry"
+  ],
+  "gateNames": [
+    "semanticParity",
+    "stability",
+    "lifecycle",
+    "performance",
+    "compatibility",
+    "configuration"
+  ],
+  "candidates": [
+    {
+      "id": "zip-read-pool",
+      "name": "ZIP read pool",
+      "configKey": "loaderZipPoolEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "",
+      "implementationState": "IMPLEMENTED_UNVERIFIED",
+      "disposition": "SAFE_KEEP_DEFAULT_OFF",
+      "reason": "Bounded pool, fallback, and close paths exist, but no qualifying multi-pack performance, repeated-reload handle-slope, or final Quick Pack compatibility evidence was run for promotion.",
+      "sourcePaths": [
+        "common/src/main/java/com/teenkung/packforge/loader/ZipReadPool.java",
+        "versions/shared/modern/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.java",
+        "common/src/test/java/com/teenkung/packforge/loader/ZipReadPoolTest.java"
+      ],
+      "missingEvidence": [
+        "two representative pack structures and qualifying performance result",
+        "ten-reload ZIP-handle slope from final distribution JARs",
+        "executed Quick Pack ownership profile"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "font-bitmap-provider-cache",
+      "name": "Font bitmap provider cache",
+      "configKey": "fontBitmapProviderCacheEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "",
+      "implementationState": "IMPLEMENTED_UNVERIFIED",
+      "disposition": "SAFE_KEEP_DEFAULT_OFF",
+      "reason": "Reload-scoped generation, retain/release, and close logic exist, but provider parity, lifecycle slope, final-JAR coverage, and ImmediatelyFast coexistence are unproved.",
+      "sourcePaths": [
+        "versions/shared/modern/src/client/java/com/teenkung/packforge/client/font/FontBitmapProviderCache.java",
+        "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java"
+      ],
+      "missingEvidence": [
+        "epoch and provider parity under repeated reload and cancellation",
+        "provider close and retained-heap slope",
+        "executed ImmediatelyFast profile and qualifying performance result"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "atlas-mipmap-parallelization",
+      "name": "Atlas mipmap parallelization",
+      "configKey": "atlasMipParallelEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "",
+      "implementationState": "NOT_STARTED",
+      "disposition": "FAILED_WITH_REASON",
+      "reason": "Capability policy and UI state exist, but no production consumer calls atlasMipParallelEnabled to schedule mip generation; there is no implementation to benchmark or promote.",
+      "sourcePaths": [
+        "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java",
+        "common/src/main/java/com/teenkung/packforge/config/FeatureFlags.java",
+        "common/src/main/java/com/teenkung/packforge/client/config/PackForgeConfigScreenModel.java"
+      ],
+      "missingEvidence": [
+        "bounded production mip scheduling implementation",
+        "render-thread publication and cancellation proof",
+        "executed Quick Pack ownership profiles and qualifying performance result"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "sprite-decode-batching",
+      "name": "Sprite decode batching",
+      "configKey": "atlasDecodeBatchingEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "",
+      "implementationState": "IMPLEMENTED_UNVERIFIED",
+      "disposition": "SAFE_KEEP_DEFAULT_OFF",
+      "reason": "Bounded decode planning and version adapters exist, but native-image cleanup, cancellation, ordering, final-JAR, compatibility, and performance gates have not been executed.",
+      "sourcePaths": [
+        "versions/shared/common/src/client/java/com/teenkung/packforge/client/atlas/BoundedSpriteDecode.java",
+        "versions/mc26/common/src/client/java/com/teenkung/packforge/client/atlas/SpriteMetadataCache.java"
+      ],
+      "missingEvidence": [
+        "native-image close and cancellation proof on Minecraft adapters",
+        "sprite ordering and manifest parity from final distribution JARs",
+        "qualifying multi-pack performance and compatibility results"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "model-adaptive-batching",
+      "name": "Model adaptive batching",
+      "configKey": "modelAdaptiveBatchingEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "",
+      "implementationState": "PARTIAL",
+      "disposition": "FAILED_WITH_REASON",
+      "reason": "Adaptive batch planning exists, but CodeGraph finds no production caller of ModelParseOptimizer.load/loadBlockModels; client initialization only resets its state, so delivered runtime reachability is unproved.",
+      "sourcePaths": [
+        "common/src/main/java/com/teenkung/packforge/concurrent/ModelSchedulingPlan.java",
+        "versions/shared/common/src/client/java/com/teenkung/packforge/client/model/ModelParseOptimizer.java",
+        "versions/mc26/common/src/client/java/com/teenkung/packforge/client/model/ModelParseOptimizer.java"
+      ],
+      "missingEvidence": [
+        "production Minecraft model-loading call path",
+        "custom loader hook preservation proof",
+        "qualifying model-heavy performance and compatibility results"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "model-duplicate-parse-cache",
+      "name": "Model duplicate parse cache",
+      "configKey": "modelDuplicateParseCacheEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "",
+      "implementationState": "PARTIAL",
+      "disposition": "FAILED_WITH_REASON",
+      "reason": "Content-key caches exist inside ModelParseOptimizer, but the optimizer load methods have no production caller and contextual or custom-loader bypass is not established.",
+      "sourcePaths": [
+        "versions/shared/common/src/client/java/com/teenkung/packforge/client/model/ModelParseOptimizer.java",
+        "versions/mc26/common/src/client/java/com/teenkung/packforge/client/model/ModelParseOptimizer.java"
+      ],
+      "missingEvidence": [
+        "production Minecraft model-loading call path",
+        "proven-pure context restriction and custom-loader bypass",
+        "semantic manifest parity and qualifying performance result"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "startup-executor-tuning",
+      "name": "Startup executor tuning",
+      "configKey": "startupExecutorTuningEnabled",
+      "configuredDefault": true,
+      "effectiveDefault": false,
+      "defaultGuard": "startupOptimizerEnabled=false",
+      "implementationState": "IMPLEMENTED_UNVERIFIED",
+      "disposition": "SAFE_KEEP_DEFAULT_OFF",
+      "reason": "Thread-count and priority tuning exists behind startupOptimizerEnabled, whose default is false; no final-JAR oversubscription or Smooth Boot/ModernFix coexistence gate has run.",
+      "sourcePaths": [
+        "common/src/main/java/com/teenkung/packforge/startup/StartupExecutorTuner.java",
+        "common/src/main/java/com/teenkung/packforge/startup/StartupEarlyConfig.java",
+        "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java"
+      ],
+      "missingEvidence": [
+        "representative startup timing and stability result",
+        "Smooth Boot and ModernFix oversubscription profiles",
+        "final distribution JAR coverage across supported runtime families"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "startup-async-data-parsing",
+      "name": "Startup async data parsing",
+      "configKey": "startupAsyncDataParsingEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "startupOptimizerEnabled=false",
+      "implementationState": "PARTIAL",
+      "disposition": "FAILED_WITH_REASON",
+      "reason": "The flag logs a message and enables reload-side model feature flags; no independent startup data-parsing task or initialization-order implementation exists.",
+      "sourcePaths": [
+        "common/src/main/java/com/teenkung/packforge/startup/StartupAsyncFeatures.java",
+        "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java"
+      ],
+      "missingEvidence": [
+        "independent startup data-parsing implementation",
+        "initialization-order and failure-propagation proof",
+        "qualifying startup performance result"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "startup-async-class-scan",
+      "name": "Startup async class scan",
+      "configKey": "startupAsyncClassScanEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "startupOptimizerEnabled=false",
+      "implementationState": "PARTIAL",
+      "disposition": "FAILED_WITH_REASON",
+      "reason": "Current async task only counts class entries and logs mode=observed-only; it does not participate in loader discovery and therefore cannot satisfy the stated optimization.",
+      "sourcePaths": [
+        "common/src/main/java/com/teenkung/packforge/startup/StartupAsyncFeatures.java"
+      ],
+      "missingEvidence": [
+        "loader-discovery integration",
+        "ordering and race-safety proof",
+        "qualifying startup performance result"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "startup-async-font-atlas",
+      "name": "Startup async font/atlas work",
+      "configKey": "startupAsyncFontAtlasEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "startupOptimizerEnabled=false",
+      "implementationState": "PARTIAL",
+      "disposition": "FAILED_WITH_REASON",
+      "reason": "The flag logs a message and aliases reload-side font-selection, sprite-decode, and mip policy; no independent startup task or render-thread publication path exists, and mip parallelization has no production consumer.",
+      "sourcePaths": [
+        "common/src/main/java/com/teenkung/packforge/startup/StartupAsyncFeatures.java",
+        "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java"
+      ],
+      "missingEvidence": [
+        "independent startup font/atlas work implementation",
+        "render-thread publication and cancellation proof",
+        "executed Quick Pack ownership profiles and qualifying performance result"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    },
+    {
+      "id": "atlas-retry",
+      "name": "Atlas retry",
+      "configKey": "atlasRetryEnabled",
+      "configuredDefault": false,
+      "effectiveDefault": false,
+      "defaultGuard": "",
+      "implementationState": "IMPLEMENTED_UNVERIFIED",
+      "disposition": "SAFE_KEEP_DEFAULT_OFF",
+      "reason": "Retry planning and shader-pipeline effective guard exist, but retry is recovery behavior and has no complete final-JAR failure, cleanup, compatibility, or semantic-parity case supporting default-on behavior.",
+      "sourcePaths": [
+        "versions/mc26/common/src/client/java/com/teenkung/packforge/client/atlas/BoundedSpriteDecode.java",
+        "versions/mc26/common/src/client/java/com/teenkung/packforge/client/atlas/SpriteMetadataCache.java",
+        "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java"
+      ],
+      "missingEvidence": [
+        "deterministic retry success and exhaustion cases",
+        "native cleanup and semantic parity after retry",
+        "final distribution JAR shader and Resource Pack Unbounded profiles"
+      ],
+      "gates": {
+        "semanticParity": "NOT_RUN",
+        "stability": "NOT_RUN",
+        "lifecycle": "NOT_RUN",
+        "performance": "NOT_RUN",
+        "compatibility": "NOT_RUN",
+        "configuration": "NOT_RUN"
+      },
+      "evidenceResults": []
+    }
+  ]
+}
