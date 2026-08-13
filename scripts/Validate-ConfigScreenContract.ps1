@@ -1,12 +1,13 @@
 [CmdletBinding()]
-param()
+param(
+	[string]$RegistryPath = (Join-Path $PSScriptRoot '..\gradle\minecraft-targets.json'),
+	[switch]$SelfTest
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$registryPath = Join-Path $repositoryRoot 'gradle/minecraft-targets.json'
-$registry = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
 
 function Require-Contract {
 	param(
@@ -30,13 +31,40 @@ $sharedTargets = @(
 	'mc1_21_5', 'mc1_21_6', 'mc1_21_7', 'mc1_21_8', 'mc1_21_9', 'mc1_21_10'
 )
 $baseTargets = @($sharedTargets + 'mc1_21_11')
-$sharedWrapper = @($registry.sharedJavaSources | Where-Object id -eq 'config-screen-1.20.5-through-1.21.10')
-$sharedBase = @($registry.sharedJavaSources | Where-Object id -eq 'config-screen-base-1.20.5-through-1.21.11')
-Require-Contract ($sharedWrapper.Count -eq 1) 'Registry must declare exactly one shared PackForgeConfigScreen wrapper route.'
-Require-Contract ($sharedBase.Count -eq 1) 'Registry must declare exactly one shared PackForgeConfigScreenBase route.'
-Require-Contract (($sharedWrapper[0].targets -join ',') -eq ($sharedTargets -join ',')) 'Shared PackForgeConfigScreen wrapper targets are stale.'
-Require-Contract (($sharedBase[0].targets -join ',') -eq ($baseTargets -join ',')) 'Shared PackForgeConfigScreenBase targets are stale.'
-Require-Contract ($sharedWrapper[0].sourceSet -eq 'client' -and $sharedBase[0].sourceSet -eq 'client') 'Configuration renderer routes must remain client-only.'
+$sharedPackSelectionTargets = @(
+	'mc1_21', 'mc1_21_1', 'mc1_21_2', 'mc1_21_3', 'mc1_21_4', 'mc1_21_5',
+	'mc1_21_6', 'mc1_21_7', 'mc1_21_8', 'mc1_21_9', 'mc1_21_10'
+)
+
+function Assert-SharedConfigRoutes {
+	param([Parameter(Mandatory = $true)]$Registry)
+
+	$sharedWrapperPath = 'versions/shared/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java'
+	$sharedBasePath = 'versions/shared/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreenBase.java'
+	$sharedPackSelectionPath = 'versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java'
+	$sharedWrapper = @($Registry.sharedJavaSources | Where-Object id -ceq 'config-screen-1.20.5-through-1.21.10')
+	$sharedBase = @($Registry.sharedJavaSources | Where-Object id -ceq 'config-screen-base-1.20.5-through-1.21.11')
+	$sharedPackSelection = @($Registry.sharedJavaSources | Where-Object id -ceq 'pack-selection-1.21-through-1.21.10')
+
+	Require-Contract ($sharedWrapper.Count -eq 1) 'Registry must declare exactly one shared PackForgeConfigScreen wrapper route.'
+	Require-Contract ($sharedBase.Count -eq 1) 'Registry must declare exactly one shared PackForgeConfigScreenBase route.'
+	Require-Contract ($sharedPackSelection.Count -eq 1) 'Registry must declare exactly one shared resource-pack config entrypoint route.'
+	Require-Contract ($sharedWrapper[0].path -ceq $sharedWrapperPath) 'Shared PackForgeConfigScreen wrapper path is stale.'
+	Require-Contract ($sharedBase[0].path -ceq $sharedBasePath) 'Shared PackForgeConfigScreenBase path is stale.'
+	Require-Contract ($sharedPackSelection[0].path -ceq $sharedPackSelectionPath) 'Shared resource-pack config entrypoint path is stale.'
+	Require-Contract (($sharedWrapper[0].targets -join ',') -ceq ($sharedTargets -join ',')) 'Shared PackForgeConfigScreen wrapper targets are stale.'
+	Require-Contract (($sharedBase[0].targets -join ',') -ceq ($baseTargets -join ',')) 'Shared PackForgeConfigScreenBase targets are stale.'
+	Require-Contract (($sharedPackSelection[0].targets -join ',') -ceq ($sharedPackSelectionTargets -join ',')) 'Shared resource-pack config entrypoint targets are stale.'
+	Require-Contract (
+		$sharedWrapper[0].sourceSet -ceq 'client' -and
+		$sharedBase[0].sourceSet -ceq 'client' -and
+		$sharedPackSelection[0].sourceSet -ceq 'client'
+	) 'Configuration renderer and resource-pack entrypoint routes must remain client-only.'
+}
+
+Require-Contract (Test-Path -LiteralPath $RegistryPath -PathType Leaf) "Missing target registry: $RegistryPath"
+$registry = Get-Content -LiteralPath $RegistryPath -Raw | ConvertFrom-Json
+Assert-SharedConfigRoutes $registry
 
 $rendererFiles = @(
 	'versions/mc1_20_1/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java',
@@ -91,4 +119,32 @@ foreach ($entry in $entryPoints.GetEnumerator()) {
 	Require-Contract $text.Contains($entry.Value) "$($entry.Key) no longer opens PackForgeConfigScreen."
 }
 
-Write-Output "PackForge configuration-screen contract valid: bodies=$($rendererBodies.Count), wrappers=2, entryPoints=$($entryPoints.Count), sharedTargets=$($baseTargets.Count)"
+if ($SelfTest) {
+	$temporaryRegistryPath = Join-Path ([IO.Path]::GetTempPath()) ("packforge-config-screen-registry-" + [guid]::NewGuid().ToString('N') + '.json')
+	try {
+		$mutatedRegistry = $registry | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+		$mutatedRoute = @($mutatedRegistry.sharedJavaSources | Where-Object id -ceq 'pack-selection-1.21-through-1.21.10')[0]
+		$mutatedRoute.targets = @($mutatedRoute.targets | Where-Object { $_ -ne 'mc1_21_10' })
+		[IO.File]::WriteAllText(
+			$temporaryRegistryPath,
+			($mutatedRegistry | ConvertTo-Json -Depth 100),
+			[Text.UTF8Encoding]::new($false)
+		)
+		$temporaryRegistry = Get-Content -LiteralPath $temporaryRegistryPath -Raw | ConvertFrom-Json
+		try {
+			Assert-SharedConfigRoutes $temporaryRegistry
+			throw 'Configuration-screen self-test accepted a shared resource-pack entrypoint route with a missing target.'
+		} catch {
+			if ($_.Exception.Message -cne 'Shared resource-pack config entrypoint targets are stale.') {
+				throw
+			}
+		}
+	} finally {
+		if (Test-Path -LiteralPath $temporaryRegistryPath -PathType Leaf) {
+			Remove-Item -LiteralPath $temporaryRegistryPath -Force
+		}
+	}
+	Write-Output 'PackForge configuration-screen contract self-test valid: stale shared resource-pack entrypoint target rejected.'
+}
+
+Write-Output "PackForge configuration-screen contract valid: bodies=$($rendererBodies.Count), wrappers=2, entryPoints=$($entryPoints.Count), sharedTargets=$($baseTargets.Count), sharedEntryPointTargets=$($sharedPackSelectionTargets.Count)"
