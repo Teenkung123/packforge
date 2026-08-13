@@ -1,5 +1,7 @@
 package com.teenkung.packforge.config;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.teenkung.packforge.platform.PackForgePlatform;
 import com.teenkung.packforge.platform.PackForgeServices;
 import org.junit.jupiter.api.Test;
@@ -35,7 +37,10 @@ class PackForgeConfigPreservationTest {
 			  "modelParseBatchingEnabled": false,
 			  "experimentalAtlasSplit": true,
 			  "startupOptimizerEnabled": true,
-			  "startupAsyncDataParsingEnabled": true
+			  "startupAsyncDataParsingEnabled": true,
+			  "futureScalar": "keep-me",
+			  "futureObject": { "enabled": true },
+			  "futureArray": ["one", 2]
 			}
 			""");
 
@@ -54,12 +59,19 @@ class PackForgeConfigPreservationTest {
 		assertTrue(loaded.startupOptimizerEnabled);
 		assertTrue(loaded.startupAsyncDataParsingEnabled);
 
-		String saved = Files.readString(configFile);
-		assertTrue(saved.contains("\"configVersion\": 12"));
-		assertTrue(saved.contains("\"atlasCapEnabled\": false"));
-		assertTrue(saved.contains("\"atlasRetryEnabled\": true"));
-		assertTrue(saved.contains("\"experimentalAtlasSplit\": true"));
-		assertTrue(saved.contains("\"startupAsyncDataParsingEnabled\": true"));
+		PackForgeConfig.Cfg draft = PackForgeConfig.copyOf(loaded);
+		draft.loaderIndexEnabled = true;
+		assertTrue(PackForgeConfig.applyAndSave(draft).successful());
+
+		JsonObject saved = JsonParser.parseString(Files.readString(configFile)).getAsJsonObject();
+		assertEquals(12, saved.get("configVersion").getAsInt());
+		assertFalse(saved.get("atlasCapEnabled").getAsBoolean());
+		assertTrue(saved.get("atlasRetryEnabled").getAsBoolean());
+		assertTrue(saved.get("experimentalAtlasSplit").getAsBoolean());
+		assertTrue(saved.get("startupAsyncDataParsingEnabled").getAsBoolean());
+		assertEquals("keep-me", saved.get("futureScalar").getAsString());
+		assertTrue(saved.getAsJsonObject("futureObject").get("enabled").getAsBoolean());
+		assertEquals("[\"one\",2]", saved.getAsJsonArray("futureArray").toString());
 	}
 
 	@Test

@@ -9,6 +9,7 @@ import com.teenkung.packforge.config.QuickPackCompatibility;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -475,7 +476,17 @@ public final class PackForgeConfigScreenModel {
 		options.add(bool("startup_async_font_atlas", Category.STARTUP, "future_async", PackForgeCapability.STARTUP_ASYNC_FONT_ATLAS, ApplyScope.GAME_RESTART,
 			cfg -> cfg.startupAsyncFontAtlasEnabled, (cfg, value) -> cfg.startupAsyncFontAtlasEnabled = value));
 
+		validateUniqueOptionIds(options);
 		return Collections.unmodifiableList(options);
+	}
+
+	static void validateUniqueOptionIds(List<OptionSpec> options) {
+		Set<String> ids = new HashSet<>();
+		for (OptionSpec option : options) {
+			if (!ids.add(option.id())) {
+				throw new IllegalStateException("Duplicate PackForge config option id: " + option.id());
+			}
+		}
 	}
 
 	private static BooleanOption bool(

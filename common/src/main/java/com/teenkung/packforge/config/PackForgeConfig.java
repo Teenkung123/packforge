@@ -17,10 +17,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public final class PackForgeConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final int CURRENT_VERSION = 12;
+	private static final Set<String> KNOWN_FIELDS = Set.copyOf(GSON.toJsonTree(new Cfg()).getAsJsonObject().keySet());
 	private static volatile Cfg INSTANCE;
 
 	public static final class Cfg {
@@ -74,6 +76,7 @@ public final class PackForgeConfig {
 		public boolean startupAsyncDataParsingEnabled = false;
 		public boolean startupAsyncClassScanEnabled = false;
 		public boolean startupAsyncFontAtlasEnabled = false;
+		private transient JsonObject extras = new JsonObject();
 	}
 
 	public record SaveResult(boolean successful, String errorMessage) {
@@ -107,6 +110,7 @@ public final class PackForgeConfig {
 					Cfg parsed = GSON.fromJson(root, Cfg.class);
 					if (parsed != null) {
 						cfg = parsed;
+						cfg.extras = unknownFields(root);
 					}
 					shouldSave = applyMissingDefaults(cfg, root);
 				}
@@ -200,6 +204,7 @@ public final class PackForgeConfig {
 		copy.startupAsyncDataParsingEnabled = source.startupAsyncDataParsingEnabled;
 		copy.startupAsyncClassScanEnabled = source.startupAsyncClassScanEnabled;
 		copy.startupAsyncFontAtlasEnabled = source.startupAsyncFontAtlasEnabled;
+		copy.extras = copyJsonObject(source.extras);
 		return copy;
 	}
 
@@ -210,7 +215,7 @@ public final class PackForgeConfig {
 			Files.createDirectories(file.getParent());
 			temporaryFile = Files.createTempFile(file.getParent(), "packforge-", ".json.tmp");
 			try (Writer w = Files.newBufferedWriter(temporaryFile, StandardCharsets.UTF_8)) {
-				GSON.toJson(cfg, w);
+				GSON.toJson(serialize(cfg), w);
 			}
 			try {
 				Files.move(temporaryFile, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -229,6 +234,29 @@ public final class PackForgeConfig {
 			}
 			return SaveResult.failure(e);
 		}
+	}
+
+	private static JsonObject serialize(Cfg cfg) {
+		JsonObject root = copyJsonObject(cfg.extras);
+		JsonObject knownFields = GSON.toJsonTree(cfg).getAsJsonObject();
+		for (String key : knownFields.keySet()) {
+			root.add(key, knownFields.get(key));
+		}
+		return root;
+	}
+
+	private static JsonObject unknownFields(JsonObject root) {
+		JsonObject extras = new JsonObject();
+		for (String key : root.keySet()) {
+			if (!KNOWN_FIELDS.contains(key)) {
+				extras.add(key, root.get(key).deepCopy());
+			}
+		}
+		return extras;
+	}
+
+	private static JsonObject copyJsonObject(JsonObject source) {
+		return source == null ? new JsonObject() : source.deepCopy();
 	}
 
 	private static Path configFile() {

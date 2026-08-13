@@ -139,6 +139,13 @@ class PackForgeConfigScreenModelTest {
 	}
 
 	@Test
+	void rejectsDuplicateOptionIds() {
+		PackForgeConfigScreenModel.OptionSpec option = option("loader_index");
+
+		assertThrows(IllegalStateException.class, () -> PackForgeConfigScreenModel.validateUniqueOptionIds(List.of(option, option)));
+	}
+
+	@Test
 	void effectiveStateShowsQuickPackOwnershipWithoutChangingDraftValue() {
 		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
 		PackForgeConfigScreenModel.OptionSpec option = PackForgeConfigScreenModel.allOptions().stream()
