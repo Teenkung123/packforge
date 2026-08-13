@@ -32,16 +32,16 @@ Registry declaration does not prove current runtime support. Current exact final
 | `mc1_21_9_11` | 1.21.11 | 1.21.9-1.21.11 publication range | beta | 21 |
 | `mc26` | 26.1 | 26.1-26.2 publication range | stable | 25 |
 
-Seven publication anchors resolve to 20 expected loader artifacts. Nineteen source anchors expand to 53 loader-specific direct distributions. Exact runtime expansion is a separate 62-cell ledger.
+Seven publication anchors resolve to 20 expected loader artifacts. Twelve source families and 19 registry build targets (direct source nodes) expand to 53 loader-specific direct distributions. Exact runtime expansion is a separate 62-cell ledger.
 
 ## Current graph status
 
 - `gradle/minecraft-targets.json` is schema v2 and owns releases, loaders, source policies, Java levels, metadata, and publication ranges.
-- Registry-derived settings create the 19 source anchors and 53 loader distributions.
+- Registry-derived settings create 19 registry build targets (direct source nodes) and 53 loader distributions from 12 source families.
 - All 53 loader leaves are authoritative direct cells; public aggregate graph is direct-only.
 - `validateStonecutterDirectContract` enforces direct-node ownership and rejects delegated public leaves.
 - Nested Gradle remains a temporary parity rollback oracle.
-- Full all-53 build/structural/package parity, Java 17/21/25 proof, remap/refmap/JarJar proof, and true Stonecutter-preprocessed-source proof are not complete.
+- Native Stonecutter preprocessing is proven only for Fabric archive capture across 16 targets. Full all-53 build/structural/package parity, Java 17/21/25 proof, remap/refmap/JarJar proof, and general cross-loader preprocessing are not complete.
 
 No intermediate release is inferred from metadata alone. A publication range becomes current-proven only when one current loader JAR passes every exact release it claims.
 

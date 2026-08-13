@@ -63,7 +63,7 @@ Quick Pack policy assigns exactly six capabilities to `EXTERNALLY_OWNED_PATH` wh
 
 ## Build and publication state
 
-The authoritative graph contains 53 direct loader distributions. Direct-contract AST/self-tests, the direct contract task, and a registry dry-run pass. Nested Gradle remains a temporary parity oracle. Full all-53 compilation/package parity and true preprocessing proof are absent.
+The authoritative graph contains 53 direct loader distributions. Direct-contract AST/self-tests, the direct contract task, and a registry dry-run pass. Native Stonecutter preprocessing is proven for Fabric archive capture across 16 targets. Nested Gradle remains a temporary parity oracle; full all-53 compilation/package parity and general cross-loader preprocessing proof are absent.
 
 Registry publication metadata expects 20 artifacts, but a complete current manifest has not been verified after direct artifact changes. Therefore publication ranges and all 62 exact runtime cells remain unproven for current bytes.
 

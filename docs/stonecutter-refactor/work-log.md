@@ -345,3 +345,23 @@
 - Verification: AST and data-only self-test passed: valid controlled graceful exit, 17 rejected mutations, valid-then-later-invalid chronology, final-summary failure behavior, and independent review.
 - Limits: no Gradle task, Minecraft launch, network request, or matrix execution was run.
 - Rollback: revert later dependants first, then `git revert aa452ac`.
+
+## Phase E — first native Stonecutter capability pilot
+
+- Date: 2026-08-13
+- Commit SHA: `b54a40f`; parent `b66a0cc`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: Fabric archive-capture canonical native source for active 1.20.2 through 1.21.10 targets, with the 1.20.5 seam; standalone, Forge, NeoForge, and legacy rollback paths retained.
+- Verification: direct-contract self-test passed 53 cells/16 native targets/21 mutations; offline 1.20.4+1.20.5 boundary compile passed in 37 seconds (daemon output after launcher timeout); `mc1_20_5 sourcesJar` passed in 25 seconds. Fresh `devlibs`: 67 files, 59 Java, one canonical entry, SHA-256 prefix `2EB1` matching generated output, no wrong root/legacy source. Independent review passed.
+- Limits: no runtime, full build, matrix, release verification, or Minecraft acceptance. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert b54a40f`.
+
+## Phase E — native loader-source metrics and compact archive-capture boundary
+
+- Date: 2026-08-13
+- Commit SHA: `4f82154`; parent `b54a40f`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: root loader source metrics, fail-closed Stonecutter directive parsing, and compact canonical archive-capture helper.
+- Verification: direct-contract self-test passed 22 mutations; metrics checkpoint passed in 34 seconds: 211 files, 16,366 LOC, 104 bridge files / 5,346 LOC (32.67%), zero duplicate groups, three blocks / maximum 39 lines. Boundary compile passed in 30 seconds; `sourcesJar` passed in 24 seconds; fresh `devlibs` was 67 files / 59 Java with canonical `BEAFDA...` SHA matching generated output. Independent review passed.
+- Limits: no runtime, full build, matrix, release verification, or Minecraft acceptance. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert 4f82154`; then `git revert b54a40f` if needed.

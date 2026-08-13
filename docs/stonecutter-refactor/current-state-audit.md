@@ -16,9 +16,9 @@ Audited continuation checkpoints through authoritative direct-graph Phase 20. Ov
 
 | Evidence class | Current result |
 |---|---|
-| Registry | Schema v2; 22 exact releases; 19 source anchors; 53 direct loader distributions; 62 exact runtime cells; seven publication anchors; 20 expected loader artifacts. |
-| Direct build ownership | Public graph is direct-only; 53 leaves authoritative; direct contract AST/self-test and task PASS; registry dry-run PASS. Nested Gradle remains parity oracle. |
-| Source metrics | 210 production Java files; 16,323 LOC; zero exact/normalized duplicate groups; 15 target/version conditional lines; three renderer bodies; two adapters. |
+| Registry | Schema v2; 22 exact releases; 12 source families; 19 registry build targets (direct source nodes); 53 direct loader distributions; 62 exact runtime cells; seven publication anchors; 20 expected loader artifacts. |
+| Direct build ownership | Public graph is direct-only; 53 leaves authoritative; direct contract AST/self-test and task PASS; registry dry-run PASS. Native Stonecutter preprocessing is proven only for Fabric archive capture on 16 targets. Nested Gradle remains parity oracle. |
+| Source metrics | 211 production Java files; 16,366 LOC; 104 bridge files / 5,346 LOC (32.67%); zero exact/normalized duplicate groups; 15 target/version conditional lines; three Stonecutter conditional blocks (maximum 39 lines); three renderer bodies; two adapters. |
 | Configuration | Unknown-field preservation, shared integer validation, shared modern renderer, and configured/effective atlas-retry policy have focused evidence. No live full renderer/shader proof. |
 | Compatibility profiles | 36 recipes; 21 `AVAILABLE`/`UNTESTED`; three `UNAVAILABLE`; 12 `PENDING_METADATA`/`UNTESTED`; no PASS profiles. Twenty unique new artifact pins were independently checked against SHA-256 and embedded metadata. |
 | Profile transport | Schema-2 materializer and three loader wrappers structurally verified offline; no downloads or launches. |
@@ -34,8 +34,8 @@ Audited continuation checkpoints through authoritative direct-graph Phase 20. Ov
 | **A — reconcile state and source gates** | `VERIFIED_COMPLETE` | Deterministic metrics cover source layers, duplicate groups, ownership, build branches, renderer families, and artifact declarations. | Refresh after later structural edits. |
 | **B — Quick Pack capability ownership** | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Exactly six overlap capabilities are externally owned; other 23 remain PackForge-governed; UI effective state is ownership-aware. | Current final-JAR profile runs. |
 | **C — safe optional-mod detection** | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Loader-neutral detection and environment-gated reporter exist; failure is conservative. | Required Forge/NeoForge and combined runtime profiles. |
-| **D — registry-derived graph** | `STRUCTURAL_VERIFIED` | 19 source anchors, 53 loader distributions, separate 62-cell ledger; registry/direct-node contract mandatory. | Maintain bijection gate. |
-| **E — authoritative direct build** | `PARTIAL` | 53 leaves are authoritative direct cells and public graph is direct-only. | All-53 compile/package parity; Java 17/21/25; remap/refmap/JarJar; runtime; preprocessing decision/proof; remove nested oracle. |
+| **D — registry-derived graph** | `STRUCTURAL_VERIFIED` | 12 source families, 19 registry build targets (direct source nodes), 53 loader distributions, separate 62-cell ledger; registry/direct-node contract mandatory. | Maintain bijection gate. |
+| **E — authoritative direct build** | `PARTIAL` | 53 leaves are authoritative direct cells and public graph is direct-only. Fabric archive capture is natively preprocessed across 16 targets with boundary compile and source-archive proof. | Extend preprocessing beyond the bounded Fabric pilot; all-53 compile/package parity; Java 17/21/25; remap/refmap/JarJar; runtime; remove nested oracle. |
 | **F — reduce duplication and clarify ownership** | `PARTIAL` | Zero duplicate groups, 15 conditional lines, source-policy centralization. | Raw shrink target not met; preserve justification and prevent regression. |
 | **G — consolidate configuration renderers** | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Unknown fields preserved; shared validation/model; three renderer bodies plus two adapters. | Live renderer parity and current final-JAR checks. |
 | **H — same-binary range artifacts** | `IMPLEMENTED_UNVERIFIED` | Registry expresses 20 artifacts without maturity crossing. | Rebuild current bytes and repeat every same-JAR range cell. |
@@ -53,7 +53,7 @@ Audited continuation checkpoints through authoritative direct-graph Phase 20. Ov
 
 ## Current blockers to completion
 
-1. Nested Gradle still exists as parity oracle; all-53 direct parity and true preprocessing ownership are unresolved.
+1. Nested Gradle still exists as parity oracle; all-53 direct parity and preprocessing ownership beyond the bounded Fabric archive pilot are unresolved.
 2. Current complete 20-artifact manifest has not been built and verified.
 3. Current same-binary range proof and all 62 exact runtime cells are absent.
 4. Twenty-one materializable compatibility profiles remain `UNTESTED`; 12 more lack exact compatible metadata; three are explicitly `UNAVAILABLE`.
@@ -62,7 +62,7 @@ Audited continuation checkpoints through authoritative direct-graph Phase 20. Ov
 
 ## Dependency-ordered continuation
 
-1. Finish Phase E direct build/package parity and preprocessing decision; remove nested parity oracle only after proof.
+1. Extend the proven Fabric preprocessing pilot, finish Phase E direct build/package parity, and remove the nested parity oracle only after equivalent proof.
 2. Rebuild and verify exact 20-artifact manifest.
 3. Execute H/K same-binary and 62-cell runtime matrix using deterministic fixtures.
 4. Execute all currently available Phase I profiles; keep unresolved cells `UNTESTED` or evidence-backed `UNAVAILABLE`.

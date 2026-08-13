@@ -4,7 +4,7 @@ Date: 2026-08-13
 
 | Candidate | Current decision | Evidence / remaining gate |
 |---|---|---|
-| Stonecutter | Retain for registry-derived project graph and direct task ownership | 19 source anchors and 53 loader distributions are generated; public leaves are direct. Full all-53 parity and true preprocessing proof remain open. Nested Gradle stays only as temporary parity oracle. |
+| Stonecutter | Retain for registry-derived project graph, direct task ownership, and native preprocessing | Twelve source families and 19 registry build targets expand into 53 loader distributions; public leaves are direct. Fabric archive capture has native preprocessing proof across 16 targets. Full all-53 parity and general cross-loader preprocessing remain open. Nested Gradle stays only as temporary parity oracle. |
 | Java toolchain resolver | Retain build-time resolver | Required for Java 17/21/25 reproducibility; no runtime dependency. Aggregate current proof remains open. |
 | MixinExtras | Keep and embed once per loader | Packaging rules exist. Current all-53 remap/JarJar verification remains open. |
 | Cloth Config / YACL | Do not require or shade | Native screens remain sufficient. |

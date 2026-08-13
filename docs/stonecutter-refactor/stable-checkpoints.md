@@ -600,3 +600,23 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: PowerShell AST validation; data-only self-test accepted a valid controlled graceful exit and rejected 17 mutations, including malformed numeric/hash/evidence cases; valid-then-later-invalid chronology and final-summary failure behavior passed; independent review passed.
 - Limits: no Gradle task, Minecraft launch, network request, or matrix execution was run.
 - Rollback: revert later dependants first, then `git revert aa452ac` to restore the preceding resumable-PASS handling.
+
+## Phase E — first native Stonecutter capability pilot
+
+- Date: 2026-08-13
+- Commit SHA: `b54a40f`; parent `b66a0cc`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: make Fabric archive capture the first native Stonecutter capability pilot: canonical source for 16 active targets from 1.20.2 through 1.21.10, with the source-family seam at 1.20.5. Standalone, Forge, NeoForge, and legacy rollback paths remain preserved.
+- Verification: direct-contract self-test passed for 53 cells, 16 native targets, and 21 rejected mutations. Offline boundary compile for 1.20.4 and 1.20.5 passed in 37 seconds (launcher timeout left daemon output); generated handlers/classes were distinct and correct. `mc1_20_5` `sourcesJar` passed in 25 seconds; fresh `devlibs` contained 67 files and 59 Java sources, exactly one canonical archive-capture entry with SHA-256 prefix `2EB1`, matching generated output, and no wrong root or legacy source. Independent review passed.
+- Limits: no runtime, full build, full matrix, artifact release verification, or Minecraft acceptance was run. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert b54a40f` to restore the preceding delegated/canonical source selection while preserving standalone, Forge, NeoForge, and legacy rollback paths.
+
+## Phase E — native loader-source metrics and compact archive-capture boundary
+
+- Date: 2026-08-13
+- Commit SHA: `4f82154`; parent `b54a40f`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: include handwritten root loader branches in source metrics, make the Stonecutter conditional parser fail closed for the active directive forms, and compact the canonical archive-capture path through a helper while retaining the native Fabric capability pilot.
+- Verification: direct-contract self-test passed 22 mutations. `reportSourceMetrics updateSourceMetricsCheckpoint` passed in 34 seconds: 211 production files, 16,366 LOC, 104 bridge files / 5,346 LOC (32.67%), zero exact/normalized duplicate groups, three Stonecutter conditional blocks with maximum 39 lines. Offline boundary compile passed in 30 seconds; `sourcesJar` passed in 24 seconds with fresh `devlibs` at 67 files / 59 Java sources and canonical SHA-256 `BEAFDA...` matching generated output. Independent review passed.
+- Limits: no runtime, full build, full matrix, release verification, or Minecraft acceptance was run. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert 4f82154`; next revert `b54a40f` if the native Fabric archive-capture pilot must also be removed.

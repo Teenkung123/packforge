@@ -13,8 +13,8 @@ This report describes current implementation state. Earlier full-matrix and Quic
 | A — audit and source gates | `VERIFIED_COMPLETE` | Deterministic source inventory, duplicate checks, ownership/category metrics, conditional counts, renderer-family counts, and registry/publication counts. | Rerun after later structural changes. |
 | B — Quick Pack ownership | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Exactly six overlap capabilities are handed off; 23 capabilities remain PackForge-owned; mixed non-overlap behavior is retained; UI reports configured/effective ownership. | Current final-JAR profiles on required loaders. |
 | C — optional-mod detection | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Loader-neutral runtime detection and environment-gated profile reporter exist; detection failures fail conservatively. | Current Forge/NeoForge profile launches and retained evidence. |
-| D — registry graph | `STRUCTURAL_VERIFIED` | Registry generates 19 source anchors, 53 loader distributions, and a separate 62-cell exact runtime ledger. | Keep registry/direct-node bijection mandatory as graph evolves. |
-| E — authoritative direct build | `PARTIAL` | All 53 loader distributions are authoritative direct cells; public graph is direct-only; contract validation is mandatory. | All-53 compile/package parity, Java 17/21/25 proof, remap/refmap/JarJar proof, runtime, true preprocessing decision/proof, then removal of nested parity oracle. |
+| D — registry graph | `STRUCTURAL_VERIFIED` | Registry generates 12 source families, 19 registry build targets (direct source nodes), 53 loader distributions, and a separate 62-cell exact runtime ledger. | Keep registry/direct-node bijection mandatory as graph evolves. |
+| E — authoritative direct build | `PARTIAL` | All 53 loader distributions are authoritative direct cells; public graph is direct-only; contract validation is mandatory. Native preprocessing is proven for Fabric archive capture on 16 targets. | Extend preprocessing beyond the bounded pilot; all-53 compile/package parity, Java 17/21/25 proof, remap/refmap/JarJar proof, runtime, then removal of nested parity oracle. |
 | F — source ownership | `PARTIAL` | Zero exact/normalized duplicate groups; 15 target/version conditionals; registry-backed source policy; deterministic metric snapshot. | Raw LOC reduction target is not met; retain justification and prevent branch/duplicate regression. |
 | G — configuration renderers | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Unknown fields survive save; integer validation is shared; renderer families reduced to three bodies plus two adapters; atlas retry configured/effective state is separated. | Live UI parity across renderer families and shader/atlas runtime behavior. |
 | H — range artifacts | `IMPLEMENTED_UNVERIFIED` | Registry expresses seven publication anchors and 20 loader artifacts without crossing maturity boundaries. | Rebuild current bytes and repeat same-JAR proof for every exact release in each range. |
@@ -25,20 +25,25 @@ This report describes current implementation state. Earlier full-matrix and Quic
 
 ## Current build architecture
 
-`gradle/minecraft-targets.json` remains schema v2 and records 22 exact Minecraft releases. Registry generation creates 19 source anchors and 53 loader-specific direct distributions. The 62-cell ledger is a runtime acceptance matrix, not a build-node count.
+`gradle/minecraft-targets.json` remains schema v2 and records 22 exact Minecraft releases, 12 source families, and 19 registry build targets (direct source nodes). Registry expansion creates 53 loader-specific direct distributions. The 62-cell ledger is a runtime acceptance matrix, not a build-node count.
 
-Direct loader leaves are authoritative and public aggregate tasks are direct-only. `validateStonecutterDirectContract` rejects delegation in public leaves and checks registry metadata. Nested Gradle still exists as a temporary parity rollback oracle. Therefore current architecture must not be described as a complete Stonecutter preprocessing migration: true preprocessing proof and full all-cell parity remain open.
+Direct loader leaves are authoritative and public aggregate tasks are direct-only. `validateStonecutterDirectContract` rejects delegation in public leaves and checks registry metadata. Native Stonecutter preprocessing is compile- and source-archive-proven for Fabric archive capture across 16 targets, but it is not yet the general source transport. Nested Gradle still exists as a temporary parity rollback oracle; broader preprocessing ownership and full all-cell parity remain open.
 
 ## Current source and configuration evidence
 
 Latest deterministic snapshot:
 
 ```text
-productionFiles=210
-productionLoc=16323
+productionFiles=211
+productionLoc=16366
+bridgeFiles=104
+bridgeLoc=5346
+bridgePercent=32.67
 exactDuplicateGroups=0
 normalizedDuplicateGroups=0
 targetVersionConditionalLines=15
+stonecutterConditionalBlocks=3
+maxStonecutterConditionalBlockLines=39
 rendererBodies=3
 rendererAdapters=2
 publicationArtifacts=20
@@ -58,7 +63,7 @@ The compatibility catalog contains 36 recipes:
 
 Every available recipe is pinned by URL/version/SHA-256 and requires runtime evidence markers. Twenty unique newly added pins were independently checked against their SHA-256 and embedded loader metadata; no downloaded artifacts were retained. `CompatibilityProfileReporter` reports profile ID, loader, target, observed mods, Quick Pack state, six handed-off capabilities, and 23 retained capabilities only when profile environment variables are present.
 
-Schema-2 materialization validates the catalog before resolving inputs, uses a hash-addressed cache, derives safe decoded basenames, verifies SHA-256, transports fixture and expected-marker metadata, and rejects unsupported paths. Offline materialization and AST tests pass. No network request, dependency download, Gradle build, or Minecraft launch belongs to this evidence. ImmediatelyFast-only path proof and nonempty configuration overrides currently fail closed.
+Schema-2 materialization validates the catalog before resolving inputs, uses a hash-addressed cache, derives safe decoded basenames, verifies SHA-256, transports fixture and expected-marker metadata, and rejects unsupported paths. Offline materialization and AST tests pass. Exactly five safe boolean overrides are merged against a complete 50-field v12 baseline; unsupported keys and values fail closed. No network request, dependency download, Gradle build, or Minecraft launch belongs to this evidence. ImmediatelyFast-only path proof remains unavailable.
 
 Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected-textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy packs. Manifest contracts also cover overlay/namespace/duplicate and malformed-but-ZIP-readable entries. Fixture generation is deterministic; runtime, repeated reload, and cancellation evidence remain open.
 
