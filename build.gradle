@@ -1253,6 +1253,7 @@ def validateStonecutterDirectContract = tasks.register("validateStonecutterDirec
 		file("build.gradle"),
 		file("stonecutter-build.gradle"),
 		file("gradle/packforge-stonecutter-direct-parity.gradle"),
+		file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"),
 		file("platform/fabric/build.gradle"),
 		file("platform/forge/build.gradle"),
 		file("platform/neoforge/build.gradle")

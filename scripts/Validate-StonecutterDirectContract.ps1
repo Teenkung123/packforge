@@ -73,12 +73,36 @@ $CanonicalJoptSimpleOverrides = @{
     ':forge:mc1_21_1' = '5.0.4'
     ':forge:mc1_21_4' = '5.0.4'
 }
+$CanonicalFabricNativeArchiveTargets = @(
+    'mc1_20_2',
+    'mc1_20_3',
+    'mc1_20_4',
+    'mc1_20_5',
+    'mc1_20_6',
+    'mc1_21',
+    'mc1_21_1',
+    'mc1_21_2',
+    'mc1_21_3',
+    'mc1_21_4',
+    'mc1_21_5',
+    'mc1_21_6',
+    'mc1_21_7',
+    'mc1_21_8',
+    'mc1_21_9',
+    'mc1_21_10'
+)
+$CanonicalFabricNonNativeArchiveTargets = @('mc1_20_1', 'mc1_21_11', 'mc26_1_to_26_2')
 
 function Fail([string] $Message) { throw "Stonecutter direct contract: $Message" }
 
 function Assert-ContainsOnce([string] $Text, [string] $Literal, [string] $Context) {
     $count = ([regex]::Matches($Text, [regex]::Escape($Literal))).Count
     if ($count -ne 1) { Fail "$Context must contain exactly one '$Literal'; found $count." }
+}
+
+function Assert-ContainsCount([string] $Text, [string] $Literal, [int] $ExpectedCount, [string] $Context) {
+    $count = ([regex]::Matches($Text, [regex]::Escape($Literal))).Count
+    if ($count -ne $ExpectedCount) { Fail "$Context must contain exactly $ExpectedCount '$Literal' entries; found $count." }
 }
 
 function Get-Section([string] $Text, [string] $Start, [string] $End, [string] $Context) {
@@ -142,6 +166,9 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
             Fail "loader '$loaderId' must contain exactly $($CanonicalLoaderCounts[$loaderId]) direct cells."
         }
     }
+    $fabricTargetKeys = @($Registry.targets | Where-Object { $null -ne $_.platforms.PSObject.Properties['fabric'] } | ForEach-Object { $_.key })
+    Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cin $CanonicalFabricNativeArchiveTargets }) $CanonicalFabricNativeArchiveTargets 'Fabric native archive targets'
+    Assert-SameSet @($fabricTargetKeys | Where-Object { $_ -cnotin $CanonicalFabricNativeArchiveTargets }) $CanonicalFabricNonNativeArchiveTargets 'Fabric non-native archive targets'
     Assert-SameSet @($joptOverrides.Keys) @($CanonicalJoptSimpleOverrides.Keys) 'JOptSimple override nodes'
     foreach ($nodePath in $CanonicalJoptSimpleOverrides.Keys) {
         if ($joptOverrides[$nodePath] -cne $CanonicalJoptSimpleOverrides[$nodePath]) {
@@ -172,6 +199,7 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     }
     Assert-ContainsOnce $rootBuild 'if (expectedDirectNodePaths != stonecutterNodePaths*.toString().sort()) {' 'root all-direct ledger guard'
     Assert-ContainsOnce $rootBuild 'def expectedForgeJoptSimpleRuntimeVersions = [mc1_21_1: "5.0.4", mc1_21_4: "5.0.4"]' 'root Forge JOptSimple registry guard'
+    Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java")' 'root Fabric native archive validator input'
 
     $aggregateSections = @(
         (Get-Section $rootBuild "tasks.register('buildStonecutterAll')" "tasks.register('verifyStonecutterAll')" 'buildStonecutterAll aggregate'),
@@ -221,6 +249,60 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         Assert-ContainsOnce $directNodeSection 'packforge-stonecutter-direct-parity.gradle' "$loaderId parity helper apply"
     }
 
+    $nativeArchive = $Sources.FabricNativeArchive
+    Assert-ContainsOnce $nativeArchive '//? if >=1.20.2 && <=1.21.10 {' 'Fabric native archive outer target guard'
+    Assert-ContainsCount $nativeArchive '//? if >=1.20.5 {' 2 'Fabric native archive constructor seam'
+    Assert-ContainsOnce $nativeArchive '//?} else {' 'Fabric native archive legacy constructor branch'
+    Assert-ContainsOnce $nativeArchive 'package com.teenkung.packforge.mixin.loader;' 'Fabric native archive package'
+    Assert-ContainsOnce $nativeArchive 'public abstract class FilePackResourcesArchiveMixin {' 'Fabric native archive class'
+    Assert-ContainsOnce $nativeArchive 'import net.minecraft.server.packs.PackLocationInfo;' 'Fabric native archive modern import'
+    Assert-ContainsOnce $nativeArchive 'method = "<init>(Lnet/minecraft/server/packs/PackLocationInfo;Lnet/minecraft/server/packs/FilePackResources$SharedZipFileAccess;Ljava/lang/String;)V"' 'Fabric native archive modern constructor descriptor'
+    Assert-ContainsOnce $nativeArchive 'PackLocationInfo location,' 'Fabric native archive modern constructor parameters'
+    Assert-ContainsOnce $nativeArchive '/*@Inject(method = "<init>", at = @At("RETURN"))' 'Fabric native archive commented legacy constructor'
+    Assert-ContainsOnce $nativeArchive 'String name,' 'Fabric native archive legacy name parameter'
+    Assert-ContainsOnce $nativeArchive 'boolean closeOnExit,' 'Fabric native archive legacy close parameter'
+    Assert-ContainsCount $nativeArchive 'holder.packforge$setArchive(bridge);' 2 'Fabric native archive shared capture behavior'
+    Assert-ContainsCount $nativeArchive 'private void packforge$captureArchive(' 2 'Fabric native archive constructor implementations'
+    Assert-ContainsCount $nativeArchive '//? if ' 3 'Fabric native archive conditional openers'
+    Assert-ContainsCount $nativeArchive '//?}' 4 'Fabric native archive conditional closers'
+
+    $fabricBuild = $Sources['Loader:fabric']
+    $nativeTransport = Get-Section $fabricBuild 'def selectedMainJavaSources = files(selectedSources.mainJavaSources)' 'sourceSets {' 'Fabric native archive source transport'
+    Assert-ContainsOnce $nativeTransport 'def compileMainJavaSources = selectedMainJavaSources' 'Fabric standalone selected-source preservation'
+    Assert-ContainsOnce $nativeTransport 'def legacyArchiveSources = [] as Set' 'Fabric standalone empty archive exclusion set'
+    Assert-ContainsOnce $nativeTransport 'if (stonecutterDirectNode) {' 'Fabric native archive direct-only transport'
+    Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric legacy archive exclusion'
+    Assert-ContainsOnce $nativeTransport 'versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric modern archive exclusion'
+    Assert-ContainsCount $nativeTransport 'new File(physicalRepositoryRoot, ' 2 'Fabric exact legacy archive exclusions'
+    Assert-ContainsOnce $nativeTransport 'selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyArchiveSources }' 'Fabric archive source replacement'
+    Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.dir("main/java")' 'Fabric generated Java compile root'
+    if ($fabricBuild.Contains('stonecutter.tasks.configureSource(')) {
+        Fail 'Fabric must reuse Stonecutter 0.9.7 automatic SourceSet registration instead of configuring main twice.'
+    }
+
+    $fabricSourceSets = Get-Section $fabricBuild 'sourceSets {' 'tasks.named("compileJava", JavaCompile)' 'Fabric native archive source set'
+    Assert-ContainsOnce $fabricSourceSets 'if (stonecutterDirectNode) {' 'Fabric generated source-set direct guard'
+    Assert-ContainsOnce $fabricSourceSets 'java.srcDir(stonecutter.tasks.generatedSourcesDir.dir("main/java"))' 'Fabric generated Java main source set'
+    $fabricCompileJava = Get-Section $fabricBuild 'tasks.named("compileJava", JavaCompile) {' 'tasks.named("compileClientJava", JavaCompile)' 'Fabric native archive compile task'
+    Assert-ContainsOnce $fabricCompileJava 'if (stonecutterDirectNode) {' 'Fabric compile generation direct guard'
+    Assert-ContainsOnce $fabricCompileJava 'dependsOn(stonecutter.tasks.generate["main"])' 'Fabric compile generation dependency'
+    Assert-ContainsOnce $fabricCompileJava 'setSource(compileMainJavaSources)' 'Fabric compile source replacement'
+    $fabricSourcesJar = Get-Section $fabricBuild 'tasks.named("sourcesJar") {' 'if (loaderConfig.mappingMode == "named") {' 'Fabric native archive sources JAR'
+    Assert-ContainsOnce $fabricSourcesJar 'if (stonecutterDirectNode) {' 'Fabric sources JAR generation direct guard'
+    Assert-ContainsOnce $fabricSourcesJar 'dependsOn(stonecutter.tasks.generate["main"])' 'Fabric sources JAR generation dependency'
+    Assert-ContainsOnce $fabricSourcesJar 'if (details.file.canonicalFile in legacyArchiveSources) {' 'Fabric sources JAR physical legacy-source filter'
+    Assert-ContainsOnce $fabricSourcesJar 'details.exclude()' 'Fabric sources JAR legacy-source exclusion'
+    Assert-ContainsCount $fabricBuild 'stonecutter.tasks.generatedSourcesDir.dir("main/java")' 2 'Fabric exact generated Java root wiring'
+    if ($fabricBuild.Contains('stonecutter.tasks.generatedSourcesDir.dir("main")')) {
+        Fail 'Fabric must not expose the Stonecutter source-set container as a Java root; use main/java.'
+    }
+    Assert-ContainsCount $fabricBuild 'dependsOn(stonecutter.tasks.generate["main"])' 2 'Fabric exact generation task wiring'
+    foreach ($loaderId in @('forge', 'neoforge')) {
+        if ($Sources["Loader:$loaderId"].Contains('FilePackResourcesArchiveMixin.java')) {
+            Fail "$loaderId build script must not consume the Fabric native archive pilot."
+        }
+    }
+
     $forgeBuild = $Sources['Loader:forge']
     Assert-ContainsOnce $forgeBuild 'def joptSimpleRuntimeVersion = loaderConfig.joptSimpleRuntimeVersion?.toString()' 'Forge registry JOptSimple selection'
     Assert-ContainsOnce $forgeBuild 'runtimeOnly "net.sf.jopt-simple:jopt-simple:${joptSimpleRuntimeVersion}"' 'Forge registry JOptSimple dependency'
@@ -229,7 +311,7 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         Fail 'Forge build script must not hard-code JOptSimple target keys or version.'
     }
 
-    return [pscustomobject]@{ DirectCells = $nodes.Count; JoptOverrides = $joptOverrides.Count }
+    return [pscustomobject]@{ DirectCells = $nodes.Count; JoptOverrides = $joptOverrides.Count; NativeArchiveCells = $CanonicalFabricNativeArchiveTargets.Count }
 }
 
 function Copy-Registry($Registry) {
@@ -266,12 +348,24 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'aggregate-delegated-task' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('dependsOn publishedTargets.collect { buildTasksByTarget[it.key] }', "dependsOn publishedTargets.collect { buildTasksByTarget[it.key] }`n`tdependsOn 'buildStonecutterDelegatedNode'") } $Registry $Sources
     Assert-MutationRejected 'direct-task-delegates' { param($r, $s) $s.Parity = $s.Parity.Replace('dependsOn directParity.directBuildDependencies', "dependsOn directParity.directBuildDependencies`n`tdependsOn(delegatedBuildTask)") } $Registry $Sources
     Assert-MutationRejected 'forge-hard-coded-jopt' { param($r, $s) $s['Loader:forge'] = $s['Loader:forge'].Replace('${joptSimpleRuntimeVersion}', '5.0.4') } $Registry $Sources
-    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 10 mutations rejected.'
+    Assert-MutationRejected 'native-archive-range-drift' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('<=1.21.10', '<=1.21.11') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-constructor-seam-drift' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('>=1.20.5', '>=1.20.6') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-legacy-branch-active' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('/*@Inject(method = "<init>"', '@Inject(method = "<init>"') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-legacy-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java', 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/Missing.java') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-extra-exclusion' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace("`tlegacyArchiveSources = [", "`tlegacyArchiveSources = [`n`t`tnew File(physicalRepositoryRoot, `"versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/Extra.java`"),") } $Registry $Sources
+    Assert-MutationRejected 'native-archive-generated-source-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('java.srcDir(stonecutter.tasks.generatedSourcesDir.dir("main/java"))', 'java.srcDir("src/main/java")') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-generated-root-too-high' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('stonecutter.tasks.generatedSourcesDir.dir("main/java")', 'stonecutter.tasks.generatedSourcesDir.dir("main")') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-compile-generation-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('dependsOn(stonecutter.tasks.generate["main"])', 'dependsOn(tasks.named("classes"))') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-sources-jar-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('details.exclude()', 'details.path') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-duplicate-source-registration' { param($r, $s) $s['Loader:fabric'] += "`nstonecutter.tasks.configureSource(sourceSets.main)" } $Registry $Sources
+    Assert-MutationRejected 'native-archive-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"),', '') } $Registry $Sources
+    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 21 mutations rejected.'
 }
 
 $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath,
     (Join-Path $RepositoryRoot 'platform\fabric\build.gradle'),
     (Join-Path $RepositoryRoot 'platform\neoforge\build.gradle'),
+    (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\FilePackResourcesArchiveMixin.java'),
     (Join-Path $RepositoryRoot 'stonecutter-build.gradle'),
     (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct-parity.gradle'))
 foreach ($path in $requiredPaths) {
@@ -284,10 +378,11 @@ $sources = @{
     RootBuild = Get-Content -LiteralPath $RootBuildPath -Raw
     Rollback = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'stonecutter-build.gradle') -Raw
     Parity = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct-parity.gradle') -Raw
+    FabricNativeArchive = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\FilePackResourcesArchiveMixin.java') -Raw
     'Loader:fabric' = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'platform\fabric\build.gradle') -Raw
     'Loader:forge' = Get-Content -LiteralPath $ForgeBuildPath -Raw
     'Loader:neoforge' = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'platform\neoforge\build.gradle') -Raw
 }
 $summary = Invoke-DirectContractValidation $registry $sources
 if ($SelfTest) { Invoke-SelfTests $registry $sources }
-Write-Output "Stonecutter direct contract PASS: $($summary.DirectCells) direct cells; $($summary.JoptOverrides) registry JOptSimple overrides; delegated wrapper isolated to parity/rollback."
+Write-Output "Stonecutter direct contract PASS: $($summary.DirectCells) direct cells; $($summary.NativeArchiveCells) Fabric native archive cells; $($summary.JoptOverrides) registry JOptSimple overrides; delegated wrapper isolated to parity/rollback."

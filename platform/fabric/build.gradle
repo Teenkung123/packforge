@@ -80,10 +80,27 @@ ext.packforgeSourceSelection = [
 ]
 apply from: new File(packforgeRepositoryRoot, "gradle/packforge-source-selection.gradle")
 def selectedSources = packforgeSelectedSources
+def selectedMainJavaSources = files(selectedSources.mainJavaSources)
+def compileMainJavaSources = selectedMainJavaSources
+def legacyArchiveSources = [] as Set
+if (stonecutterDirectNode) {
+	legacyArchiveSources = [
+		new File(physicalRepositoryRoot, "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile,
+		new File(physicalRepositoryRoot, "versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile
+	] as Set
+	compileMainJavaSources = files(
+		selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyArchiveSources },
+		// Stonecutter 0.9.7 auto-configures every SourceSet, including main.
+		stonecutter.tasks.generatedSourcesDir.dir("main/java")
+	)
+}
 
 sourceSets {
 	main {
 		java.setSrcDirs(selectedSources.mainJavaSourceDirsEnabled ? selectedSources.mainJavaDirs : [])
+		if (stonecutterDirectNode) {
+			java.srcDir(stonecutter.tasks.generatedSourcesDir.dir("main/java"))
+		}
 		resources.setSrcDirs(selectedSources.mainResourceDirs)
 	}
 	client {
@@ -97,7 +114,10 @@ sourceSets {
 }
 
 tasks.named("compileJava", JavaCompile) {
-	setSource(files(selectedSources.mainJavaSources))
+	if (stonecutterDirectNode) {
+		dependsOn(stonecutter.tasks.generate["main"])
+	}
+	setSource(compileMainJavaSources)
 }
 
 tasks.named("compileClientJava", JavaCompile) {
@@ -292,6 +312,14 @@ jar {
 
 tasks.named("sourcesJar") {
 	archiveFileName = "packforge-fabric-${project.version}-mc${packforgeArtifactMinecraft}-sources.jar"
+	if (stonecutterDirectNode) {
+		dependsOn(stonecutter.tasks.generate["main"])
+		eachFile { details ->
+			if (details.file.canonicalFile in legacyArchiveSources) {
+				details.exclude()
+			}
+		}
+	}
 }
 
 if (loaderConfig.mappingMode == "named") {
