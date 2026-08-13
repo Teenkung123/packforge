@@ -1,0 +1,196 @@
+def sourceSelectionConfig = project.extensions.extraProperties.has("packforgeSourceSelection")
+	? project.extensions.extraProperties.get("packforgeSourceSelection")
+	: null
+if (!(sourceSelectionConfig instanceof Map)) {
+	throw new GradleException("packforgeSourceSelection must be configured before applying packforge-source-selection.gradle.")
+}
+
+def layoutId = sourceSelectionConfig.layout?.toString()
+if (!(layoutId in ["split", "combined"])) {
+	throw new GradleException("Unsupported PackForge source layout '${layoutId}'.")
+}
+
+def platformId = packforgePlatformId.toString()
+def target = packforgeTarget
+def policyId = target.sourcePolicy?.toString()
+def sourcePolicies = packforgeRegistry.sourcePolicies ?: [:]
+def policy = policyId == null ? null : sourcePolicies[policyId]
+if (policyId == null || policy == null) {
+	throw new GradleException("Target '${target.key}' references unknown source policy '${policyId}'.")
+}
+
+def repositoryRoot = packforgeRepositoryRoot.canonicalFile
+def resolvePolicyPath = { Object rawPath ->
+	def relativePath = rawPath.toString()
+		.replace("{sourceFamily}", target.sourceFamily.toString())
+		.replace("{platform}", platformId)
+	new File(repositoryRoot, relativePath)
+}
+def entry = { String id, File directory -> [id: id, directory: directory] }
+
+def collections = layoutId == "split"
+	? [
+		mainJavaDirs: [
+			entry("commonMain", new File(packforgeCommonRoot, "src/main/java")),
+			entry("adapterCommonMain", new File(packforgeAdapterCommonRoot, "src/main/java")),
+			entry("platformMain", new File(packforgePlatformSourceRoot, "src/main/java")),
+			entry("adapterPlatformMain", new File(packforgeAdapterPlatformRoot, "src/main/java"))
+		],
+		mainResourceDirs: [
+			entry("commonMainResources", new File(packforgeCommonRoot, "src/main/resources")),
+			entry("adapterCommonMainResources", new File(packforgeAdapterCommonRoot, "src/main/resources")),
+			entry("platformMainResources", new File(packforgePlatformSourceRoot, "src/main/resources")),
+			entry("adapterPlatformMainResources", new File(packforgeAdapterPlatformRoot, "src/main/resources"))
+		],
+		clientJavaDirs: [
+			entry("commonClient", new File(packforgeCommonRoot, "src/client/java")),
+			entry("adapterCommonClient", new File(packforgeAdapterCommonRoot, "src/client/java")),
+			entry("platformClient", new File(packforgePlatformSourceRoot, "src/client/java")),
+			entry("adapterPlatformClient", new File(packforgeAdapterPlatformRoot, "src/client/java"))
+		],
+		clientResourceDirs: [
+			entry("commonClientResources", new File(packforgeCommonRoot, "src/client/resources")),
+			entry("adapterCommonClientResources", new File(packforgeAdapterCommonRoot, "src/client/resources")),
+			entry("platformClientResources", new File(packforgePlatformSourceRoot, "src/client/resources")),
+			entry("adapterPlatformClientResources", new File(packforgeAdapterPlatformRoot, "src/client/resources"))
+		]
+	]
+	: [
+		mainJavaDirs: [
+			entry("commonMain", new File(packforgeCommonRoot, "src/main/java")),
+			entry("commonClient", new File(packforgeCommonRoot, "src/client/java")),
+			entry("adapterCommonMain", new File(packforgeAdapterCommonRoot, "src/main/java")),
+			entry("adapterCommonClient", new File(packforgeAdapterCommonRoot, "src/client/java")),
+			entry("platformMain", new File(packforgePlatformSourceRoot, "src/main/java")),
+			entry("platformClient", new File(packforgePlatformSourceRoot, "src/client/java")),
+			entry("adapterPlatformMain", new File(packforgeAdapterPlatformRoot, "src/main/java")),
+			entry("adapterPlatformClient", new File(packforgeAdapterPlatformRoot, "src/client/java"))
+		],
+		mainResourceDirs: [
+			entry("commonMainResources", new File(packforgeCommonRoot, "src/main/resources")),
+			entry("commonClientResources", new File(packforgeCommonRoot, "src/client/resources")),
+			entry("adapterCommonMainResources", new File(packforgeAdapterCommonRoot, "src/main/resources")),
+			entry("adapterCommonClientResources", new File(packforgeAdapterCommonRoot, "src/client/resources")),
+			entry("platformMainResources", new File(packforgePlatformSourceRoot, "src/main/resources")),
+			entry("platformClientResources", new File(packforgePlatformSourceRoot, "src/client/resources")),
+			entry("adapterPlatformMainResources", new File(packforgeAdapterPlatformRoot, "src/main/resources")),
+			entry("adapterPlatformClientResources", new File(packforgeAdapterPlatformRoot, "src/client/resources"))
+		],
+		clientJavaDirs: [],
+		clientResourceDirs: []
+	]
+
+collections.testJavaDirs = [
+	entry("commonTest", new File(packforgeCommonRoot, "src/test/java")),
+	entry("adapterCommonTest", new File(packforgeAdapterCommonRoot, "src/test/java")),
+	entry("platformTest", new File(packforgePlatformSourceRoot, "src/test/java")),
+	entry("adapterPlatformTest", new File(packforgeAdapterPlatformRoot, "src/test/java"))
+]
+collections.testResourceDirs = [
+	entry("commonTestResources", new File(packforgeCommonRoot, "src/test/resources")),
+	entry("adapterCommonTestResources", new File(packforgeAdapterCommonRoot, "src/test/resources")),
+	entry("platformTestResources", new File(packforgePlatformSourceRoot, "src/test/resources")),
+	entry("adapterPlatformTestResources", new File(packforgeAdapterPlatformRoot, "src/test/resources"))
+]
+
+def appliesToCurrentBuild = { Map rule ->
+	(rule.layouts == null || layoutId in rule.layouts*.toString()) &&
+		(rule.platforms == null || platformId in rule.platforms*.toString())
+}
+
+(policy.inserts ?: [:]).each { Object collectionNameValue, Object rawRules ->
+	def collectionName = collectionNameValue.toString()
+	def selectedCollection = collections[collectionName]
+	if (selectedCollection == null) {
+		throw new GradleException("Source policy '${policyId}' references unknown collection '${collectionName}'.")
+	}
+	(rawRules ?: []).findAll { appliesToCurrentBuild(it as Map) }.each { Map rule ->
+		def rawIndex = rule.index instanceof Map ? rule.index[layoutId] : rule.index
+		if (rawIndex == null) {
+			throw new GradleException("Source policy '${policyId}' insert '${rule.id}' has no index for layout '${layoutId}'.")
+		}
+		def index = rawIndex as int
+		if (index < 0 || index > selectedCollection.size()) {
+			throw new GradleException("Source policy '${policyId}' insert '${rule.id}' has invalid index ${index} for '${collectionName}'.")
+		}
+		selectedCollection.add(index, entry(rule.id.toString(), resolvePolicyPath(rule.path)))
+	}
+}
+
+def rootMatches = { Map sourceEntry, String selector ->
+	switch (selector) {
+		case "adapterCommon":
+			return sourceEntry.directory.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())
+		case "adapterPlatform":
+			return sourceEntry.directory.canonicalFile.toPath().startsWith(packforgeAdapterPlatformRoot.canonicalFile.toPath())
+		default:
+			return sourceEntry.id == selector
+	}
+}
+
+def sourceTrees = { String sourceName, List<Map> directoryEntries ->
+	directoryEntries.collect { Map sourceEntry ->
+		def exclusions = (policy.exclusions ?: [])
+			.findAll { Map rule ->
+				rule.source.toString() == sourceName && appliesToCurrentBuild(rule) && rootMatches(sourceEntry, rule.root.toString())
+			}
+			.collectMany { Map rule -> (rule.paths ?: []).collect { it.toString() } }
+		def tree = project.fileTree(sourceEntry.directory)
+		if (!exclusions.isEmpty()) {
+			tree.exclude(exclusions)
+		}
+		tree
+	}
+}
+
+def appendIncludes = { String sourceName, List sources ->
+	(policy.includes ?: [])
+		.findAll { Map rule -> rule.source.toString() == sourceName && appliesToCurrentBuild(rule) }
+		.each { Map rule ->
+			def tree = project.fileTree(resolvePolicyPath(rule.path))
+			tree.include((rule.paths ?: []).collect { it.toString() })
+			sources.add(tree)
+		}
+}
+
+def mainJavaSources = sourceTrees("mainJavaSources", collections.mainJavaDirs)
+def clientJavaSources = sourceTrees("clientJavaSources", collections.clientJavaDirs)
+def testJavaSources = sourceTrees("testJavaSources", collections.testJavaDirs)
+appendIncludes("mainJavaSources", mainJavaSources)
+appendIncludes("clientJavaSources", clientJavaSources)
+
+mainJavaSources.addAll((sourceSelectionConfig.sharedMainJavaSources ?: []) as List)
+if (layoutId == "split") {
+	clientJavaSources.addAll((sourceSelectionConfig.sharedClientJavaSources ?: []) as List)
+} else {
+	mainJavaSources.addAll((sourceSelectionConfig.sharedClientJavaSources ?: []) as List)
+}
+
+def sourceDirEnabledFor = { String sourceName ->
+	def sourceDirRules = policy.sourceDirEnabled ?: [:]
+	def platformRules = sourceDirRules[platformId]
+	platformRules == null || platformRules[sourceName] == null || platformRules[sourceName] as boolean
+}
+
+project.ext.packforgeSelectedSources = [
+	policyId: policyId,
+	mainJavaDirs: collections.mainJavaDirs*.directory,
+	mainJavaSources: mainJavaSources,
+	mainJavaSourceDirsEnabled: sourceDirEnabledFor("mainJava"),
+	mainResourceDirs: collections.mainResourceDirs*.directory,
+	clientJavaDirs: collections.clientJavaDirs*.directory,
+	clientJavaSources: clientJavaSources,
+	clientJavaSourceDirsEnabled: sourceDirEnabledFor("clientJava"),
+	clientResourceDirs: collections.clientResourceDirs*.directory,
+	testJavaDirs: collections.testJavaDirs*.directory,
+	testJavaSources: testJavaSources,
+	testResourceDirs: collections.testResourceDirs*.directory
+]
+
+def sourcesJarDuplicates = (policy.sourcesJarDuplicates ?: "FAIL").toString()
+if (!(sourcesJarDuplicates in ["FAIL", "EXCLUDE"])) {
+	throw new GradleException("Source policy '${policyId}' has unsupported sourcesJarDuplicates '${sourcesJarDuplicates}'.")
+}
+tasks.matching { task -> task.name == "sourcesJar" }.configureEach {
+	duplicatesStrategy = DuplicatesStrategy.valueOf(sourcesJarDuplicates)
+}

@@ -73,201 +73,39 @@ loom {
 	}
 }
 
-def mainJavaDirs = [
-	new File(packforgeCommonRoot, "src/main/java"),
-	new File(packforgeAdapterCommonRoot, "src/main/java"),
-	new File(packforgePlatformSourceRoot, "src/main/java"),
-	new File(packforgeAdapterPlatformRoot, "src/main/java")
+ext.packforgeSourceSelection = [
+	layout: "split",
+	sharedMainJavaSources: packforgeSharedMainJavaSources,
+	sharedClientJavaSources: packforgeSharedClientJavaSources
 ]
-if (target.key == "mc1_21_5") {
-	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_5/common/src/main/java"))
-}
-if (target.key in ["mc1_21_9", "mc1_21_10"]) {
-	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/main/java"))
-}
-def mainResourceDirs = [
-	new File(packforgeCommonRoot, "src/main/resources"),
-	new File(packforgeAdapterCommonRoot, "src/main/resources"),
-	new File(packforgePlatformSourceRoot, "src/main/resources"),
-	new File(packforgeAdapterPlatformRoot, "src/main/resources")
-]
-if (target.key == "mc1_21_5") {
-	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_5/common/src/main/resources"))
-}
-if (target.key in ["mc1_21_9", "mc1_21_10"]) {
-	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/main/resources"))
-}
-if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
-	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/main/resources"))
-}
-if (target.key in ["mc1_20_5", "mc1_20_6"]) {
-	mainResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/main/resources"))
-}
-def clientJavaDirs = [
-	new File(packforgeCommonRoot, "src/client/java"),
-	new File(packforgeAdapterCommonRoot, "src/client/java"),
-	new File(packforgePlatformSourceRoot, "src/client/java"),
-	new File(packforgeAdapterPlatformRoot, "src/client/java")
-]
-if (target.key in ["mc1_20_5", "mc1_20_6"]) {
-	clientJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/client/java"))
-}
-if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8", "mc1_21_9", "mc1_21_10"]) {
-	clientJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/client/java"))
-}
-if (target.key in ["mc1_21_9", "mc1_21_10"]) {
-	clientJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/client/java"))
-}
-if (target.key in ["mc1_20_5", "mc1_20_6", "mc1_21", "mc1_21_1", "mc1_21_2", "mc1_21_3", "mc1_21_4", "mc1_21_5", "mc1_21_6", "mc1_21_7", "mc1_21_8"]) {
-	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/main/java"))
-}
-if (target.key in ["mc1_21_9", "mc1_21_10"]) {
-	mainJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/main/java"))
-}
-def mainJavaSources = mainJavaDirs.collect { root ->
-	if (target.key == "mc1_21_5" && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java"
-		}
-	}
-	if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.java"
-			exclude "com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java"
-		}
-	}
-	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java"
-		}
-	}
-	if (target.key in ["mc1_21_9", "mc1_21_10"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCache.java"
-			exclude "com/teenkung/packforge/client/font/FontPreparedSelection.java"
-			exclude "com/teenkung/packforge/client/mixin/font/FontProviderSelectionMixin.java"
-			exclude "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
-		}
-	}
-	if (target.key in ["mc1_21_9", "mc1_21_10"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java"
-		}
-	}
-	return fileTree(root)
-}
-if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
-	def sharedRoot = new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/main/java")
-	mainJavaSources.add(fileTree(sharedRoot) {
-		include "com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.java"
-		include "com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"
-		include "com/teenkung/packforge/mixin/observe/ReloadableResourceManagerMixin.java"
-	})
-	def targetRoot = new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/common/src/main/java")
-	mainJavaSources.add(fileTree(targetRoot) {
-		include "com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"
-	})
-}
-mainJavaSources.addAll(packforgeSharedMainJavaSources)
-def clientResourceDirs = [
-	new File(packforgeCommonRoot, "src/client/resources"),
-	new File(packforgeAdapterCommonRoot, "src/client/resources"),
-	new File(packforgePlatformSourceRoot, "src/client/resources"),
-	new File(packforgeAdapterPlatformRoot, "src/client/resources")
-]
-if (target.key in ["mc1_21_9", "mc1_21_10"]) {
-	clientResourceDirs.add(1, new File(packforgeRepositoryRoot, "versions/mc1_21_9/common/src/client/resources"))
-}
-def testJavaDirs = [
-	new File(packforgeCommonRoot, "src/test/java"),
-	new File(packforgeAdapterCommonRoot, "src/test/java"),
-	new File(packforgePlatformSourceRoot, "src/test/java"),
-	new File(packforgeAdapterPlatformRoot, "src/test/java")
-]
-if (target.key in ["mc1_20_5", "mc1_20_6"]) {
-	testJavaDirs.add(1, new File(packforgeRepositoryRoot, "versions/${target.sourceFamily}/fabric/src/test/java"))
-}
-def testResourceDirs = [
-	new File(packforgeCommonRoot, "src/test/resources"),
-	new File(packforgeAdapterCommonRoot, "src/test/resources"),
-	new File(packforgePlatformSourceRoot, "src/test/resources"),
-	new File(packforgeAdapterPlatformRoot, "src/test/resources")
-]
-def testJavaSources = testJavaDirs.collect { root ->
-	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(packforgeAdapterPlatformRoot.canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCacheTest.java"
-			exclude "com/teenkung/packforge/client/font/FontSelectionRegistryTest.java"
-		}
-	}
-	return fileTree(root)
-}
-def clientJavaSources = clientJavaDirs.collect { root ->
-	if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/client/atlas/BoundedSpriteDecode.java"
-			exclude "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
-		}
-	}
-	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java"
-		}
-	}
-	if (target.key in ["mc1_20_5", "mc1_20_6"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.java"
-		}
-	}
-	if (target.key in ["mc1_21_9", "mc1_21_10"] && root.canonicalFile.toPath().startsWith(file("${packforgeRepositoryRoot}/versions/mc1_21_shared/common/src/client/java").canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/client/font/FontBitmapProviderCache.java"
-			exclude "com/teenkung/packforge/client/font/FontPreparedSelection.java"
-			exclude "com/teenkung/packforge/client/mixin/font/FontProviderSelectionMixin.java"
-			exclude "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
-		}
-	}
-	if (target.key in ["mc1_21_9", "mc1_21_10"] && root.canonicalFile.toPath().startsWith(packforgeAdapterCommonRoot.canonicalFile.toPath())) {
-		return fileTree(root) {
-			exclude "com/teenkung/packforge/client/mixin/ui/LoadingOverlayMixin.java"
-		}
-	}
-	return fileTree(root)
-}
-if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]) {
-	def sharedClientRoot = new File(packforgeRepositoryRoot, "versions/mc1_21_shared/common/src/client/java")
-	clientJavaSources.add(fileTree(sharedClientRoot) {
-		include "com/teenkung/packforge/client/atlas/BoundedSpriteDecode.java"
-		include "com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java"
-	})
-}
-clientJavaSources.addAll(packforgeSharedClientJavaSources)
+apply from: new File(packforgeRepositoryRoot, "gradle/packforge-source-selection.gradle")
+def selectedSources = packforgeSelectedSources
 
 sourceSets {
 	main {
-		java.setSrcDirs(target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"] ? [] : mainJavaDirs)
-		resources.setSrcDirs(mainResourceDirs)
+		java.setSrcDirs(selectedSources.mainJavaSourceDirsEnabled ? selectedSources.mainJavaDirs : [])
+		resources.setSrcDirs(selectedSources.mainResourceDirs)
 	}
 	client {
-		java.setSrcDirs(target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4", "mc1_20_5", "mc1_20_6"] ? [] : clientJavaDirs)
-		resources.setSrcDirs(clientResourceDirs)
+		java.setSrcDirs(selectedSources.clientJavaSourceDirsEnabled ? selectedSources.clientJavaDirs : [])
+		resources.setSrcDirs(selectedSources.clientResourceDirs)
 	}
 	test {
-		java.setSrcDirs(testJavaDirs)
-		resources.setSrcDirs(testResourceDirs)
+		java.setSrcDirs(selectedSources.testJavaDirs)
+		resources.setSrcDirs(selectedSources.testResourceDirs)
 	}
 }
 
 tasks.named("compileJava", JavaCompile) {
-	setSource(files(mainJavaSources))
+	setSource(files(selectedSources.mainJavaSources))
 }
 
 tasks.named("compileClientJava", JavaCompile) {
-	setSource(files(clientJavaSources))
+	setSource(files(selectedSources.clientJavaSources))
 }
 
 tasks.named("compileTestJava", JavaCompile) {
-	setSource(files(testJavaSources))
+	setSource(files(selectedSources.testJavaSources))
 }
 
 dependencies {
@@ -453,11 +291,6 @@ jar {
 }
 
 tasks.named("sourcesJar") {
-	if (target.key in ["mc1_21_5", "mc1_21_9", "mc1_21_10"]) {
-		duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-	} else {
-		duplicatesStrategy = DuplicatesStrategy.FAIL
-	}
 	archiveFileName = "packforge-fabric-${project.version}-mc${packforgeArtifactMinecraft}-sources.jar"
 }
 
