@@ -6,10 +6,10 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 
 | Metric | Value |
 |---|---:|
-| Production Java files | 209 |
-| Production nonblank LOC | 16084 |
+| Production Java files | 210 |
+| Production nonblank LOC | 16323 |
 | Bridge files | 103 |
-| Bridge LOC | 5303 (32.97%) |
+| Bridge LOC | 5303 (32.49%) |
 | Exact duplicate groups | 0 |
 | Normalized version duplicate groups | 0 |
 | Platform `target.key` references | 19 |
@@ -26,8 +26,8 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 
 | Layer | Files | Nonblank LOC |
 |---|---:|---:|
-| `neutralCommon` | 62 | 6046 |
-| `versionCommon` | 47 | 4840 |
+| `neutralCommon` | 63 | 6293 |
+| `versionCommon` | 47 | 4832 |
 | `loaderCommon` | 15 | 480 |
 | `exactVersionBridge` | 85 | 4718 |
 

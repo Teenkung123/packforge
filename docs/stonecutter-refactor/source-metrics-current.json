@@ -11,12 +11,12 @@
         "generatedPolicy": "All build/generated/Stonecutter output lies outside handwritten source roots."
     },
     "production": {
-        "files": 209,
-        "nonblankLoc": 16084,
+        "files": 210,
+        "nonblankLoc": 16323,
         "bridgeFiles": 103,
         "bridgeLoc": 5303,
-        "bridgePercent": 32.97,
-        "locPerExactRelease": 731.09,
+        "bridgePercent": 32.49,
+        "locPerExactRelease": 741.95,
         "layerPrecedence": [
             "neutralCommon",
             "loaderCommon",
@@ -26,12 +26,12 @@
         "aggregateBridgePolicy": "Bridge totals include loader-owned bridge/compat files plus non-loader exact-version bridges.",
         "layers": {
             "neutralCommon": {
-                "files": 62,
-                "loc": 6046
+                "files": 63,
+                "loc": 6293
             },
             "versionCommon": {
                 "files": 47,
-                "loc": 4840
+                "loc": 4832
             },
             "loaderCommon": {
                 "files": 15,
