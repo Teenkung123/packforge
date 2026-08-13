@@ -389,6 +389,7 @@
         "neoforge": {
           "maturity": "beta",
           "versionSuffix": "-beta.2",
+          "stonecutterBuildMode": "direct",
           "version": "21.1.1",
           "versionRange": "[20.6.139,21.2)",
           "minecraftVersionRange": "[1.20.6,1.21.2)",
@@ -2005,6 +2006,7 @@
         "neoforge": {
           "maturity": "beta",
           "versionSuffix": "-beta.3",
+          "stonecutterBuildMode": "direct",
           "version": "20.2.93",
           "versionRange": "[20.2.93,20.5)",
           "minecraftVersionRange": "[1.20.2,1.20.5)"

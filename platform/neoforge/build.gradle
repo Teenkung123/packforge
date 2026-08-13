@@ -4,8 +4,31 @@ plugins {
 	id "net.neoforged.gradle.userdev" version "7.1.38" apply false
 }
 
+// A direct Stonecutter leaf evaluates this physical loader script from a
+// generated :neoforge:<target> project.  Keep the standalone platform project
+// unchanged, but bind direct leaves back to the real repository and sources.
+def physicalPlatformRoot = project.buildFile.parentFile.canonicalFile
+def physicalRepositoryRoot = physicalPlatformRoot.parentFile.parentFile.canonicalFile
+def stonecutterDirectNode = rootProject != project
+if (stonecutterDirectNode) {
+	def pathSegments = project.path.tokenize(':')
+	if (pathSegments != ['neoforge', project.name]) {
+		throw new GradleException("Direct NeoForge build script requires a :neoforge:<target> Stonecutter leaf; found '${project.path}'.")
+	}
+	if (rootProject.projectDir.canonicalFile != physicalRepositoryRoot) {
+		throw new GradleException("Direct NeoForge node repository mismatch: root=${rootProject.projectDir}, physical=${physicalRepositoryRoot}.")
+	}
+	def currentTargetKey = stonecutter.current.project.toString()
+	if (currentTargetKey != project.name) {
+		throw new GradleException("Direct NeoForge node target mismatch: path=${project.name}, Stonecutter=${currentTargetKey}.")
+	}
+	ext.packforgeRepositoryRootOverride = physicalRepositoryRoot
+	ext.packforgeTargetKeyOverride = currentTargetKey
+}
+
 ext.packforgePlatformId = "neoforge"
-apply from: "../../gradle/packforge-target.gradle"
+ext.packforgePlatformSourceRoot = physicalPlatformRoot
+apply from: new File(physicalRepositoryRoot, "gradle/packforge-target.gradle")
 
 version = packforgeModVersion
 group = packforgeMavenGroup
@@ -63,8 +86,8 @@ def mainJavaDirs = [
 	new File(packforgeCommonRoot, "src/client/java"),
 	new File(packforgeAdapterCommonRoot, "src/main/java"),
 	new File(packforgeAdapterCommonRoot, "src/client/java"),
-	file("src/main/java"),
-	file("src/client/java"),
+	new File(packforgePlatformSourceRoot, "src/main/java"),
+	new File(packforgePlatformSourceRoot, "src/client/java"),
 	new File(packforgeAdapterPlatformRoot, "src/main/java"),
 	new File(packforgeAdapterPlatformRoot, "src/client/java")
 ]
@@ -102,7 +125,7 @@ def mainJavaSources = mainJavaDirs.collect { root ->
 		}
 	}
 	if (target.key in ["mc1_20_2", "mc1_20_3", "mc1_20_4"]
-		&& root.canonicalFile.canonicalPath == file("src/main/java").canonicalFile.canonicalPath) {
+		&& root.canonicalFile.canonicalPath == new File(packforgePlatformSourceRoot, "src/main/java").canonicalFile.canonicalPath) {
 		return fileTree(root) {
 			exclude "com/teenkung/packforge/neoforge/PackForgeNeoForge.java"
 		}
@@ -161,8 +184,8 @@ def mainResourceDirs = [
 	new File(packforgeCommonRoot, "src/client/resources"),
 	new File(packforgeAdapterCommonRoot, "src/main/resources"),
 	new File(packforgeAdapterCommonRoot, "src/client/resources"),
-	file("src/main/resources"),
-	file("src/client/resources"),
+	new File(packforgePlatformSourceRoot, "src/main/resources"),
+	new File(packforgePlatformSourceRoot, "src/client/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/main/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/client/resources")
 ]
@@ -182,13 +205,13 @@ if (target.key in ["mc1_21_9", "mc1_21_10"]) {
 def testJavaDirs = [
 	new File(packforgeCommonRoot, "src/test/java"),
 	new File(packforgeAdapterCommonRoot, "src/test/java"),
-	file("src/test/java"),
+	new File(packforgePlatformSourceRoot, "src/test/java"),
 	new File(packforgeAdapterPlatformRoot, "src/test/java")
 ]
 def testResourceDirs = [
 	new File(packforgeCommonRoot, "src/test/resources"),
 	new File(packforgeAdapterCommonRoot, "src/test/resources"),
-	file("src/test/resources"),
+	new File(packforgePlatformSourceRoot, "src/test/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/test/resources")
 ]
 def testJavaSources = testJavaDirs.collect { root ->
@@ -335,4 +358,55 @@ tasks.named("sourcesJar") {
 		duplicatesStrategy = DuplicatesStrategy.FAIL
 	}
 	archiveFileName = "packforge-neoforge-${project.version}-mc${packforgeArtifactMinecraft}-sources.jar"
+}
+
+if (stonecutterDirectNode) {
+	// Preserve Phase D's nested build as a rollback/parity oracle.  Direct
+	// aggregate builds depend only on the node task configured below.
+	apply from: new File(packforgeRepositoryRoot, "stonecutter-build.gradle")
+
+	def expectedDirectArtifactName = "packforge-neoforge-${project.version}-mc${packforgeArtifactMinecraft}.jar"
+	// UserDev families package embedded dependencies through jarJar; ModDev
+	// packages its production artifact through jar.  The selected task is the
+	// sole direct artifact authority for its Stonecutter leaf.
+	def finalArtifactTask = usesNeoGradle ? tasks.named('jarJar') : tasks.named('jar')
+	def directArtifact = finalArtifactTask.flatMap { task -> task.archiveFile }
+	def delegatedArtifactForParity = new File(
+		packforgePlatformSourceRoot,
+		"build/${target.key}/libs/${expectedDirectArtifactName}"
+	)
+	ext.packforgeStonecutterDirectParity = [
+		loaderId: 'NeoForge',
+		artifactProvider: directArtifact,
+		expectedArtifactName: expectedDirectArtifactName,
+		delegatedArtifact: delegatedArtifactForParity,
+		directBuildDependencies: [finalArtifactTask],
+		finalArtifactTask: finalArtifactTask,
+		delegatedBuildTaskName: 'buildStonecutterDelegatedNode',
+		loaderSpecificChecks: { File directFile, Map<String, List<String>> ignoredEntries ->
+			def zip = new java.util.zip.ZipFile(directFile)
+			try {
+				def metadataEntry = zip.getEntry(metadataDescriptor)
+				def capabilitiesEntry = zip.getEntry('packforge-capabilities.properties')
+				def requiredEntries = [metadataEntry, capabilitiesEntry, zip.getEntry(mainMixinConfig), zip.getEntry(clientMixinConfig)]
+				if (requiredEntries.any { entry -> entry == null }) {
+					throw new GradleException('Direct NeoForge artifact is missing required metadata, mixin, or capabilities entries.')
+				}
+				def metadataText = zip.getInputStream(metadataEntry).getText('UTF-8')
+				def capabilities = new Properties()
+				zip.getInputStream(capabilitiesEntry).withCloseable { input -> capabilities.load(input) }
+				if (!metadataText.contains('modId="packforge"')
+					|| !metadataText.contains("version=\"${project.version}\"")
+					|| !metadataText.contains("${loaderConfig.minecraftVersionRange}")
+					|| !metadataText.contains("${loaderConfig.versionRange}")
+					|| capabilities.getProperty('target') != target.key.toString()
+					|| capabilities.getProperty('minecraft') != packforgeArtifactMinecraft) {
+					throw new GradleException("Direct NeoForge artifact metadata does not match registry target '${target.key}'.")
+				}
+			} finally {
+				zip.close()
+			}
+		}
+	]
+	apply from: new File(packforgeRepositoryRoot, 'gradle/packforge-stonecutter-direct-parity.gradle')
 }

@@ -1,7 +1,14 @@
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 import java.security.MessageDigest
 import java.util.zip.ZipFile
+
+abstract class PackForgeNeoForgeBuildGate implements BuildService<BuildServiceParameters.None>, AutoCloseable {
+	@Override
+	void close() {}
+}
 
 version = project.mod_version
 group = project.maven_group
@@ -1733,6 +1740,12 @@ targets.each { target ->
 def directStonecutterBuildTaskPaths = stonecutterDirectNodePaths.collect { "${it}:buildStonecutterDirectNode" }
 def directStonecutterParityTaskPaths = stonecutterDirectNodePaths.collect { "${it}:verifyStonecutterDirectNode" }
 def directFabricNodePaths = stonecutterDirectNodePaths.findAll { it.startsWith(':fabric:') }
+def directNeoForgeNodePaths = stonecutterDirectNodePaths.findAll { it.startsWith(':neoforge:') }
+def neoForgeBuildGate = directNeoForgeNodePaths.isEmpty()
+	? null
+	: gradle.sharedServices.registerIfAbsent('packforgeNeoForgeBuildGate', PackForgeNeoForgeBuildGate) {
+		maxParallelUsages.set(1)
+	}
 gradle.projectsEvaluated {
 	directFabricNodePaths.eachWithIndex { nodePath, index ->
 		if (index > 0) {
@@ -1741,6 +1754,26 @@ gradle.projectsEvaluated {
 			}
 			project(nodePath).tasks.named('verifyStonecutterDirectNode').configure {
 				mustRunAfter("${directFabricNodePaths[index - 1]}:verifyStonecutterDirectNode")
+			}
+		}
+	}
+
+	if (neoForgeBuildGate != null) {
+		def directNeoForgeProjects = directNeoForgeNodePaths.collect { nodePath -> project(nodePath) }
+		directNeoForgeProjects.each { neoForgeProject ->
+			neoForgeProject.tasks.configureEach { currentTask ->
+				currentTask.usesService(neoForgeBuildGate)
+			}
+		}
+		def isNeoForgeBuildPipelineTask = { currentTask ->
+			!currentTask.name.startsWith('stonecutter')
+				&& currentTask.name !in ['buildStonecutterDelegatedNode', 'verifyStonecutterDirectNode']
+		}
+		directNeoForgeProjects.eachWithIndex { neoForgeProject, index ->
+			neoForgeProject.tasks.matching(isNeoForgeBuildPipelineTask).configureEach { currentTask ->
+				directNeoForgeProjects.take(index).each { earlierProject ->
+					currentTask.mustRunAfter(earlierProject.tasks.matching(isNeoForgeBuildPipelineTask))
+				}
 			}
 		}
 	}
