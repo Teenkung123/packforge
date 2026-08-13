@@ -92,19 +92,40 @@ The feature can be configured through `config/packforge.json` or PackForge's in-
 | 26.1.2 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
 | 26.2 | 25 | Yes | Yes | Yes | Stable, exact smoke verified |
 
-Choose the JAR whose filename matches both your mod loader and Minecraft version. Exact legacy builds do not claim support for unlisted Minecraft releases. The registry-derived release manifest currently publishes the six consolidated anchor targets; the expanded exact target artifacts are retained as separately verified beta/stable build outputs.
+Choose the JAR whose filename matches both your mod loader and Minecraft version. Exact legacy builds do not claim support for unlisted Minecraft releases. The registry-derived release manifest publishes seven consolidated targets as 20 loader-specific artifacts; the support table above records loader gaps for exact Minecraft releases.
+
+<!-- packforge-publication-registry
+artifact-count: 20
+target-keys: mc1_20_1,mc1_20_2,mc1_21_1,mc1_21_4,mc1_21_8,mc1_21_11,mc26_1_to_26_2
+-->
 
 ### Minimum Loader Versions
 
-PackForge is compiled and tested against the lower bound shown here. Newer loader builds in the same Minecraft line remain supported, but users do not need the latest patch release just for PackForge.
+PackForge is compiled and tested against the exact lower bound shown for each Minecraft release. Newer loader builds in the same Minecraft line remain supported, but users do not need the latest patch release just for PackForge.
 
 | Minecraft | Fabric Loader | Forge | NeoForge |
 |---|---:|---:|---:|
-| 26.1-26.2 | 0.18.4 | 62.0.0 | 26.1.0.1-beta |
-| 1.21.1 | 0.15.11 | 52.0.0 | 21.1.1 |
-| 1.21.4 | 0.16.9 | 54.0.0 | 21.4.0-beta |
-| 1.21.8 | 0.16.14 | 58.0.0 | 21.8.0-beta |
+| 26.2 | 0.18.4 | 65.1.0 | 26.2.0.48-beta |
+| 26.1.2 | 0.18.4 | 64.1.0 | 26.1.2.94 |
+| 26.1.1 | 0.18.4 | 63.0.2 | 26.1.1.15-beta |
+| 26.1 | 0.18.4 | 62.0.0 | 26.1.0.1-beta |
 | 1.21.11 | 0.18.1 | 61.0.1 | 21.11.0-beta |
+| 1.21.10 | 0.18.1 | 60.1.13 | 21.10.64 |
+| 1.21.9 | 0.18.1 | 59.0.5 | 21.9.16-beta |
+| 1.21.8 | 0.16.14 | 58.0.0 | 21.8.0-beta |
+| 1.21.7 | 0.16.14 | 57.0.3 | 21.7.25-beta |
+| 1.21.6 | 0.16.14 | 56.0.9 | 21.6.20-beta |
+| 1.21.5 | 0.16.14 | 55.1.12 | 21.5.98 |
+| 1.21.4 | 0.16.9 | 54.0.0 | 21.4.0-beta |
+| 1.21.3 | 0.16.9 | 53.1.12 | 21.3.97 |
+| 1.21.2 | 0.16.9 | Not available | 21.2.1-beta |
+| 1.21.1 | 0.15.11 | 52.0.0 | 21.1.1 |
+| 1.21 | 0.15.11 | 51.0.17 | 21.0.167 |
+| 1.20.6 | 0.15.11 | 50.2.10 | 20.6.139 |
+| 1.20.5 | 0.15.11 | Not available | Not available |
+| 1.20.4 | 0.15.11 | 49.2.9 | 20.4.251 |
+| 1.20.3 | 0.15.11 | 49.0.2 | 20.3.8-beta |
+| 1.20.2 | 0.15.11 | 48.1.0 | 20.2.93 |
 | 1.20.1 | 0.14.25 | 47.0.0 | Not available |
 
 PackForge is client-side only and does not need to be installed on the server.
@@ -204,7 +225,7 @@ Build every supported target with:
 gradlew.bat buildAllSupported --no-daemon
 ```
 
-The full build produces 17 artifacts and verifies filenames, Java class versions, mixin compatibility, loader ranges, Minecraft ranges, generated pack metadata, and target capability metadata.
+The full build produces 20 artifacts and verifies filenames, Java class versions, mixin compatibility, loader ranges, Minecraft ranges, generated pack metadata, and target capability metadata.
 
 ## License
 
