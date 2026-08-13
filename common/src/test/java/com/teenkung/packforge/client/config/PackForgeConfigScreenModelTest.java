@@ -235,6 +235,45 @@ class PackForgeConfigScreenModelTest {
 		}
 	}
 
+	@Test
+	void atlasRetryShaderGuardStateDoesNotDependOnRetryBeingEffective() {
+		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
+		config.largeAtlasFixerEnabled = true;
+		config.atlasRetryEnabled = true;
+		config.forceDisablePartIIIWithIris = true;
+		QuickPackCompatibility.Profile quickPack = new QuickPackCompatibility.Profile(
+				QuickPackCompatibility.Status.ABSENT,
+				Optional.empty(),
+				EnumSet.noneOf(PackForgeCapability.class)
+		);
+		String previousRuntime = RuntimeMinecraftVersion.current();
+		RuntimeMinecraftVersion.configure("26.2");
+		try {
+			PackForgeConfigScreenModel.EffectiveState retry = PackForgeConfigScreenModel.effectiveState(
+				option("atlas_retry"),
+				config,
+				quickPack,
+				true
+			);
+			PackForgeConfigScreenModel.EffectiveState guard = PackForgeConfigScreenModel.effectiveState(
+				option("atlas_retry_disable_with_iris"),
+				config,
+				quickPack,
+				true
+			);
+
+			assertEquals("on", retry.configuredValue());
+			assertEquals("off", retry.effectiveValue());
+			assertFalse(retry.effective());
+			assertEquals("on", guard.configuredValue());
+			assertEquals("on", guard.effectiveValue());
+			assertTrue(guard.effective());
+			assertEquals("", guard.disabledReason());
+		} finally {
+			RuntimeMinecraftVersion.configure(previousRuntime);
+		}
+	}
+
 	private static PackForgeConfigScreenModel.OptionSpec option(String id) {
 		return PackForgeConfigScreenModel.allOptions().stream()
 			.filter(candidate -> candidate.id().equals(id))

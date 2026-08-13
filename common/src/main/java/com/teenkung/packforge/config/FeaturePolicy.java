@@ -1,5 +1,7 @@
 package com.teenkung.packforge.config;
 
+import com.teenkung.packforge.platform.PackForgeCompat;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -46,15 +48,22 @@ public final class FeaturePolicy {
 	private final PackForgeConfig.Cfg config;
 	private final PackForgeCapabilityProfile capabilities;
 	private final QuickPackCompatibility.Profile quickPack;
+	private final boolean shaderPipelinePresent;
 
-	private FeaturePolicy(PackForgeConfig.Cfg config, PackForgeCapabilityProfile capabilities, QuickPackCompatibility.Profile quickPack) {
+	private FeaturePolicy(
+		PackForgeConfig.Cfg config,
+		PackForgeCapabilityProfile capabilities,
+		QuickPackCompatibility.Profile quickPack,
+		boolean shaderPipelinePresent
+	) {
 		this.config = PackForgeConfig.copyOf(Objects.requireNonNull(config, "config"));
 		this.capabilities = Objects.requireNonNull(capabilities, "capabilities");
 		this.quickPack = Objects.requireNonNull(quickPack, "quickPack");
+		this.shaderPipelinePresent = shaderPipelinePresent;
 	}
 
 	public static FeaturePolicy current() {
-		return new FeaturePolicy(PackForgeConfig.get(), PackForgeCapabilities.profile(), QuickPackCompatibility.current());
+		return new FeaturePolicy(PackForgeConfig.get(), PackForgeCapabilities.profile(), QuickPackCompatibility.current(), PackForgeCompat.isShaderPipelinePresent());
 	}
 
 	public static FeaturePolicy forConfiguration(PackForgeConfig.Cfg config) {
@@ -62,7 +71,15 @@ public final class FeaturePolicy {
 	}
 
 	public static FeaturePolicy forConfiguration(PackForgeConfig.Cfg config, QuickPackCompatibility.Profile quickPack) {
-		return new FeaturePolicy(config, PackForgeCapabilities.profile(), quickPack);
+		return forConfiguration(config, quickPack, PackForgeCompat.isShaderPipelinePresent());
+	}
+
+	public static FeaturePolicy forConfiguration(
+		PackForgeConfig.Cfg config,
+		QuickPackCompatibility.Profile quickPack,
+		boolean shaderPipelinePresent
+	) {
+		return new FeaturePolicy(config, PackForgeCapabilities.profile(), quickPack, shaderPipelinePresent);
 	}
 
 	static FeaturePolicy forTesting(PackForgeConfig.Cfg config, PackForgeCapabilityProfile capabilities) {
@@ -70,7 +87,16 @@ public final class FeaturePolicy {
 	}
 
 	static FeaturePolicy forTesting(PackForgeConfig.Cfg config, PackForgeCapabilityProfile capabilities, QuickPackCompatibility.Profile quickPack) {
-		return new FeaturePolicy(config, capabilities, quickPack);
+		return forTesting(config, capabilities, quickPack, false);
+	}
+
+	static FeaturePolicy forTesting(
+		PackForgeConfig.Cfg config,
+		PackForgeCapabilityProfile capabilities,
+		QuickPackCompatibility.Profile quickPack,
+		boolean shaderPipelinePresent
+	) {
+		return new FeaturePolicy(config, capabilities, quickPack, shaderPipelinePresent);
 	}
 
 	public boolean reloadOptimizerEnabled() { return config.reloadOptimizerEnabled; }
@@ -118,7 +144,13 @@ public final class FeaturePolicy {
 	}
 	public boolean atlasCapEnabled() { return enabled(ATLAS_CAP, largeAtlasFixerEnabled(), config.atlasCapEnabled); }
 	public int atlasCapPx() { return config.atlasCapPx; }
-	public boolean atlasRetryEnabled() { return enabled(ATLAS_RETRY, largeAtlasFixerEnabled(), config.atlasRetryEnabled); }
+	public boolean atlasRetryEnabled() {
+		return enabled(ATLAS_RETRY, largeAtlasFixerEnabled(), config.atlasRetryEnabled)
+			&& !(config.forceDisablePartIIIWithIris && shaderPipelinePresent);
+	}
+	public boolean atlasRetryShaderGuardEnabled() {
+		return enabled(ATLAS_RETRY, largeAtlasFixerEnabled(), config.forceDisablePartIIIWithIris);
+	}
 	public int atlasRetryMaxAttempts() { return config.atlasRetryMaxAttempts; }
 	public boolean atlasExcludes(String atlasId) { return config.atlasExcludeIds != null && config.atlasExcludeIds.contains(atlasId); }
 	public List<String> atlasExclusionIds() {

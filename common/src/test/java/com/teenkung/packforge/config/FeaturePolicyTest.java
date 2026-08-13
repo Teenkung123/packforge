@@ -55,6 +55,28 @@ class FeaturePolicyTest {
 	}
 
 	@Test
+	void atlasRetryShaderGuardChangesOnlyEffectiveState() {
+		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
+		config.largeAtlasFixerEnabled = true;
+		config.atlasRetryEnabled = true;
+		config.forceDisablePartIIIWithIris = true;
+		Properties properties = new Properties();
+		properties.setProperty("target", "test");
+		properties.setProperty("capabilities", "ATLAS_RETRY");
+		PackForgeCapabilityProfile capabilities = PackForgeCapabilityProfile.fromProperties(properties);
+
+		assertFalse(FeaturePolicy.forTesting(config, capabilities, QuickPackCompatibility.absentForTesting(), true).atlasRetryEnabled());
+		assertTrue(FeaturePolicy.forTesting(config, capabilities, QuickPackCompatibility.absentForTesting(), true).atlasRetryShaderGuardEnabled());
+		assertTrue(config.atlasRetryEnabled);
+
+		config.forceDisablePartIIIWithIris = false;
+		assertTrue(FeaturePolicy.forTesting(config, capabilities, QuickPackCompatibility.absentForTesting(), true).atlasRetryEnabled());
+
+		config.forceDisablePartIIIWithIris = true;
+		assertTrue(FeaturePolicy.forTesting(config, capabilities, QuickPackCompatibility.absentForTesting(), false).atlasRetryEnabled());
+	}
+
+	@Test
 	void quickPackOwnsExactlyTheSixOverlapCapabilities() {
 		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
 		Properties properties = new Properties();

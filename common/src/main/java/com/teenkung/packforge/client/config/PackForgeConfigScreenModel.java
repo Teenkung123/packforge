@@ -301,8 +301,17 @@ public final class PackForgeConfigScreenModel {
 	}
 
 	static EffectiveState effectiveState(OptionSpec option, PackForgeConfig.Cfg config, QuickPackCompatibility.Profile quickPack) {
+		return effectiveState(option, config, quickPack, false);
+	}
+
+	static EffectiveState effectiveState(
+		OptionSpec option,
+		PackForgeConfig.Cfg config,
+		QuickPackCompatibility.Profile quickPack,
+		boolean shaderPipelinePresent
+	) {
 		Objects.requireNonNull(option, "option");
-		return option.resolve(config, FeaturePolicy.forConfiguration(config, quickPack));
+		return option.resolve(config, FeaturePolicy.forConfiguration(config, quickPack, shaderPipelinePresent));
 	}
 
 	public static boolean sameValues(PackForgeConfig.Cfg left, PackForgeConfig.Cfg right) {
@@ -359,7 +368,8 @@ public final class PackForgeConfigScreenModel {
 			case "large_atlas_fixer" -> policy.largeAtlasFixerEnabled();
 			case "model_uv_clamp" -> policy.modelUvTransparencyClampEnabled();
 			case "atlas_cap", "atlas_cap_pixels", "atlas_exclude_ids" -> policy.atlasCapEnabled();
-			case "atlas_retry", "atlas_retry_attempts", "atlas_retry_disable_with_iris" -> policy.atlasRetryEnabled();
+			case "atlas_retry", "atlas_retry_attempts" -> policy.atlasRetryEnabled();
+			case "atlas_retry_disable_with_iris" -> policy.atlasRetryShaderGuardEnabled();
 			case "atlas_mip_parallel", "atlas_mip_batch_size" -> policy.atlasMipParallelEnabled();
 			case "startup_optimizer" -> policy.startupOptimizerEnabled();
 			case "startup_timings" -> policy.startupTimingsEnabled();
