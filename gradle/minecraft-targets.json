@@ -3,7 +3,9 @@
   "defaultTarget": "mc26_1_to_26_2",
   "stonecutterVcsTarget": "mc1_21_1",
   "stonecutterBuildDefaults": {
-    "fabric": "direct"
+    "fabric": "direct",
+    "forge": "direct",
+    "neoforge": "direct"
   },
   "releaseSequence": [
     "1.20.1", "1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6",
@@ -377,7 +379,6 @@
         "forge": {
           "maturity": "beta",
           "versionSuffix": "-beta.2",
-          "stonecutterBuildMode": "direct",
           "version": "1.21.1-52.0.0",
           "versionRange": "[50.2.10,53)",
           "minecraftVersionRange": "[1.20.6,1.21.2)",
@@ -389,7 +390,6 @@
         "neoforge": {
           "maturity": "beta",
           "versionSuffix": "-beta.2",
-          "stonecutterBuildMode": "direct",
           "version": "21.1.1",
           "versionRange": "[20.6.139,21.2)",
           "minecraftVersionRange": "[1.20.6,1.21.2)",
@@ -2006,7 +2006,6 @@
         "neoforge": {
           "maturity": "beta",
           "versionSuffix": "-beta.3",
-          "stonecutterBuildMode": "direct",
           "version": "20.2.93",
           "versionRange": "[20.2.93,20.5)",
           "minecraftVersionRange": "[1.20.2,1.20.5)"
@@ -2081,7 +2080,6 @@
         "forge": {
           "maturity": "beta",
           "versionSuffix": "-beta.2",
-          "stonecutterBuildMode": "direct",
           "version": "1.20.1-47.0.0",
           "versionRange": "[47.0.0,48)",
           "minecraftVersionRange": "[1.20.1]"
