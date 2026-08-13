@@ -13,7 +13,7 @@ Baseline production inventory remains in `baseline.md`. Current deterministic sn
 - Registry generation defines 12 source families and 19 registry build targets (direct source nodes), then expands them into 53 authoritative direct loader distributions. Public aggregate graph is direct-only.
 - Nested Gradle remains a temporary parity oracle; it is not authoritative production ownership.
 
-This is a direct registry-derived build graph. Native Stonecutter preprocessing has focused Fabric proof for archive capture across 16 targets, SharedZip across 17, ReloadableResourceManager across 18 pre26 targets, RuntimeResourceHash across 17, and Bitmap provider definition across all 19; general cross-loader source transport and full all-53 build/package parity remain open.
+This is a direct registry-derived build graph. Native Stonecutter preprocessing has focused Fabric proof for archive capture across 16 targets, SharedZip across 17, ReloadableResourceManager across 18 pre26 targets, RuntimeResourceHash across 17, LoadingOverlayToast across 14, and Bitmap provider definition across all 19; general cross-loader source transport and full all-53 build/package parity remain open.
 
 ## Core seams
 
@@ -28,19 +28,19 @@ This is a direct registry-derived build graph. Native Stonecutter preprocessing 
 
 | Metric | Current |
 |---|---:|
-| Production Java files | 215 |
-| Production nonblank LOC | 16,496 |
-| Bridge files | 108 |
-| Bridge LOC | 5,476 (33.20%) |
+| Production Java files | 216 |
+| Production nonblank LOC | 16,544 |
+| Bridge files | 109 |
+| Bridge LOC | 5,524 (33.39%) |
 | Exact duplicate groups | 0 |
 | Normalized duplicate groups | 0 |
 | Target/version conditional lines | 15 |
-| Stonecutter conditional blocks | 7 (maximum 40 lines) |
+| Stonecutter conditional blocks | 9 (maximum 40 lines) |
 | Renderer bodies | 3 |
 | Renderer adapters | 2 |
 | Registry publication artifacts | 20 |
 
-Baseline was 212 production files and 16,837 LOC with 20 normalized duplicate groups. Current source has three additional production files, removes all measured duplicate groups, and is 341 LOC lower, a 2.03% raw LOC reduction. It does not meet a 20-25% raw shrink target; added registry, compatibility, validation, and reporter capabilities must remain explicitly justified rather than recast as shrink proof.
+Baseline was 212 production files and 16,837 LOC with 20 normalized duplicate groups. Current source has four additional production files, removes all measured duplicate groups, and is 293 LOC lower, a 1.74% raw LOC reduction. It does not meet a 20-25% raw shrink target; added registry, compatibility, validation, and reporter capabilities must remain explicitly justified rather than recast as shrink proof.
 
 Three renderer bodies plus two adapters are measured structure, not live UI parity. Twenty publication artifacts is registry output, not proof that 20 current JARs were built or verified.
 

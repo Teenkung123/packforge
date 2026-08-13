@@ -405,3 +405,13 @@
 - Verification: static direct-contract self-test passed 73 rejected mutations including RuntimeResourceHash17. Metrics passed in 27 seconds: 215 files / 16,496 LOC, 108 bridge files / 5,476 LOC (33.20%), zero duplicates, seven blocks / maximum 40 lines, and 18 platform target-key references. Offline Fabric 1.20.1/1.21.10/1.21.11/mc26 compileJava+sourcesJar reached BUILD SUCCESSFUL in 44 seconds across 24 tasks (18 executed, six up-to-date); active `F1726800...D9B7` matched generated output, physical 1.21.11 `ED80675E...AE83` and mc26 `532500D6...ABE6` matched, inactive generated output was absent, and classes existed. Independent final review passed.
 - Limits: no runtime, all-53 parity, full matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert f74e0a7`; then `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, then `b54a40f` if needed.
+
+## Phase E — canonical preprocessed LoadingOverlayToast Fabric seam
+
+- Date: 2026-08-13
+- Commit SHA: `731d1c2`; parent `9caa86e`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: canonical Fabric LoadingOverlayToast for 14 active targets: common 1.20.5 through 1.21.5 (eight; guard 18) and modern 1.21.6 through 1.21.11 (six; guard 31). Physical 1.20.1-1.20.4 adapter and mc26 priority-1100 tick-at-HEAD seam remain; standalone/Forge/NeoForge are untouched.
+- Verification: static direct-contract self-test passed 89 rejected mutations including LoadingOverlayToast14. Metrics passed in 27 seconds: 216 files / 16,544 LOC, 109 bridge files / 5,524 LOC (33.39%), zero duplicates, nine blocks / maximum 40 lines, and 18 platform target-key references. Offline six-boundary Fabric compileClientJava+sourcesJar reached BUILD SUCCESSFUL in 52 seconds across 48 tasks (39 executed, nine up-to-date); physical lower `6405DCD1...`, generated common `734966D6...`, generated modern `12A3E4CA...`, and physical mc26 `8D9A1069...` matched; classes existed. Independent final review passed.
+- Limits: no runtime, all-53 parity, full matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert 731d1c2`; then `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, then `b54a40f` if needed.
