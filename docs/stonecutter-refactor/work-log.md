@@ -385,3 +385,13 @@
 - Verification: direct-contract self-test passed 49 mutations; metrics passed in 32 seconds: 213 files / 16,430 LOC, 106 bridge files / 5,410 LOC (32.93%), zero duplicates, five blocks / maximum 40 lines, and 18 platform target-key references. Fabric 1.20.1/1.21.11/mc26 compileClientJava+sourcesJar passed in 32 seconds across 24 tasks (16 executed, eight up-to-date); each target had one matching `35EF7378...CB22` generated/source-JAR entry and one 2,655-byte compiled class.
 - Limits: no runtime, full build, matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert c5b61e2`; then `7efd43f`, `4f82154`, then `b54a40f` if needed.
+
+## Phase E — canonical preprocessed ReloadableResourceManager Fabric pre26 seam
+
+- Date: 2026-08-13
+- Commit SHA: `aba98b3`; parent `4846e15`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: canonical guarded Fabric ReloadableResourceManager preprocessing for exact pre26 releases 1.20.1 through 1.21.11 (18 targets), transported through generated `main`; the mc26 physical StartupStatus/StartupTimings seam remains.
+- Verification: direct-contract static self-test passed 61 rejected mutations across 53 total cells / 16 archive / 17 SharedZip / 18 ReloadableResourceManager / 19 Bitmap targets. Metrics passed in 36 seconds: 214 files / 16,471 LOC, 107 bridge files / 5,451 LOC (33.09%), zero duplicates, six blocks / maximum 40 lines, and 18 platform target-key references. Offline Fabric 1.20.1/1.21.11/mc26 compileJava+sourcesJar reached BUILD SUCCESSFUL in 35 seconds across 18 tasks (12 executed, six up-to-date); active `ACD7634C...DDFD` matched generated output, mc26 `1D05F03C...A13C` matched retained physical source, and classes existed in all cells. Independent final review passed.
+- Limits: no runtime, all-53 parity, full matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert aba98b3`; then `c5b61e2`, `7efd43f`, `4f82154`, then `b54a40f` if needed.

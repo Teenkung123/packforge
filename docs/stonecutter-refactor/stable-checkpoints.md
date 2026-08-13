@@ -640,3 +640,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: direct-contract self-test passed 49 mutations. Source metrics passed in 32 seconds: 213 production files, 16,430 LOC, 106 bridge files / 5,410 LOC (32.93%), zero duplicate groups, five Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused Fabric 1.20.1/1.21.11/mc26 `compileClientJava` plus `sourcesJar` passed in 32 seconds across 24 tasks (16 executed, eight up-to-date). Each target produced one compiled Bitmap class of 2,655 bytes and one source-JAR entry whose SHA-256 exactly matched its generated source: `35EF7378...CB22`.
 - Limits: no Minecraft runtime, full build, full matrix, release verification, or cross-loader native preprocessing proof was run. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert c5b61e2`; then revert `7efd43f`, `4f82154`, and `b54a40f` in order if removing the preceding Fabric native pilot work.
+
+## Phase E — canonical preprocessed ReloadableResourceManager Fabric pre26 seam
+
+- Date: 2026-08-13
+- Commit SHA: `aba98b3`; parent `4846e15`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: canonical guarded Fabric `ReloadableResourceManager` preprocessing for the exact 18 pre26 targets from 1.20.1 through 1.21.11, with generated `main` transport. The mc26 physical StartupStatus/StartupTimings seam remains retained.
+- Verification: direct-contract static self-test passed 61 rejected mutations: 53 total cells, 16 archive targets, 17 SharedZip targets, 18 ReloadableResourceManager targets, and 19 Bitmap targets. Source metrics passed in 36 seconds: 214 production files, 16,471 LOC, 107 bridge files / 5,451 LOC (33.09%), zero duplicate groups, six Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused offline Fabric 1.20.1/1.21.11/mc26 `compileJava` plus `sourcesJar` reached BUILD SUCCESSFUL in 35 seconds across 18 tasks (12 executed, six up-to-date). Active entry SHA-256 `ACD7634C...DDFD` matched generated output; mc26 SHA-256 `1D05F03C...A13C` matched the retained physical source; classes existed in all three cells. Independent final review passed.
+- Limits: no Minecraft runtime, all-53 build/package parity, full matrix, release verification, or general cross-loader preprocessing proof was run. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert aba98b3`; then revert `c5b61e2`, `7efd43f`, `4f82154`, and `b54a40f` in order if removing the preceding Fabric native pilot work.

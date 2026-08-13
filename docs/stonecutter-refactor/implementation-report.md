@@ -14,7 +14,7 @@ This report describes current implementation state. Earlier full-matrix and Quic
 | B — Quick Pack ownership | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Exactly six overlap capabilities are handed off; 23 capabilities remain PackForge-owned; mixed non-overlap behavior is retained; UI reports configured/effective ownership. | Current final-JAR profiles on required loaders. |
 | C — optional-mod detection | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Loader-neutral runtime detection and environment-gated profile reporter exist; detection failures fail conservatively. | Current Forge/NeoForge profile launches and retained evidence. |
 | D — registry graph | `STRUCTURAL_VERIFIED` | Registry generates 12 source families, 19 registry build targets (direct source nodes), 53 loader distributions, and a separate 62-cell exact runtime ledger. | Keep registry/direct-node bijection mandatory as graph evolves. |
-| E — authoritative direct build | `PARTIAL` | All 53 loader distributions are authoritative direct cells; public graph is direct-only; contract validation is mandatory. Native preprocessing is proven for Fabric archive capture on 16 targets. | Extend preprocessing beyond the bounded pilot; all-53 compile/package parity, Java 17/21/25 proof, remap/refmap/JarJar proof, runtime, then removal of nested parity oracle. |
+| E — authoritative direct build | `PARTIAL` | All 53 loader distributions are authoritative direct cells; public graph is direct-only; contract validation is mandatory. Fabric native preprocessing is proven for archive capture on 16 targets, SharedZip on 17, ReloadableResourceManager on 18 pre26 targets, and Bitmap provider definition on all 19 targets. | Extend preprocessing beyond bounded pilots; all-53 compile/package parity, Java 17/21/25 proof, remap/refmap/JarJar proof, runtime, then removal of nested parity oracle. |
 | F — source ownership | `PARTIAL` | Zero exact/normalized duplicate groups; 15 target/version conditionals; registry-backed source policy; deterministic metric snapshot. | Raw LOC reduction target is not met; retain justification and prevent branch/duplicate regression. |
 | G — configuration renderers | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Unknown fields survive save; integer validation is shared; renderer families reduced to three bodies plus two adapters; atlas retry configured/effective state is separated. | Live UI parity across renderer families and shader/atlas runtime behavior. |
 | H — range artifacts | `IMPLEMENTED_UNVERIFIED` | Registry expresses seven publication anchors and 20 loader artifacts without crossing maturity boundaries. | Rebuild current bytes and repeat same-JAR proof for every exact release in each range. |
@@ -27,22 +27,22 @@ This report describes current implementation state. Earlier full-matrix and Quic
 
 `gradle/minecraft-targets.json` remains schema v2 and records 22 exact Minecraft releases, 12 source families, and 19 registry build targets (direct source nodes). Registry expansion creates 53 loader-specific direct distributions. The 62-cell ledger is a runtime acceptance matrix, not a build-node count.
 
-Direct loader leaves are authoritative and public aggregate tasks are direct-only. `validateStonecutterDirectContract` rejects delegation in public leaves and checks registry metadata. Native Stonecutter preprocessing is compile- and source-archive-proven for Fabric archive capture across 16 targets, but it is not yet the general source transport. Nested Gradle still exists as a temporary parity rollback oracle; broader preprocessing ownership and full all-cell parity remain open.
+Direct loader leaves are authoritative and public aggregate tasks are direct-only. `validateStonecutterDirectContract` rejects delegation in public leaves and checks registry metadata. Native Stonecutter preprocessing is focused compile- and source-archive-proven for Fabric archive capture across 16 targets, SharedZip across 17, ReloadableResourceManager across 18 pre26 targets, and Bitmap provider definition across all 19; it is not yet the general source transport. Nested Gradle still exists as a temporary parity rollback oracle; broader preprocessing ownership and full all-cell parity remain open.
 
 ## Current source and configuration evidence
 
 Latest deterministic snapshot:
 
 ```text
-productionFiles=213
-productionLoc=16430
-bridgeFiles=106
-bridgeLoc=5410
-bridgePercent=32.93
+productionFiles=214
+productionLoc=16471
+bridgeFiles=107
+bridgeLoc=5451
+bridgePercent=33.09
 exactDuplicateGroups=0
 normalizedDuplicateGroups=0
 targetVersionConditionalLines=15
-stonecutterConditionalBlocks=5
+stonecutterConditionalBlocks=6
 maxStonecutterConditionalBlockLines=40
 rendererBodies=3
 rendererAdapters=2
