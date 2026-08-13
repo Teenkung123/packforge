@@ -6,15 +6,16 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 
 | Metric | Value |
 |---|---:|
-| Production Java files | 207 |
-| Production nonblank LOC | 16129 |
+| Production Java files | 209 |
+| Production nonblank LOC | 16084 |
 | Bridge files | 103 |
-| Bridge LOC | 5303 (32.88%) |
+| Bridge LOC | 5303 (32.97%) |
 | Exact duplicate groups | 0 |
 | Normalized version duplicate groups | 0 |
-| Platform `target.key` references | 83 |
-| Target-key/version conditional lines | 85 |
-| Version-specific configuration renderers | 4 |
+| Platform `target.key` references | 19 |
+| Target-key/version conditional lines | 15 |
+| Configuration renderer bodies | 3 |
+| Configuration renderer adapters | 2 |
 | Exact release cells | 22 |
 | Exact loader cells | 62 |
 | Registered build targets | 19 |
@@ -25,8 +26,8 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 
 | Layer | Files | Nonblank LOC |
 |---|---:|---:|
-| `neutralCommon` | 61 | 5972 |
-| `versionCommon` | 46 | 4959 |
+| `neutralCommon` | 62 | 6046 |
+| `versionCommon` | 47 | 4840 |
 | `loaderCommon` | 15 | 480 |
 | `exactVersionBridge` | 85 | 4718 |
 
@@ -42,11 +43,15 @@ None.
 
 None.
 
-## Version-specific configuration renderers
+## Configuration renderer bodies
 
 - `versions/mc1_20_1/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java`
-- `versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java`
 - `versions/mc26/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java`
+- `versions/shared/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreenBase.java`
+
+## Configuration renderer adapters
+
+- `versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java`
 - `versions/shared/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java`
 
 ## Capability ownership

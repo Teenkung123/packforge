@@ -867,8 +867,14 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 			}
 		}
 
-		def configScreenRenderers = rows
-			.findAll { row -> row.path.matches("versions/[^/]+/common/src/client/java/.+/PackForgeConfigScreen\\.java") }
+		def configScreenFiles = rows.findAll { row ->
+			row.path.matches("versions/[^/]+/common/src/client/java/.+/PackForgeConfigScreen(?:Base)?\\.java")
+		}
+		def configScreenAdapters = configScreenFiles
+			.findAll { row -> row.file.getText("UTF-8").contains("extends PackForgeConfigScreenBase") }
+			.collect { row -> row.path }
+		def configScreenRendererBodies = configScreenFiles
+			.findAll { row -> !configScreenAdapters.contains(row.path) }
 			.collect { row -> row.path }
 		def exactLoaderCells = registry.releaseCells.sum(0) { cell -> cell.loaderAvailability.size() }
 		def capabilityOwnership = capabilityContract.keySet().collect { it.toString() }.sort().collectEntries { capability ->
@@ -966,8 +972,10 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 				targetConditionalLines: targetBranchLines
 			],
 			configuration: [
-				versionSpecificRendererCount: configScreenRenderers.size(),
-				versionSpecificRenderers: configScreenRenderers
+				rendererBodyCount: configScreenRendererBodies.size(),
+				rendererBodies: configScreenRendererBodies,
+				rendererAdapterCount: configScreenAdapters.size(),
+				rendererAdapters: configScreenAdapters
 			],
 			matrix: [
 				exactReleaseCells: supportedExactTargets,
@@ -1023,7 +1031,8 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 | Normalized version duplicate groups | ${duplicateGroups.size()} |
 | Platform `target.key` references | ${platformTargetKeyReferences} |
 | Target-key/version conditional lines | ${targetBranchLines} |
-| Version-specific configuration renderers | ${configScreenRenderers.size()} |
+| Configuration renderer bodies | ${configScreenRendererBodies.size()} |
+| Configuration renderer adapters | ${configScreenAdapters.size()} |
 | Exact release cells | ${supportedExactTargets} |
 | Exact loader cells | ${exactLoaderCells} |
 | Registered build targets | ${targets.size()} |
@@ -1048,9 +1057,13 @@ ${exactDuplicateRows}
 
 ${normalizedDuplicateRows}
 
-## Version-specific configuration renderers
+## Configuration renderer bodies
 
-${configScreenRenderers.isEmpty() ? "None." : configScreenRenderers.collect { "- `${it}`" }.join("\n")}
+${configScreenRendererBodies.isEmpty() ? "None." : configScreenRendererBodies.collect { "- `${it}`" }.join("\n")}
+
+## Configuration renderer adapters
+
+${configScreenAdapters.isEmpty() ? "None." : configScreenAdapters.collect { "- `${it}`" }.join("\n")}
 
 ## Capability ownership
 
@@ -1082,7 +1095,8 @@ ${capabilityRows}
 		println("platformTargetKeyReferences=${platformTargetKeyReferences}")
 		println("targetVersionReferences=${targetVersionReferences}")
 		println("targetConditionalLines=${targetBranchLines}")
-		println("versionSpecificConfigRenderers=${configScreenRenderers.size()}")
+		println("configScreenRendererBodies=${configScreenRendererBodies.size()}")
+		println("configScreenRendererAdapters=${configScreenAdapters.size()}")
 		println("quickPackInternalReferences=${quickPackInternalReferencePaths.size()}")
 		println("productionLocPerSupportedTarget=${locPerTarget}")
 		println("stonecutterConditionalBlocks=${conditionalBlocks}")

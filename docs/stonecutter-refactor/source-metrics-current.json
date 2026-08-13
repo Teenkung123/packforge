@@ -11,12 +11,12 @@
         "generatedPolicy": "All build/generated/Stonecutter output lies outside handwritten source roots."
     },
     "production": {
-        "files": 207,
-        "nonblankLoc": 16129,
+        "files": 209,
+        "nonblankLoc": 16084,
         "bridgeFiles": 103,
         "bridgeLoc": 5303,
-        "bridgePercent": 32.88,
-        "locPerExactRelease": 733.14,
+        "bridgePercent": 32.97,
+        "locPerExactRelease": 731.09,
         "layerPrecedence": [
             "neutralCommon",
             "loaderCommon",
@@ -26,12 +26,12 @@
         "aggregateBridgePolicy": "Bridge totals include loader-owned bridge/compat files plus non-loader exact-version bridges.",
         "layers": {
             "neutralCommon": {
-                "files": 61,
-                "loc": 5972
+                "files": 62,
+                "loc": 6046
             },
             "versionCommon": {
-                "files": 46,
-                "loc": 4959
+                "files": 47,
+                "loc": 4840
             },
             "loaderCommon": {
                 "files": 15,
@@ -55,18 +55,22 @@
         "normalizedGroupReductionPercent": 100.00
     },
     "buildBranches": {
-        "targetKeyReferences": 143,
-        "platformTargetKeyReferences": 83,
+        "targetKeyReferences": 80,
+        "platformTargetKeyReferences": 19,
         "targetVersionReferences": 15,
-        "targetKeyLiteralReferences": 319,
-        "targetConditionalLines": 85
+        "targetKeyLiteralReferences": 85,
+        "targetConditionalLines": 15
     },
     "configuration": {
-        "versionSpecificRendererCount": 4,
-        "versionSpecificRenderers": [
+        "rendererBodyCount": 3,
+        "rendererBodies": [
             "versions/mc1_20_1/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java",
-            "versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java",
             "versions/mc26/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java",
+            "versions/shared/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreenBase.java"
+        ],
+        "rendererAdapterCount": 2,
+        "rendererAdapters": [
+            "versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java",
             "versions/shared/common/src/client/java/com/teenkung/packforge/client/config/PackForgeConfigScreen.java"
         ]
     },
