@@ -450,3 +450,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: runner AST validation passed. `Test-ExactProductionMatrixProfiles` passed in about six seconds, covering empty, unknown, catalog guard, duplicate, conflict, exact-cell, `PENDING_METADATA`, `UNAVAILABLE`, and `AVAILABLE` cases. The runner invokes the catalog validator directly; it is not a root Gradle or CI gate.
 - Status: `PHASE_I_FOUNDATION_VERIFIED`; all 36 profiles remain `PENDING_METADATA` and `UNTESTED`. No real metadata resolution, download, or compatibility profile execution occurred.
 - Rollback: `git revert 5f668bc597ffdc094c91fda645fde19e7f0ed5f2` first; then revert `b35a0b0` and `934c283` if the entire Phase I foundation must be removed.
+
+## Existing release-manifest verification
+
+- Date: 2026-08-13
+- Commit SHA: `67a7bf5e57de4d35089983db00ae84328d530c7c`
+- Parent SHA: `1914912723bcfa19742d58e3bb549d2c203ab5b5`
+- Scope: add a non-writing `--verify-existing` mode to `Generate-ReleaseManifest.py`; make `verifyReleaseManifest` verify the already-generated release manifest after structural artifact verification; add a temporary-fixture self-test for manifest equality, artifact set, ordering, sizes, and SHA-256/SHA-512 values.
+- Verification: generator self-test and Python compilation passed; independent read-only review passed. Current `--verify-existing` check reported `CURRENT_MANIFEST_MISSING`: only 7 of 20 expected release JARs existed and `build/libs/release/manifest.json` was absent.
+- Status: `PHASE_K_MANIFEST_VERIFIER_STRUCTURAL_VERIFIED`; real `verifyReleaseManifest` was not run. No full artifact build, final-manifest verification, exact release matrix, compatibility profile, or Minecraft runtime proof exists from this checkpoint. Phase K remains incomplete.
+- Rollback: after reverting later documentation-only checkpoints, `git revert 67a7bf5e57de4d35089983db00ae84328d530c7c` removes the existing-manifest verifier and its self-test, returning to generated-manifest-only behavior.
