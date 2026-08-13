@@ -81,8 +81,11 @@ ext.packforgeSourceSelection = [
 apply from: new File(packforgeRepositoryRoot, "gradle/packforge-source-selection.gradle")
 def selectedSources = packforgeSelectedSources
 def selectedMainJavaSources = files(selectedSources.mainJavaSources)
+def selectedClientJavaSources = files(selectedSources.clientJavaSources)
 def compileMainJavaSources = selectedMainJavaSources
+def compileClientJavaSources = selectedClientJavaSources
 def legacyNativeSources = [] as Set
+def legacyNativeClientSources = [] as Set
 def legacySharedZipSource = stonecutterDirectNode
 	? new File(physicalRepositoryRoot, "versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java").canonicalFile
 	: null
@@ -96,11 +99,20 @@ if (stonecutterDirectNode) {
 		new File(physicalRepositoryRoot, "versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java").canonicalFile,
 		legacySharedZipSource
 	] as Set
+	legacyNativeClientSources = [
+		new File(physicalRepositoryRoot, "versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java").canonicalFile,
+		new File(physicalRepositoryRoot, "versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java").canonicalFile,
+		new File(physicalRepositoryRoot, "versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java").canonicalFile
+	] as Set
 	nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }
 	compileMainJavaSources = files(
 		selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyNativeSources },
 		// Stonecutter 0.9.7 auto-configures every SourceSet, including main.
 		stonecutter.tasks.generatedSourcesDir.dir("main/java")
+	)
+	compileClientJavaSources = files(
+		selectedClientJavaSources.filter { source -> source.canonicalFile !in legacyNativeClientSources },
+		stonecutter.tasks.generatedSourcesDir.dir("client/java")
 	)
 }
 
@@ -114,6 +126,9 @@ sourceSets {
 	}
 	client {
 		java.setSrcDirs(selectedSources.clientJavaSourceDirsEnabled ? selectedSources.clientJavaDirs : [])
+		if (stonecutterDirectNode) {
+			java.srcDir(stonecutter.tasks.generatedSourcesDir.dir("client/java"))
+		}
 		resources.setSrcDirs(selectedSources.clientResourceDirs)
 	}
 	test {
@@ -130,7 +145,10 @@ tasks.named("compileJava", JavaCompile) {
 }
 
 tasks.named("compileClientJava", JavaCompile) {
-	setSource(files(selectedSources.clientJavaSources))
+	if (stonecutterDirectNode) {
+		dependsOn(stonecutter.tasks.generate["client"])
+	}
+	setSource(compileClientJavaSources)
 }
 
 tasks.named("compileTestJava", JavaCompile) {
@@ -322,9 +340,10 @@ jar {
 tasks.named("sourcesJar") {
 	archiveFileName = "packforge-fabric-${project.version}-mc${packforgeArtifactMinecraft}-sources.jar"
 	if (stonecutterDirectNode) {
-		dependsOn(stonecutter.tasks.generate["main"])
+		dependsOn(stonecutter.tasks.generate["main"], stonecutter.tasks.generate["client"])
 		eachFile { details ->
 			if (details.file.canonicalFile in legacyNativeSources
+				|| details.file.canonicalFile in legacyNativeClientSources
 				|| (!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource)) {
 				details.exclude()
 			}

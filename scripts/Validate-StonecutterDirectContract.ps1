@@ -112,6 +112,36 @@ $CanonicalFabricNativeSharedZipTargets = @(
     'mc1_21_11'
 )
 $CanonicalFabricNonNativeSharedZipTargets = @('mc1_20_1', 'mc26_1_to_26_2')
+$CanonicalFabricNativeBitmapTargets = @(
+    'mc1_20_1',
+    'mc1_20_2',
+    'mc1_20_3',
+    'mc1_20_4',
+    'mc1_20_5',
+    'mc1_20_6',
+    'mc1_21',
+    'mc1_21_1',
+    'mc1_21_2',
+    'mc1_21_3',
+    'mc1_21_4',
+    'mc1_21_5',
+    'mc1_21_6',
+    'mc1_21_7',
+    'mc1_21_8',
+    'mc1_21_9',
+    'mc1_21_10',
+    'mc1_21_11',
+    'mc26_1_to_26_2'
+)
+$CanonicalFabricBitmapDescriptorPaths = @(
+    'versions/mc1_20_1/common/src/client/resources/packforge.fabric.client.mixins.json',
+    'versions/mc1_21_1/common/src/client/resources/packforge.fabric.client.mixins.json',
+    'versions/mc1_21_4/common/src/client/resources/packforge.fabric.client.mixins.json',
+    'versions/mc1_21_8/common/src/client/resources/packforge.fabric.client.mixins.json',
+    'versions/mc1_21_9/common/src/client/resources/packforge.mc1_21_9_10.client.mixins.json',
+    'versions/mc1_21_11/common/src/client/resources/packforge.fabric.client.mixins.json',
+    'versions/mc26/common/src/client/resources/packforge.fabric.client.mixins.json'
+)
 $CanonicalFabricSharedZipDescriptorPaths = @(
     'versions/mc1_20_1/common/src/main/resources/packforge.fabric.mixins.json',
     'versions/mc1_20_2/common/src/main/resources/packforge.fabric.mixins.mc1_20_2.json',
@@ -203,6 +233,13 @@ function Normalize-NativeStonecutterJava([string] $Text) {
     return $body -replace '\s+', ''
 }
 
+function Normalize-BitmapProviderMixin([string] $Text) {
+    $body = @($Text -split '\r?\n' | Where-Object { $_.Trim() -notmatch '^//\?' }) -join ''
+    $body = [regex]::Replace($body, '\bresourceManager\b', 'manager')
+    $body = $body -replace '\s+', ''
+    return $body.Replace('if(cached!=null){returncached;}', 'if(cached!=null)returncached;')
+}
+
 function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     if ([int] $Registry.schemaVersion -ne 2) { Fail "unsupported registry schema '$($Registry.schemaVersion)'." }
 
@@ -261,6 +298,16 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         Fail 'registry pre-26 SharedZip route path/sourceSet/platform scope drifted.'
     }
     Assert-SameSet @($sharedZipRoute.targets) $CanonicalFabricNativeSharedZipTargets 'registry pre-26 SharedZip route targets'
+    Assert-SameSet $fabricTargetKeys $CanonicalFabricNativeBitmapTargets 'Fabric native bitmap-provider targets'
+    $bitmapRoutes = @($Registry.sharedJavaSources | Where-Object { $_.id -ceq 'bitmap-provider-definition-through-1.21.10' })
+    if ($bitmapRoutes.Count -ne 1) { Fail "registry must contain one frozen bitmap-provider route; found $($bitmapRoutes.Count)." }
+    $bitmapRoute = $bitmapRoutes[0]
+    if (($bitmapRoute.path -cne 'versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java') -or
+        ($bitmapRoute.sourceSet -cne 'client') -or
+        ($null -ne $bitmapRoute.PSObject.Properties['platforms'])) {
+        Fail 'registry bitmap-provider route path/sourceSet/platform scope drifted.'
+    }
+    Assert-SameSet @($bitmapRoute.targets) @($CanonicalFabricNativeBitmapTargets | Where-Object { $_ -cnotin @('mc1_21_11', 'mc26_1_to_26_2') }) 'registry bitmap-provider shared route targets'
     Assert-SameSet @($joptOverrides.Keys) @($CanonicalJoptSimpleOverrides.Keys) 'JOptSimple override nodes'
     foreach ($nodePath in $CanonicalJoptSimpleOverrides.Keys) {
         if ($joptOverrides[$nodePath] -cne $CanonicalJoptSimpleOverrides[$nodePath]) {
@@ -293,6 +340,10 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $rootBuild 'def expectedForgeJoptSimpleRuntimeVersions = [mc1_21_1: "5.0.4", mc1_21_4: "5.0.4"]' 'root Forge JOptSimple registry guard'
     Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java")' 'root Fabric native archive validator input'
     Assert-ContainsOnce $rootBuild 'file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java")' 'root Fabric native SharedZip validator input'
+    Assert-ContainsOnce $rootBuild 'file("fabric/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java")' 'root Fabric native bitmap-provider validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java")' 'root retained shared bitmap-provider validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java")' 'root retained 1.21.11 bitmap-provider validator input'
+    Assert-ContainsOnce $rootBuild 'file("versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java")' 'root retained mc26 bitmap-provider validator input'
     Assert-ContainsOnce $rootBuild 'file("versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java")' 'root retained SharedZip validator input'
     Assert-ContainsOnce $rootBuild 'file("versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java")' 'root mc26 SharedZip validator input'
     Assert-ContainsOnce $rootBuild 'file("versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessAccessor.java")' 'root mc26 SharedZip accessor validator input'
@@ -445,10 +496,40 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         }
     }
 
+    $nativeBitmap = $Sources.FabricNativeBitmap
+    Assert-ContainsOnce $nativeBitmap '//? if >=1.20.1 && <=26.1 {' 'Fabric native bitmap-provider outer target guard'
+    Assert-ContainsOnce $nativeBitmap 'package com.teenkung.packforge.client.mixin.font;' 'Fabric native bitmap-provider package'
+    Assert-ContainsOnce $nativeBitmap '@Mixin(BitmapProvider.Definition.class)' 'Fabric native bitmap-provider target'
+    Assert-ContainsOnce $nativeBitmap '@WrapMethod(method = "load")' 'Fabric native bitmap-provider load hook'
+    Assert-ContainsOnce $nativeBitmap 'private GlyphProvider packforge$loadCached(ResourceManager manager, Operation<GlyphProvider> original) throws Exception {' 'Fabric native bitmap-provider signature'
+    Assert-ContainsOnce $nativeBitmap 'if (!FontBitmapProviderCache.enabled()) {' 'Fabric native bitmap-provider feature guard'
+    Assert-ContainsOnce $nativeBitmap 'GlyphProvider cached = FontBitmapProviderCache.get(epoch, manager, definition);' 'Fabric native bitmap-provider lookup'
+    Assert-ContainsOnce $nativeBitmap 'return loaded == null ? null : FontBitmapProviderCache.cache(epoch, manager, definition, loaded);' 'Fabric native bitmap-provider cache behavior'
+    Assert-ContainsCount $nativeBitmap '//? if ' 1 'Fabric native bitmap-provider conditional openers'
+    Assert-ContainsCount $nativeBitmap '//?}' 1 'Fabric native bitmap-provider conditional closers'
+    $nativeBitmapMetrics = Measure-StonecutterConditionalBlocks $nativeBitmap 'Fabric native bitmap-provider'
+    if ($nativeBitmapMetrics.Blocks -ne 1) { Fail "Fabric native bitmap-provider must contain one Stonecutter block; found $($nativeBitmapMetrics.Blocks)." }
+    if ($nativeBitmapMetrics.MaxLines -gt 40) { Fail "Fabric native bitmap-provider Stonecutter block spans $($nativeBitmapMetrics.MaxLines) lines; maximum is 40." }
+    $bitmapBaseline = Normalize-BitmapProviderMixin $nativeBitmap
+    foreach ($variant in @('LegacyBitmap', 'Mc12111Bitmap', 'Mc26Bitmap')) {
+        if ((Normalize-BitmapProviderMixin $Sources[$variant]) -cne $bitmapBaseline) {
+            Fail "Fabric native bitmap-provider behavior differs from retained variant '$variant' after narrow semantic normalization."
+        }
+    }
+    try { $bitmapDescriptors = $Sources.FabricBitmapDescriptors | ConvertFrom-Json -AsHashtable } catch { Fail "Fabric bitmap-provider descriptor proof is invalid JSON: $($_.Exception.Message)" }
+    Assert-SameSet @($bitmapDescriptors.Keys) $CanonicalFabricBitmapDescriptorPaths 'Fabric bitmap-provider descriptor paths'
+    foreach ($descriptorPath in $CanonicalFabricBitmapDescriptorPaths) {
+        $bitmapCount = @($bitmapDescriptors[$descriptorPath].client | Where-Object { $_ -ceq 'font.BitmapProviderDefinitionMixin' }).Count
+        if ($bitmapCount -ne 1) { Fail "Fabric descriptor '$descriptorPath' must register one bitmap-provider mixin; found $bitmapCount." }
+    }
+
     $fabricBuild = $Sources['Loader:fabric']
     $nativeTransport = Get-Section $fabricBuild 'def selectedMainJavaSources = files(selectedSources.mainJavaSources)' 'sourceSets {' 'Fabric native source transport'
     Assert-ContainsOnce $nativeTransport 'def compileMainJavaSources = selectedMainJavaSources' 'Fabric standalone selected-source preservation'
+    Assert-ContainsOnce $nativeTransport 'def selectedClientJavaSources = files(selectedSources.clientJavaSources)' 'Fabric selected client sources'
+    Assert-ContainsOnce $nativeTransport 'def compileClientJavaSources = selectedClientJavaSources' 'Fabric standalone client-source preservation'
     Assert-ContainsOnce $nativeTransport 'def legacyNativeSources = [] as Set' 'Fabric standalone empty native exclusion set'
+    Assert-ContainsOnce $nativeTransport 'def legacyNativeClientSources = [] as Set' 'Fabric standalone empty client-native exclusion set'
     Assert-ContainsOnce $nativeTransport 'def legacySharedZipSource = stonecutterDirectNode' 'Fabric legacy SharedZip source identity'
     Assert-ContainsOnce $nativeTransport 'def generatedSharedZipSource = stonecutterDirectNode' 'Fabric generated SharedZip source identity'
     Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java").get().asFile.canonicalFile' 'Fabric generated SharedZip source path'
@@ -457,34 +538,47 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric legacy archive exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric modern archive exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java' 'Fabric legacy SharedZip exclusion'
-    Assert-ContainsCount $nativeTransport 'new File(physicalRepositoryRoot, ' 3 'Fabric exact legacy native exclusions'
+    Assert-ContainsCount $nativeTransport 'new File(physicalRepositoryRoot, ' 6 'Fabric exact legacy native exclusions'
+    Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java' 'Fabric legacy shared bitmap-provider exclusion'
+    Assert-ContainsOnce $nativeTransport 'versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java' 'Fabric legacy 1.21.11 bitmap-provider exclusion'
+    Assert-ContainsOnce $nativeTransport 'versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java' 'Fabric legacy mc26 bitmap-provider exclusion'
     Assert-ContainsOnce $nativeTransport 'nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }' 'Fabric registry-selected SharedZip activation'
     Assert-ContainsOnce $nativeTransport 'selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyNativeSources }' 'Fabric native source replacement'
     Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.dir("main/java")' 'Fabric generated Java compile root'
+    Assert-ContainsOnce $nativeTransport 'selectedClientJavaSources.filter { source -> source.canonicalFile !in legacyNativeClientSources }' 'Fabric native client source replacement'
+    Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.dir("client/java")' 'Fabric generated client Java compile root'
     if ($fabricBuild.Contains('stonecutter.tasks.configureSource(')) {
         Fail 'Fabric must reuse Stonecutter 0.9.7 automatic SourceSet registration instead of configuring main twice.'
     }
 
     $fabricSourceSets = Get-Section $fabricBuild 'sourceSets {' 'tasks.named("compileJava", JavaCompile)' 'Fabric native archive source set'
-    Assert-ContainsOnce $fabricSourceSets 'if (stonecutterDirectNode) {' 'Fabric generated source-set direct guard'
+    Assert-ContainsCount $fabricSourceSets 'if (stonecutterDirectNode) {' 2 'Fabric generated source-set direct guards'
     Assert-ContainsOnce $fabricSourceSets 'java.srcDir(stonecutter.tasks.generatedSourcesDir.dir("main/java"))' 'Fabric generated Java main source set'
+    Assert-ContainsOnce $fabricSourceSets 'java.srcDir(stonecutter.tasks.generatedSourcesDir.dir("client/java"))' 'Fabric generated Java client source set'
     $fabricCompileJava = Get-Section $fabricBuild 'tasks.named("compileJava", JavaCompile) {' 'tasks.named("compileClientJava", JavaCompile)' 'Fabric native archive compile task'
     Assert-ContainsOnce $fabricCompileJava 'if (stonecutterDirectNode) {' 'Fabric compile generation direct guard'
     Assert-ContainsOnce $fabricCompileJava 'dependsOn(stonecutter.tasks.generate["main"])' 'Fabric compile generation dependency'
     Assert-ContainsOnce $fabricCompileJava 'setSource(compileMainJavaSources)' 'Fabric compile source replacement'
+    $fabricCompileClientJava = Get-Section $fabricBuild 'tasks.named("compileClientJava", JavaCompile) {' 'tasks.named("compileTestJava", JavaCompile)' 'Fabric native bitmap-provider compile task'
+    Assert-ContainsOnce $fabricCompileClientJava 'if (stonecutterDirectNode) {' 'Fabric client compile generation direct guard'
+    Assert-ContainsOnce $fabricCompileClientJava 'dependsOn(stonecutter.tasks.generate["client"])' 'Fabric client compile generation dependency'
+    Assert-ContainsOnce $fabricCompileClientJava 'setSource(compileClientJavaSources)' 'Fabric client compile source replacement'
     $fabricSourcesJar = Get-Section $fabricBuild 'tasks.named("sourcesJar") {' 'if (loaderConfig.mappingMode == "named") {' 'Fabric native archive sources JAR'
     Assert-ContainsOnce $fabricSourcesJar 'if (stonecutterDirectNode) {' 'Fabric sources JAR generation direct guard'
-    Assert-ContainsOnce $fabricSourcesJar 'dependsOn(stonecutter.tasks.generate["main"])' 'Fabric sources JAR generation dependency'
+    Assert-ContainsOnce $fabricSourcesJar 'dependsOn(stonecutter.tasks.generate["main"], stonecutter.tasks.generate["client"])' 'Fabric sources JAR generation dependencies'
     Assert-ContainsOnce $fabricSourcesJar 'if (details.file.canonicalFile in legacyNativeSources' 'Fabric sources JAR physical legacy-source filter'
+    Assert-ContainsOnce $fabricSourcesJar 'details.file.canonicalFile in legacyNativeClientSources' 'Fabric sources JAR physical client-source filter'
     Assert-ContainsOnce $fabricSourcesJar '!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource' 'Fabric inactive generated SharedZip filter'
     Assert-ContainsOnce $fabricSourcesJar 'details.exclude()' 'Fabric sources JAR legacy-source exclusion'
     Assert-ContainsCount $fabricBuild 'stonecutter.tasks.generatedSourcesDir.dir("main/java")' 2 'Fabric exact generated Java root wiring'
+    Assert-ContainsCount $fabricBuild 'stonecutter.tasks.generatedSourcesDir.dir("client/java")' 2 'Fabric exact generated client Java root wiring'
     if ($fabricBuild.Contains('stonecutter.tasks.generatedSourcesDir.dir("main")')) {
         Fail 'Fabric must not expose the Stonecutter source-set container as a Java root; use main/java.'
     }
-    Assert-ContainsCount $fabricBuild 'dependsOn(stonecutter.tasks.generate["main"])' 2 'Fabric exact generation task wiring'
+    Assert-ContainsCount $fabricBuild 'dependsOn(stonecutter.tasks.generate["main"])' 1 'Fabric exact main compile generation wiring'
+    Assert-ContainsCount $fabricBuild 'stonecutter.tasks.generate["client"]' 2 'Fabric exact client generation wiring'
     foreach ($loaderId in @('forge', 'neoforge')) {
-        if ($Sources["Loader:$loaderId"].Contains('FilePackResourcesArchiveMixin.java') -or $Sources["Loader:$loaderId"].Contains('SharedZipFileAccessMixin.java')) {
+        if ($Sources["Loader:$loaderId"].Contains('FilePackResourcesArchiveMixin.java') -or $Sources["Loader:$loaderId"].Contains('SharedZipFileAccessMixin.java') -or $Sources["Loader:$loaderId"].Contains('BitmapProviderDefinitionMixin.java')) {
             Fail "$loaderId build script must not consume a Fabric native source pilot."
         }
     }
@@ -497,7 +591,7 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         Fail 'Forge build script must not hard-code JOptSimple target keys or version.'
     }
 
-    return [pscustomobject]@{ DirectCells = $nodes.Count; JoptOverrides = $joptOverrides.Count; NativeArchiveCells = $CanonicalFabricNativeArchiveTargets.Count; NativeSharedZipCells = $CanonicalFabricNativeSharedZipTargets.Count }
+    return [pscustomobject]@{ DirectCells = $nodes.Count; JoptOverrides = $joptOverrides.Count; NativeArchiveCells = $CanonicalFabricNativeArchiveTargets.Count; NativeSharedZipCells = $CanonicalFabricNativeSharedZipTargets.Count; NativeBitmapCells = $CanonicalFabricNativeBitmapTargets.Count }
 }
 
 function Copy-Registry($Registry) {
@@ -548,6 +642,12 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-shared-zip-mc26-accessor-missing' { param($r, $s) $s.Mc26SharedZipAccessor = $s.Mc26SharedZipAccessor.Replace('@Accessor("file")', '@Accessor("missing")') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-descriptor-registration-missing' { param($r, $s) $s.FabricSharedZipDescriptors = $s.FabricSharedZipDescriptors.Replace('loader.SharedZipFileAccessMixin', 'loader.MissingSharedZipMixin') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-mc26-descriptor-accessor-missing' { param($r, $s) $s.FabricSharedZipDescriptors = $s.FabricSharedZipDescriptors.Replace('loader.SharedZipFileAccessAccessor', 'loader.MissingSharedZipAccessor') } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-registry-route-drift' { param($r, $s) $route = @($r.sharedJavaSources | Where-Object { $_.id -ceq 'bitmap-provider-definition-through-1.21.10' })[0]; $route.sourceSet = 'main' } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-lower-range-drift' { param($r, $s) $s.FabricNativeBitmap = $s.FabricNativeBitmap.Replace('>=1.20.1', '>=1.20.2') } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-upper-range-missing' { param($r, $s) $s.FabricNativeBitmap = $s.FabricNativeBitmap.Replace(' && <=26.1', '') } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-behavior-drift' { param($r, $s) $s.FabricNativeBitmap = $s.FabricNativeBitmap.Replace('FontBitmapProviderCache.enabled()', 'false') } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-retained-parity-drift' { param($r, $s) $s.Mc26Bitmap = $s.Mc26Bitmap.Replace('FontBitmapProviderCache.enabled()', 'false') } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-descriptor-registration-missing' { param($r, $s) $s.FabricBitmapDescriptors = $s.FabricBitmapDescriptors.Replace('font.BitmapProviderDefinitionMixin', 'font.MissingBitmapProviderDefinitionMixin') } $Registry $Sources
     Assert-MutationRejected 'native-archive-legacy-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java', 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/Missing.java') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-legacy-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java', 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/MissingSharedZip.java') } $Registry $Sources
     Assert-MutationRejected 'native-source-extra-exclusion' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace("`tlegacyNativeSources = [", "`tlegacyNativeSources = [`n`t`tnew File(physicalRepositoryRoot, `"versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/Extra.java`"),") } $Registry $Sources
@@ -557,11 +657,16 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-archive-sources-jar-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('details.exclude()', 'details.path') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-activation-drift' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }', 'nativeSharedZipActive = true') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-inactive-generated-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('|| (!nativeSharedZipActive && details.file.canonicalFile == generatedSharedZipSource)', '') } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-client-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java', 'versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/Missing.java') } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-generated-client-root-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('stonecutter.tasks.generatedSourcesDir.dir("client/java")', 'files()') } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-client-generation-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('dependsOn(stonecutter.tasks.generate["client"])', 'dependsOn(tasks.named("classes"))') } $Registry $Sources
+    Assert-MutationRejected 'native-bitmap-sources-jar-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('|| details.file.canonicalFile in legacyNativeClientSources', '') } $Registry $Sources
     Assert-MutationRejected 'native-archive-duplicate-source-registration' { param($r, $s) $s['Loader:fabric'] += "`nstonecutter.tasks.configureSource(sourceSets.main)" } $Registry $Sources
     Assert-MutationRejected 'native-archive-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"),', '') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"),', '') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-mc26-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"),', '') } $Registry $Sources
-    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 38 mutations rejected.'
+    Assert-MutationRejected 'native-bitmap-validator-input-missing' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('file("fabric/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java"),', '') } $Registry $Sources
+    Write-Output 'Stonecutter direct contract self-test PASS: baseline accepted; 49 mutations rejected.'
 }
 
 $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath,
@@ -569,12 +674,18 @@ $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath
     (Join-Path $RepositoryRoot 'platform\neoforge\build.gradle'),
     (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\FilePackResourcesArchiveMixin.java'),
     (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java'),
+    (Join-Path $RepositoryRoot 'fabric\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java'),
     (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java'),
     (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java'),
     (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessAccessor.java'),
+    (Join-Path $RepositoryRoot 'versions\shared\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\mc1_21_11\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java'),
+    (Join-Path $RepositoryRoot 'versions\mc26\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java'),
     (Join-Path $RepositoryRoot 'stonecutter-build.gradle'),
     (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct-parity.gradle')) + @(
         $CanonicalFabricSharedZipDescriptorPaths | ForEach-Object { Join-Path $RepositoryRoot $_ }
+    ) + @(
+        $CanonicalFabricBitmapDescriptorPaths | ForEach-Object { Join-Path $RepositoryRoot $_ }
     )
 foreach ($path in $requiredPaths) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Fail "missing required file '$path'." }
@@ -589,6 +700,14 @@ foreach ($relativePath in $CanonicalFabricSharedZipDescriptorPaths) {
         Fail "Fabric SharedZip descriptor '$relativePath' is invalid JSON: $($_.Exception.Message)"
     }
 }
+$bitmapDescriptorProof = [ordered]@{}
+foreach ($relativePath in $CanonicalFabricBitmapDescriptorPaths) {
+    try {
+        $bitmapDescriptorProof[$relativePath] = Get-Content -LiteralPath (Join-Path $RepositoryRoot $relativePath) -Raw | ConvertFrom-Json
+    } catch {
+        Fail "Fabric bitmap-provider descriptor '$relativePath' is invalid JSON: $($_.Exception.Message)"
+    }
+}
 $sources = @{
     Settings = Get-Content -LiteralPath $SettingsPath -Raw
     RootBuild = Get-Content -LiteralPath $RootBuildPath -Raw
@@ -596,14 +715,19 @@ $sources = @{
     Parity = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct-parity.gradle') -Raw
     FabricNativeArchive = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\FilePackResourcesArchiveMixin.java') -Raw
     FabricNativeSharedZip = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java') -Raw
+    FabricNativeBitmap = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java') -Raw
     LegacySharedZip = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\shared\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java') -Raw
     Mc26SharedZip = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java') -Raw
     Mc26SharedZipAccessor = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc26\common\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessAccessor.java') -Raw
+    LegacyBitmap = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\shared\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java') -Raw
+    Mc12111Bitmap = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc1_21_11\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java') -Raw
+    Mc26Bitmap = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'versions\mc26\common\src\client\java\com\teenkung\packforge\client\mixin\font\BitmapProviderDefinitionMixin.java') -Raw
     FabricSharedZipDescriptors = $sharedZipDescriptorProof | ConvertTo-Json -Depth 20 -Compress
+    FabricBitmapDescriptors = $bitmapDescriptorProof | ConvertTo-Json -Depth 20 -Compress
     'Loader:fabric' = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'platform\fabric\build.gradle') -Raw
     'Loader:forge' = Get-Content -LiteralPath $ForgeBuildPath -Raw
     'Loader:neoforge' = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'platform\neoforge\build.gradle') -Raw
 }
 $summary = Invoke-DirectContractValidation $registry $sources
 if ($SelfTest) { Invoke-SelfTests $registry $sources }
-Write-Output "Stonecutter direct contract PASS: $($summary.DirectCells) direct cells; $($summary.NativeArchiveCells) Fabric native archive cells; $($summary.NativeSharedZipCells) Fabric native SharedZip cells; registry legacy SharedZip route preserved for standalone/rollback; canonical replacement direct-only; $($summary.JoptOverrides) registry JOptSimple overrides."
+Write-Output "Stonecutter direct contract PASS: $($summary.DirectCells) direct cells; $($summary.NativeArchiveCells) Fabric native archive cells; $($summary.NativeSharedZipCells) Fabric native SharedZip cells; $($summary.NativeBitmapCells) Fabric native bitmap-provider cells; registry physical routes preserved for standalone/rollback; canonical replacement direct-only; $($summary.JoptOverrides) registry JOptSimple overrides."
