@@ -10,6 +10,10 @@ param(
 
     [string[]] $OnlyCell,
 
+    [string] $ProfileId,
+
+    [string] $CompatibilityCatalogPath,
+
     [string[]] $AdditionalModPaths,
 
     [string[]] $ExpectedLogMarkers,
@@ -395,6 +399,112 @@ foreach ($selectedCell in $selectedCells) {
     if (-not $selectedCellSet.Add($selectedCell)) {
         throw "Duplicate -OnlyCell selection: $selectedCell"
     }
+}
+
+$profileIdProvided = $PSBoundParameters.ContainsKey('ProfileId')
+$catalogPathProvided = $PSBoundParameters.ContainsKey('CompatibilityCatalogPath')
+if ($profileIdProvided -and [string]::IsNullOrWhiteSpace($ProfileId)) {
+    throw '-ProfileId must be a non-empty compatibility profile ID.'
+}
+if ($catalogPathProvided -and -not $profileIdProvided) {
+    throw '-CompatibilityCatalogPath requires -ProfileId.'
+}
+if ($profileIdProvided) {
+    $legacyProfileArguments = @('AdditionalModPaths', 'ExpectedLogMarkers', 'ForbiddenLogMarkers')
+    $conflictingArguments = @($legacyProfileArguments | Where-Object { $PSBoundParameters.ContainsKey($_) })
+    if ($conflictingArguments.Count -gt 0) {
+        throw "-ProfileId cannot be combined with legacy compatibility argument(s): -$($conflictingArguments -join ', -')."
+    }
+
+    $resolvedCatalogPath = if ($catalogPathProvided) {
+        Resolve-RequiredFile -Path $CompatibilityCatalogPath -Description 'Compatibility profile catalog'
+    } else {
+        Resolve-RequiredFile -Path (Join-Path $repositoryRoot 'gradle\compatibility-profiles.json') -Description 'Compatibility profile catalog'
+    }
+    $catalogValidatorPath = Resolve-RequiredFile `
+        -Path (Join-Path $PSScriptRoot 'Validate-CompatibilityProfileCatalog.ps1') `
+        -Description 'Compatibility profile catalog validator'
+    & $catalogValidatorPath -CatalogPath $resolvedCatalogPath -RegistryPath $registryPath | Out-Null
+
+    try {
+        $compatibilityCatalog = Get-Content -LiteralPath $resolvedCatalogPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "Compatibility profile catalog is not valid JSON: $($_.Exception.Message)"
+    }
+    $selectedProfiles = @($compatibilityCatalog.profiles | Where-Object { [string] $_.id -ceq $ProfileId })
+    if ($selectedProfiles.Count -eq 0) {
+        throw "Unknown compatibility profile ID '$ProfileId'."
+    }
+    if ($selectedProfiles.Count -ne 1) {
+        throw "Compatibility profile ID '$ProfileId' is duplicated $($selectedProfiles.Count) times."
+    }
+    $selectedProfile = $selectedProfiles[0]
+    $profileRelease = [string] $selectedProfile.minecraftVersion
+    $profileLoader = [string] $selectedProfile.loader
+    $profileTargetKey = [string] $selectedProfile.packForgeArtifact.targetKey
+    $profileReleaseCells = @($registry.releaseCells | Where-Object {
+        [string] $_.id -eq $profileRelease -and
+        [string] $_.targetKey -eq $profileTargetKey -and
+        $profileLoader -in @($_.loaderAvailability)
+    })
+    if ($profileReleaseCells.Count -ne 1) {
+        throw "Compatibility profile '$ProfileId' must resolve exactly one registry release/loader cell; resolved $($profileReleaseCells.Count)."
+    }
+    $profileCell = "$profileRelease/$profileLoader"
+    if ($selectedCells.Count -gt 1 -or ($selectedCells.Count -eq 1 -and -not [string]::Equals($selectedCells[0], $profileCell, [StringComparison]::OrdinalIgnoreCase))) {
+        throw "-OnlyCell must be absent or exactly '$profileCell' when -ProfileId '$ProfileId' is selected."
+    }
+
+    $catalogSha256 = (Get-FileHash -LiteralPath $resolvedCatalogPath -Algorithm SHA256).Hash.ToUpperInvariant()
+    $availability = [string] $selectedProfile.availability
+    $declaredResult = if ($availability -eq 'UNAVAILABLE') { 'UNAVAILABLE' } else { 'UNTESTED' }
+    $reason = [string] $selectedProfile.reason
+    Write-Output "PROFILE id=$ProfileId cell=$profileCell availability=$availability result=$declaredResult catalogSha256=$catalogSha256 reason=$reason"
+
+    if ($availability -in @('PENDING_METADATA', 'UNAVAILABLE')) {
+        if ($PlanOnly.IsPresent) { return }
+        if ([string]::IsNullOrWhiteSpace($ResultsRoot)) {
+            $runId = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss')
+            $ResultsRoot = Join-Path $repositoryRoot "build\production-matrix\$runId"
+        }
+        $ResultsRoot = [IO.Path]::GetFullPath($ResultsRoot)
+        New-Item -ItemType Directory -Path $ResultsRoot -Force | Out-Null
+        $resultsPath = Join-Path $ResultsRoot 'results.jsonl'
+        $summaryPath = Join-Path $ResultsRoot 'summary.json'
+        $timestampUtc = [datetime]::UtcNow.ToString('o')
+        $record = [ordered]@{
+            timestampUtc = $timestampUtc
+            executed = $false
+            profileId = $ProfileId
+            cell = $profileCell
+            release = $profileRelease
+            loader = $profileLoader
+            target = $profileTargetKey
+            catalogSha256 = $catalogSha256
+            availability = $availability
+            result = $declaredResult
+            reason = $reason
+        }
+        [IO.File]::AppendAllText($resultsPath, (($record | ConvertTo-Json -Compress) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+        $summary = [ordered]@{
+            completedUtc = $timestampUtc
+            executed = $false
+            profileId = $ProfileId
+            cell = $profileCell
+            catalogSha256 = $catalogSha256
+            availability = $availability
+            result = $declaredResult
+            reason = $reason
+            results = $resultsPath
+        }
+        [IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+        Write-Output "PROFILE_RESULT id=$ProfileId executed=false result=$declaredResult results=$ResultsRoot"
+        return
+    }
+    if ($availability -eq 'AVAILABLE') {
+        throw "Compatibility profile '$ProfileId' is AVAILABLE, but executable schema-2 profile materialization is not implemented in this bounded runner slice."
+    }
+    throw "Compatibility profile '$ProfileId' has unsupported availability '$availability'."
 }
 
 $modVersionLine = Select-String -LiteralPath (Join-Path $repositoryRoot 'gradle.properties') -Pattern '^mod_version=(.+)$'
