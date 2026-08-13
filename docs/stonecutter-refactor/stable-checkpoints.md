@@ -310,3 +310,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: `projects` exposed exactly three loader branches and 53 target-loader leaves. `updateSourceMetricsCheckpoint validateStonecutterRegistry` passed with 19 unique source anchors, 53 distributions, and 62 exact loader cells. A Fabric 1.21.1 leaf regenerated and verified its distribution artifact after the generic freshness hardening. A legacy NeoForge 1.20.2 leaf built and verified through the retained rollback path before that loader-neutral freshness tweak. Independent re-review found no remaining technical blocker.
 - Status: `PHASE_D_VERIFIED_COMPLETE`; this proves registry graph ownership and delegated rollback behavior. Direct in-graph loader builds remain Phase E work, and no Minecraft runtime result is implied.
 - Rollback: revert later direct-build commits first, then `git revert 8241e600d807f3900224e90a17d3467413d30ee1` to restore the prior manually enumerated Stonecutter project graph and settings.
+
+## Direct Fabric Stonecutter pilot
+
+- Date: 2026-08-13
+- Commit SHA: `6125316572a086369320616ec754a8076068e29a`
+- Parent SHA: `ce87201d22b4d2a04327fe227efba3bbe83fd174`
+- Scope: registry-selected direct build for the Fabric `mc1_21_1` leaf; physical loader source roots; per-leaf target selection; public root build, collection, verification, and clean ownership; retained delegated parity oracle; fail-closed manifest provenance comparison.
+- Verification: a clean direct build ran compilation, resource generation, tests, access-widener validation, remapping, and final packaging. Direct-versus-standalone parity matched all 214 ZIP entries after asserting exactly four Stonecutter provenance attributes. `-Ppackforge_target=mc1_21_1 verifyTargetArtifacts` passed all three loaders in 1 minute 23 seconds with 125 actionable tasks, using the direct Fabric leaf and delegated Forge/NeoForge fallbacks. The collected and leaf Fabric JARs both hashed `CB57A4FADACB3BD55F420234C7F148ABB68B810F14539DCD43F2380985C56DD1`. Root `clean` removed direct and standalone outputs, and the full-matrix dry run scheduled the direct Fabric leaf without its delegated build. Independent re-review found no remaining blocker.
+- Status: `PHASE_E_FABRIC_PILOT_VERIFIED`; this is one authoritative target-loader cutover, not Phase E completion. Forge, NeoForge, and remaining Fabric leaves retain the delegated rollback path, and no Minecraft runtime result is implied.
+- Rollback: `git revert 6125316572a086369320616ec754a8076068e29a` restores delegated ownership for this Fabric cell while retaining the registry-derived Phase D graph.
