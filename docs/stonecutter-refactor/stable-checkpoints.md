@@ -350,3 +350,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: registry configuration passed. The Java 17 UserDev pilot completed NeoForm preparation, compilation, and JarJar packaging. The Java 21 ModDev pilot completed artifact preparation, compilation, and jar packaging. Both collected artifacts passed the root direct structural verifiers. After correcting an overbroad ordering edge, a dry run of root validation plus both explicit parity tasks passed without graph cycles. Independent re-review approved the final service and ordering design.
 - Status: `PHASE_E_NEOFORGE_PILOTS_PACKAGE_VERIFIED`; actual direct-versus-delegated ZIP parity and Minecraft runtime execution were not run. Other NeoForge cells remain delegated.
 - Rollback: `git revert 2beb0bd821c51d37f2a4b93cb57293ce0be70d5f` returns both NeoForge cells to delegation and removes their root toolchain/serialization wiring without affecting Fabric or Forge direct cells.
+
+## All-loader direct Stonecutter ownership
+
+- Date: 2026-08-13
+- Commit SHA: `9b6e25512c4363829f3b1a5f86538cabf2797fa5`
+- Parent SHA: `81ab1697e601d361af49333e449b6482f1c61fd1`
+- Scope: registry-default direct ownership for all Fabric, Forge, and NeoForge cells; removal of redundant per-cell pilot overrides; authoritative 19/17/17 loader distribution.
+- Verification: registry parsing resolved exactly 19 Fabric, 17 Forge, and 17 NeoForge direct leaves with no explicit overrides. `validateStonecutterRegistry` configured the entire graph and passed with three branches, 19 source anchors, 53 distributions, and 62 exact loader cells. The previously unproven Java 25 Forge and NeoForge `mc26_1_to_26_2` direct builds passed, followed by both root structural artifact verifiers. Earlier checkpoints supply representative Java 17/21 packaging and one Fabric ZIP-parity result.
+- Status: `PHASE_E_DIRECT_OWNERSHIP_IMPLEMENTED_REPRESENTATIVE_VERIFIED`; all 53 leaves are authoritative direct tasks, but the complete direct aggregate, all-cell ZIP parity, and runtime matrix were intentionally deferred. Delegated tasks remain available only as explicit parity/rollback oracles.
+- Rollback: `git revert 9b6e25512c4363829f3b1a5f86538cabf2797fa5` restores the Fabric default plus four verified Forge/NeoForge pilots. Revert loader pilot commits afterward only if those cells must also return to delegation.
