@@ -14,6 +14,14 @@ param(
 
     [string] $CompatibilityCatalogPath,
 
+    [string] $CompatibilityCacheRoot,
+
+    [string] $CompatibilityFixtureManifestPath,
+
+    [switch] $MaterializeProfileOnly,
+
+    [switch] $OfflineProfileCache,
+
     [string[]] $AdditionalModPaths,
 
     [string[]] $ExpectedLogMarkers,
@@ -94,6 +102,30 @@ function Get-NonEmptyMarkers {
     return @($Markers | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) } | ForEach-Object { [string] $_ })
 }
 
+function Get-RequiredPathEvidenceMarkers {
+    param($Profile)
+
+    $profileId = [string] $Profile.id
+    $expectedPath = [string] $Profile.expectedPath
+    $declaredMarkers = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($marker in @(Get-NonEmptyMarkers -Markers @($Profile.expectedLogMarkers))) {
+        [void] $declaredMarkers.Add($marker)
+    }
+    $requiredMarkers = switch ($expectedPath) {
+        'EXTERNALLY_OWNED_PATH' { @('PackForge Quick Pack compatibility: status=MODULE_HANDOFF') }
+        'FULL_OPTIMIZED_PATH' { @('PackForge compatibility path: FULL_OPTIMIZED_PATH') }
+        'HOOK_PRESERVING_COALESCED_PATH' { @('PackForge compatibility path: HOOK_PRESERVING_COALESCED_PATH') }
+        'SAFE_ORIGINAL_PATH' { @('PackForge compatibility path: SAFE_ORIGINAL_PATH') }
+        default { throw "Compatibility profile '$profileId' has unsupported expectedPath '$expectedPath'." }
+    }
+    foreach ($requiredMarker in $requiredMarkers) {
+        if (-not $declaredMarkers.Contains($requiredMarker)) {
+            throw "Compatibility profile '$profileId' expectedPath '$expectedPath' does not declare explicit runtime path evidence marker '$requiredMarker'; refusing materialization or launch."
+        }
+    }
+    return @($requiredMarkers)
+}
+
 function Get-Sha256Text {
     param([string] $Text)
 
@@ -103,6 +135,187 @@ function Get-Sha256Text {
         return ([BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace('-', '')
     } finally {
         $sha256.Dispose()
+    }
+}
+
+function Get-SafeArtifactNameFromSourceUrl {
+    param([string] $SourceUrl, [string] $Description)
+
+    try {
+        $uri = [Uri] $SourceUrl
+    } catch {
+        throw "$Description has an invalid source URL: $SourceUrl"
+    }
+    if (-not $uri.IsAbsoluteUri -or $uri.Scheme -cne 'https') {
+        throw "$Description source URL must use HTTPS: $SourceUrl"
+    }
+    if ($uri.Segments.Count -eq 0) {
+        throw "$Description source URL has no artifact filename: $SourceUrl"
+    }
+    try {
+        $artifact = [Uri]::UnescapeDataString([string] $uri.Segments[$uri.Segments.Count - 1])
+    } catch {
+        throw "$Description source URL has an invalid encoded artifact filename: $SourceUrl"
+    }
+    if ($artifact.IndexOfAny([char[]] @('/', '\')) -ge 0 -or
+        [string]::IsNullOrWhiteSpace($artifact) -or
+        $artifact -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\-]*\.jar$') {
+        throw "$Description source URL must end in a safe JAR filename: $SourceUrl"
+    }
+    return $artifact
+}
+
+function Resolve-CompatibilityCacheDirectory {
+    param([string] $RequestedRoot)
+
+    $root = if ([string]::IsNullOrWhiteSpace($RequestedRoot)) {
+        Join-Path $repositoryRoot 'build\compatibility-profile-cache'
+    } else {
+        $RequestedRoot
+    }
+    $resolved = [IO.Path]::GetFullPath($root)
+    $driveRoot = [IO.Path]::GetPathRoot($resolved).TrimEnd('\', '/')
+    if ($resolved.TrimEnd('\', '/') -eq $driveRoot -or
+        $resolved.TrimEnd('\', '/') -eq $repositoryRoot.TrimEnd('\', '/')) {
+        throw "Compatibility cache root must be a dedicated non-root directory: $resolved"
+    }
+    return $resolved
+}
+
+function Resolve-PinnedCompatibilityInputs {
+    param($Profile, [string] $CacheRoot, [switch] $Offline)
+
+    $declared = [Collections.Generic.List[object]]::new()
+    $seenArtifacts = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $seenIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($kind in @('externalMods', 'dependencies')) {
+        foreach ($pin in @(Get-PropertyValue -Object $Profile -Name $kind)) {
+            $id = [string] (Get-PropertyValue -Object $pin -Name 'id')
+            $sha256 = ([string] (Get-PropertyValue -Object $pin -Name 'sha256')).ToUpperInvariant()
+            $sourceUrl = [string] (Get-PropertyValue -Object $pin -Name 'sourceUrl')
+            if ($id -notmatch '^[a-z0-9][a-z0-9._-]{0,127}$') {
+                throw "Compatibility profile runtime mod has unsafe ID '$id'."
+            }
+            if (-not $seenIds.Add($id)) {
+                throw "Compatibility profile contains duplicate runtime mod ID '$id'."
+            }
+            if ($sha256 -notmatch '^[A-F0-9]{64}$') {
+                throw "Compatibility profile runtime mod '$id' has invalid SHA-256."
+            }
+            $artifact = Get-SafeArtifactNameFromSourceUrl -SourceUrl $sourceUrl -Description "Compatibility profile runtime mod '$id'"
+            if (-not $seenArtifacts.Add($artifact)) {
+                throw "Compatibility profile contains colliding runtime-mod filename '$artifact'."
+            }
+            [void] $declared.Add([pscustomobject]@{
+                kind = if ($kind -eq 'dependencies') { 'dependency' } else { 'externalMod' }
+                id = $id
+                artifact = $artifact
+                coordinate = [string] (Get-PropertyValue -Object $pin -Name 'coordinate')
+                version = [string] (Get-PropertyValue -Object $pin -Name 'version')
+                sourceUrl = $sourceUrl
+                sha256 = $sha256
+            })
+        }
+    }
+
+    $resolved = [Collections.Generic.List[object]]::new()
+    foreach ($pin in $declared) {
+        $hashRoot = Join-Path (Join-Path $CacheRoot 'sha256') ([string] $pin.sha256)
+        $cachedPath = Join-Path $hashRoot ([string] $pin.artifact)
+        if (Test-Path -LiteralPath $cachedPath) {
+            if (-not (Test-Path -LiteralPath $cachedPath -PathType Leaf)) {
+                throw "Compatibility cache entry is not a file: $cachedPath"
+            }
+            $cachedHash = (Get-FileHash -LiteralPath $cachedPath -Algorithm SHA256).Hash.ToUpperInvariant()
+            if ($cachedHash -ne [string] $pin.sha256) {
+                throw "Compatibility cache SHA-256 mismatch for $($pin.id): expected=$($pin.sha256) actual=$cachedHash path=$cachedPath"
+            }
+        } else {
+            if ($Offline.IsPresent) {
+                throw "Compatibility cache is missing pinned artifact '$($pin.artifact)' while -OfflineProfileCache is active: $cachedPath"
+            }
+            New-Item -ItemType Directory -Path $hashRoot -Force | Out-Null
+            $temporaryPath = Join-Path $hashRoot (".$($pin.artifact)." + [guid]::NewGuid().ToString('N') + '.download')
+            try {
+                Write-Output "DOWNLOAD compatibility mod id=$($pin.id) version=$($pin.version) sha256=$($pin.sha256)"
+                Invoke-WebRequest -Uri ([string] $pin.sourceUrl) -OutFile $temporaryPath -UseBasicParsing
+                $downloadHash = (Get-FileHash -LiteralPath $temporaryPath -Algorithm SHA256).Hash.ToUpperInvariant()
+                if ($downloadHash -ne [string] $pin.sha256) {
+                    throw "Downloaded compatibility mod '$($pin.id)' has wrong SHA-256: expected=$($pin.sha256) actual=$downloadHash"
+                }
+                Move-Item -LiteralPath $temporaryPath -Destination $cachedPath
+            } finally {
+                if (Test-Path -LiteralPath $temporaryPath -PathType Leaf) {
+                    Remove-Item -LiteralPath $temporaryPath -Force
+                }
+            }
+        }
+        [void] $resolved.Add([pscustomobject]@{
+            kind = [string] $pin.kind
+            id = [string] $pin.id
+            artifact = [string] $pin.artifact
+            coordinate = [string] $pin.coordinate
+            version = [string] $pin.version
+            sourceUrl = [string] $pin.sourceUrl
+            sha256 = [string] $pin.sha256
+            path = [IO.Path]::GetFullPath($cachedPath)
+        })
+    }
+    return @($resolved)
+}
+
+function Resolve-CompatibilityFixture {
+    param($Profile, [string] $ManifestPath)
+
+    $requestedManifest = if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
+        Join-Path $repositoryRoot 'build\compatibility-fixtures\compatibility-fixtures-manifest.json'
+    } else {
+        $ManifestPath
+    }
+    if (-not (Test-Path -LiteralPath $requestedManifest -PathType Leaf)) {
+        if (-not [string]::IsNullOrWhiteSpace($ManifestPath)) {
+            throw "Compatibility fixture manifest is missing: $([IO.Path]::GetFullPath($requestedManifest))"
+        }
+        $generator = Resolve-RequiredFile -Path (Join-Path $PSScriptRoot 'Generate-CompatibilityFixtures.py') -Description 'Compatibility fixture generator'
+        $outputDirectory = Split-Path -Parent ([IO.Path]::GetFullPath($requestedManifest))
+        & python $generator --output-dir $outputDirectory --minecraft-version ([string] $Profile.minecraftVersion) | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "Compatibility fixture generator exited with code $LASTEXITCODE." }
+    }
+    $resolvedManifest = Resolve-RequiredFile -Path $requestedManifest -Description 'Compatibility fixture manifest'
+    try {
+        $manifest = Get-Content -LiteralPath $resolvedManifest -Raw | ConvertFrom-Json
+    } catch {
+        throw "Compatibility fixture manifest is not valid JSON: $resolvedManifest"
+    }
+    if ([int] $manifest.schemaVersion -ne 1) {
+        throw "Unsupported compatibility fixture manifest schema: $($manifest.schemaVersion)"
+    }
+    $fixtureId = [string] $Profile.fixture
+    $matches = @($manifest.fixtures | Where-Object { [string] $_.id -ceq $fixtureId })
+    if ($matches.Count -ne 1) {
+        throw "Compatibility fixture '$fixtureId' must resolve exactly once; resolved $($matches.Count)."
+    }
+    $fixture = $matches[0]
+    if ([string] $Profile.minecraftVersion -notin @($fixture.supportedMinecraft | ForEach-Object { [string] $_ })) {
+        throw "Compatibility fixture '$fixtureId' does not support Minecraft $($Profile.minecraftVersion)."
+    }
+    $filename = [string] $fixture.filename
+    if ($filename -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\-]*\.zip$') {
+        throw "Compatibility fixture '$fixtureId' has unsafe filename '$filename'."
+    }
+    $fixturePath = Resolve-RequiredFile -Path (Join-Path (Split-Path -Parent $resolvedManifest) $filename) -Description "Compatibility fixture '$fixtureId'"
+    $expectedHash = ([string] $fixture.sha256).ToUpperInvariant()
+    $actualHash = (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($expectedHash -notmatch '^[A-F0-9]{64}$' -or $actualHash -ne $expectedHash) {
+        throw "Compatibility fixture '$fixtureId' SHA-256 mismatch: expected=$expectedHash actual=$actualHash"
+    }
+    return [pscustomobject]@{
+        id = $fixtureId
+        path = $fixturePath
+        artifact = $filename
+        sha256 = $expectedHash
+        manifestPath = $resolvedManifest
+        manifestSha256 = (Get-FileHash -LiteralPath $resolvedManifest -Algorithm SHA256).Hash.ToUpperInvariant()
     }
 }
 
@@ -276,11 +489,80 @@ function Copy-ImmutableEvidenceInput {
     return [IO.Path]::GetFullPath($destination)
 }
 
+function New-Schema2CompatibilityProfileInput {
+    param(
+        $Profile,
+        [string] $CatalogSha256,
+        [object[]] $RuntimeMods,
+        $Fixture,
+        [string] $EvidenceInputsRoot
+    )
+
+    $materializedMods = [Collections.Generic.List[object]]::new()
+    foreach ($runtimeMod in $RuntimeMods) {
+        $immutablePath = Copy-ImmutableEvidenceInput `
+            -SourcePath ([string] $runtimeMod.path) `
+            -ExpectedHash ([string] $runtimeMod.sha256) `
+            -DestinationRoot (Join-Path $EvidenceInputsRoot 'mods') `
+            -Description "Compatibility profile runtime mod $($runtimeMod.id)"
+        [void] $materializedMods.Add([ordered]@{
+            kind = [string] $runtimeMod.kind
+            id = [string] $runtimeMod.id
+            artifact = [string] $runtimeMod.artifact
+            coordinate = [string] $runtimeMod.coordinate
+            version = [string] $runtimeMod.version
+            sourceUrl = [string] $runtimeMod.sourceUrl
+            sha256 = [string] $runtimeMod.sha256
+            path = $immutablePath
+        })
+    }
+    $immutableFixture = Copy-ImmutableEvidenceInput `
+        -SourcePath ([string] $Fixture.path) `
+        -ExpectedHash ([string] $Fixture.sha256) `
+        -DestinationRoot (Join-Path $EvidenceInputsRoot 'fixtures') `
+        -Description "Compatibility fixture $($Fixture.id)"
+
+    $profileId = [string] $Profile.id
+    $inputPath = Join-Path $EvidenceInputsRoot "compatibility-profile-$profileId.json"
+    $input = [ordered]@{
+        schema = 2
+        profileId = $profileId
+        catalogSha256 = $CatalogSha256
+        minecraftVersion = [string] $Profile.minecraftVersion
+        loader = [string] $Profile.loader
+        target = [string] $Profile.packForgeArtifact.targetKey
+        runtimeMods = @($materializedMods)
+        modIds = @($materializedMods | ForEach-Object { [string] $_.id } | Sort-Object)
+        expectedLogMarkers = @($Profile.expectedLogMarkers | ForEach-Object { [string] $_ })
+        forbiddenLogMarkers = @($Profile.forbiddenLogMarkers | ForEach-Object { [string] $_ })
+        pathEvidenceMarkers = @(Get-RequiredPathEvidenceMarkers -Profile $Profile)
+        featureOverrides = $Profile.featureOverrides
+        config = [ordered]@{ overrides = $Profile.featureOverrides }
+        fixture = [ordered]@{
+            id = [string] $Fixture.id
+            artifact = [string] $Fixture.artifact
+            path = $immutableFixture
+            sha256 = [string] $Fixture.sha256
+            manifestPath = [string] $Fixture.manifestPath
+            manifestSha256 = [string] $Fixture.manifestSha256
+        }
+        expectedPath = [string] $Profile.expectedPath
+    }
+    [IO.File]::WriteAllText($inputPath, ($input | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
+    return [pscustomobject]@{
+        Path = [IO.Path]::GetFullPath($inputPath)
+        Input = $input
+        RuntimeMods = @($materializedMods)
+        FixturePath = $immutableFixture
+    }
+}
+
 function Test-ProfileProvenance {
     param(
         [string] $Path,
         $Row,
-        [object[]] $ExpectedAdditionalMods
+        [object[]] $ExpectedAdditionalMods,
+        $ExpectedSchema2Profile
     )
 
     if ([string]::IsNullOrWhiteSpace($Path)) { return 'Smoke PASS line omitted compatibility-profile provenance.' }
@@ -314,7 +596,9 @@ function Test-ProfileProvenance {
     }
     foreach ($expected in $ExpectedAdditionalMods) {
         $matches = @($actualAdditionalMods | Where-Object {
-            [string] $_.artifact -eq [string] $expected.artifact -and [string] $_.sha256 -eq [string] $expected.sha256
+            [string] $_.artifact -eq [string] $expected.artifact -and
+            [string] $_.sha256 -eq [string] $expected.sha256 -and
+            ($null -eq (Get-PropertyValue -Object $expected -Name 'id') -or [string] $_.id -eq [string] $expected.id)
         })
         if ($matches.Count -ne 1) {
             return "Compatibility profile provenance is missing $($expected.artifact) with SHA-256 $($expected.sha256)."
@@ -327,6 +611,82 @@ function Test-ProfileProvenance {
         }
         if ($stagedHash -ne [string] $expected.sha256) {
             return "Staged compatibility mod $($expected.artifact) has the wrong SHA-256."
+        }
+    }
+    if ($null -ne $ExpectedSchema2Profile) {
+        $profile = Get-PropertyValue -Object $provenance -Name 'compatibilityProfile'
+        if ($null -eq $profile) { return 'Compatibility profile provenance omitted schema-2 identity.' }
+        if ([int] $profile.schema -ne 2 -or
+            [string] $profile.profileId -ne [string] $ExpectedSchema2Profile.profileId -or
+            [string] $profile.catalogSha256 -ne [string] $ExpectedSchema2Profile.catalogSha256) {
+            return 'Compatibility profile provenance has a different schema, profile ID, or catalog hash.'
+        }
+        if ([string] $profile.loader -ne [string] $Row.Loader -or
+            [string] $profile.minecraftVersion -ne [string] $Row.Release -or
+            [string] $profile.target -ne [string] $Row.Target) {
+            return 'Compatibility profile provenance has a different runtime cell.'
+        }
+
+        $fixture = Get-PropertyValue -Object $provenance -Name 'fixture'
+        if ($null -eq $fixture -or
+            [string] $fixture.id -ne [string] $ExpectedSchema2Profile.fixture.id -or
+            [string] $fixture.sha256 -ne [string] $ExpectedSchema2Profile.fixture.sha256) {
+            return 'Compatibility profile provenance has different fixture identity.'
+        }
+        try {
+            $stagedFixture = Resolve-RequiredFile -Path ([string] $fixture.stagedPath) -Description 'Staged compatibility fixture'
+            $stagedFixtureHash = (Get-FileHash -LiteralPath $stagedFixture -Algorithm SHA256).Hash.ToUpperInvariant()
+        } catch {
+            return $_.Exception.Message
+        }
+        if ($stagedFixtureHash -ne [string] $ExpectedSchema2Profile.fixture.sha256) {
+            return 'Staged compatibility fixture has the wrong SHA-256.'
+        }
+
+        $config = Get-PropertyValue -Object $provenance -Name 'config'
+        if ($null -eq $config) { return 'Compatibility profile provenance omitted staged configuration.' }
+        try {
+            $configPath = Resolve-RequiredFile -Path ([string] $config.path) -Description 'Staged compatibility configuration'
+            $configHash = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash.ToUpperInvariant()
+            $stagedConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+        } catch {
+            return $_.Exception.Message
+        }
+        if ($configHash -ne [string] $config.sha256) { return 'Staged compatibility configuration has the wrong SHA-256.' }
+        foreach ($override in $ExpectedSchema2Profile.config.overrides.PSObject.Properties) {
+            $actualProperty = $stagedConfig.PSObject.Properties[$override.Name]
+            if ($null -eq $actualProperty -or
+                ($actualProperty.Value | ConvertTo-Json -Compress) -cne ($override.Value | ConvertTo-Json -Compress)) {
+                return "Staged compatibility configuration omitted or changed override '$($override.Name)'."
+            }
+        }
+
+        $runtimeEvidence = Get-PropertyValue -Object $provenance -Name 'runtimeEvidence'
+        if ($null -eq $runtimeEvidence) { return 'Compatibility profile provenance omitted runtime log evidence.' }
+        try {
+            $runtimeLogPath = Resolve-RequiredFile -Path ([string] $runtimeEvidence.logPath) -Description 'Compatibility runtime evidence log'
+            $runtimeLogHash = (Get-FileHash -LiteralPath $runtimeLogPath -Algorithm SHA256).Hash.ToUpperInvariant()
+            $runtimeLogText = Get-Content -LiteralPath $runtimeLogPath -Raw
+        } catch {
+            return $_.Exception.Message
+        }
+        if ($runtimeLogHash -ne [string] $runtimeEvidence.sha256) {
+            return 'Compatibility runtime evidence log has the wrong SHA-256.'
+        }
+        foreach ($marker in @($ExpectedSchema2Profile.expectedLogMarkers)) {
+            if ($runtimeLogText.IndexOf([string] $marker, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                return "Compatibility runtime evidence is missing expected-path marker '$marker'."
+            }
+        }
+        foreach ($marker in @($ExpectedSchema2Profile.pathEvidenceMarkers)) {
+            if ($runtimeLogText.IndexOf([string] $marker, [StringComparison]::Ordinal) -lt 0) {
+                return "Compatibility runtime evidence is missing explicit path marker '$marker'."
+            }
+        }
+        foreach ($marker in @($ExpectedSchema2Profile.forbiddenLogMarkers)) {
+            if ($runtimeLogText.IndexOf([string] $marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                return "Compatibility runtime evidence contains forbidden marker '$marker'."
+            }
         }
     }
     return $null
@@ -403,12 +763,28 @@ foreach ($selectedCell in $selectedCells) {
 
 $profileIdProvided = $PSBoundParameters.ContainsKey('ProfileId')
 $catalogPathProvided = $PSBoundParameters.ContainsKey('CompatibilityCatalogPath')
+$cacheRootProvided = $PSBoundParameters.ContainsKey('CompatibilityCacheRoot')
+$fixtureManifestProvided = $PSBoundParameters.ContainsKey('CompatibilityFixtureManifestPath')
 if ($profileIdProvided -and [string]::IsNullOrWhiteSpace($ProfileId)) {
     throw '-ProfileId must be a non-empty compatibility profile ID.'
 }
 if ($catalogPathProvided -and -not $profileIdProvided) {
     throw '-CompatibilityCatalogPath requires -ProfileId.'
 }
+if (($cacheRootProvided -or $fixtureManifestProvided -or $MaterializeProfileOnly.IsPresent -or $OfflineProfileCache.IsPresent) -and -not $profileIdProvided) {
+    throw 'Compatibility cache, fixture, and materialization options require -ProfileId.'
+}
+if ($MaterializeProfileOnly.IsPresent -and ($PlanOnly.IsPresent -or $PrepareOnly.IsPresent -or $Resume.IsPresent)) {
+    throw '-MaterializeProfileOnly cannot be combined with -PlanOnly, -PrepareOnly, or -Resume.'
+}
+$selectedProfile = $null
+$resolvedCatalogPath = $null
+$catalogSha256 = $null
+$profileCell = $null
+$profileRelease = $null
+$profileLoader = $null
+$profileTargetKey = $null
+$profilePathEvidenceMarkers = @()
 if ($profileIdProvided) {
     $legacyProfileArguments = @('AdditionalModPaths', 'ExpectedLogMarkers', 'ForbiddenLogMarkers')
     $conflictingArguments = @($legacyProfileArguments | Where-Object { $PSBoundParameters.ContainsKey($_) })
@@ -458,7 +834,7 @@ if ($profileIdProvided) {
     $catalogSha256 = (Get-FileHash -LiteralPath $resolvedCatalogPath -Algorithm SHA256).Hash.ToUpperInvariant()
     $availability = [string] $selectedProfile.availability
     $declaredResult = if ($availability -eq 'UNAVAILABLE') { 'UNAVAILABLE' } else { 'UNTESTED' }
-    $reason = [string] $selectedProfile.reason
+    $reason = [string] (Get-PropertyValue -Object $selectedProfile -Name 'reason')
     Write-Output "PROFILE id=$ProfileId cell=$profileCell availability=$availability result=$declaredResult catalogSha256=$catalogSha256 reason=$reason"
 
     if ($availability -in @('PENDING_METADATA', 'UNAVAILABLE')) {
@@ -501,10 +877,44 @@ if ($profileIdProvided) {
         Write-Output "PROFILE_RESULT id=$ProfileId executed=false result=$declaredResult results=$ResultsRoot"
         return
     }
-    if ($availability -eq 'AVAILABLE') {
-        throw "Compatibility profile '$ProfileId' is AVAILABLE, but executable schema-2 profile materialization is not implemented in this bounded runner slice."
+    if ($availability -ne 'AVAILABLE') {
+        throw "Compatibility profile '$ProfileId' has unsupported availability '$availability'."
     }
-    throw "Compatibility profile '$ProfileId' has unsupported availability '$availability'."
+    $profilePathEvidenceMarkers = @(Get-RequiredPathEvidenceMarkers -Profile $selectedProfile)
+    if ($PlanOnly.IsPresent) { return }
+    if ($selectedCellSet.Count -eq 0) {
+        [void] $selectedCellSet.Add($profileCell)
+        $selectedCells = @($profileCell)
+    }
+}
+
+$materializedCatalogMods = @()
+$resolvedCatalogFixture = $null
+if ($null -ne $selectedProfile) {
+    $resolvedCacheRoot = Resolve-CompatibilityCacheDirectory -RequestedRoot $CompatibilityCacheRoot
+    $materializedCatalogMods = @(Resolve-PinnedCompatibilityInputs `
+        -Profile $selectedProfile `
+        -CacheRoot $resolvedCacheRoot `
+        -Offline:$OfflineProfileCache)
+    $resolvedCatalogFixture = Resolve-CompatibilityFixture `
+        -Profile $selectedProfile `
+        -ManifestPath $CompatibilityFixtureManifestPath
+
+    if ($MaterializeProfileOnly.IsPresent) {
+        if ([string]::IsNullOrWhiteSpace($ResultsRoot)) {
+            $ResultsRoot = Join-Path $repositoryRoot "build\production-matrix\materialized-$ProfileId"
+        }
+        $ResultsRoot = [IO.Path]::GetFullPath($ResultsRoot)
+        New-Item -ItemType Directory -Path $ResultsRoot -Force | Out-Null
+        $materializedOnlyInput = New-Schema2CompatibilityProfileInput `
+            -Profile $selectedProfile `
+            -CatalogSha256 $catalogSha256 `
+            -RuntimeMods $materializedCatalogMods `
+            -Fixture $resolvedCatalogFixture `
+            -EvidenceInputsRoot (Join-Path $ResultsRoot 'evidence-inputs')
+        Write-Output "PROFILE_MATERIALIZED id=$ProfileId mods=$($materializedCatalogMods.Count) fixture=$($resolvedCatalogFixture.id) input=$($materializedOnlyInput.Path)"
+        return
+    }
 }
 
 $modVersionLine = Select-String -LiteralPath (Join-Path $repositoryRoot 'gradle.properties') -Pattern '^mod_version=(.+)$'
@@ -522,7 +932,14 @@ foreach ($cell in $registry.releaseCells) {
         $coordinate = Get-ExactLoaderCoordinate -Target $target -Release ([string] $cell.id) -Loader $loader
         $artifact = Get-ArtifactPath -Target $target -Loader $loader -ModVersion $modVersion
         $java = Resolve-RequiredFile -Path $javaPaths[[string] $cell.javaVersion] -Description "Java $($cell.javaVersion) runtime"
-        $fixture = if ($loader -eq 'fabric') { $null } else { Resolve-ResourcePackFixture -Target ([string] $target.key) -PreferredLoader $loader }
+        $isCatalogProfileCell = $null -ne $selectedProfile -and [string]::Equals($cellId, $profileCell, [StringComparison]::OrdinalIgnoreCase)
+        $fixture = if ($isCatalogProfileCell) {
+            [string] $resolvedCatalogFixture.path
+        } elseif ($loader -eq 'fabric') {
+            $null
+        } else {
+            Resolve-ResourcePackFixture -Target ([string] $target.key) -PreferredLoader $loader
+        }
         [void] $rows.Add([pscustomobject]@{
             Cell = $cellId
             Release = [string] $cell.id
@@ -533,6 +950,7 @@ foreach ($cell in $registry.releaseCells) {
             Artifact = $artifact
             ArtifactHash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToUpperInvariant()
             Fixture = $fixture
+            FixtureId = if ($isCatalogProfileCell) { [string] $resolvedCatalogFixture.id } elseif ($null -eq $fixture) { 'fabric-active-pack-stack-v1' } else { 'deterministic-large-pack' }
             FixtureHash = if ($null -eq $fixture) { 'fabric-active-pack-stack-v1' } else { (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash.ToUpperInvariant() }
         })
     }
@@ -552,14 +970,30 @@ if ($selectedCellSet.Count -gt 0) {
     }
 }
 $profileAdditionalMods = @(Resolve-CompatibilityProfileMods -Paths $AdditionalModPaths)
-$profileExpectedMarkers = @(Get-NonEmptyMarkers -Markers $ExpectedLogMarkers)
-$profileForbiddenMarkers = @(Get-NonEmptyMarkers -Markers $ForbiddenLogMarkers)
-$compatibilityProfileRequested = $profileAdditionalMods.Count -gt 0 -or $profileExpectedMarkers.Count -gt 0 -or $profileForbiddenMarkers.Count -gt 0
+$profileExpectedMarkers = if ($null -ne $selectedProfile) {
+    @(Get-NonEmptyMarkers -Markers @($selectedProfile.expectedLogMarkers))
+} else {
+    @(Get-NonEmptyMarkers -Markers $ExpectedLogMarkers)
+}
+$profileForbiddenMarkers = if ($null -ne $selectedProfile) {
+    @(Get-NonEmptyMarkers -Markers @($selectedProfile.forbiddenLogMarkers))
+} else {
+    @(Get-NonEmptyMarkers -Markers $ForbiddenLogMarkers)
+}
+$compatibilityProfileRequested = $null -ne $selectedProfile -or $profileAdditionalMods.Count -gt 0 -or $profileExpectedMarkers.Count -gt 0 -or $profileForbiddenMarkers.Count -gt 0
 $profileIdentity = [ordered]@{
-    schema = 1
-    additionalMods = @($profileAdditionalMods | Sort-Object artifact | ForEach-Object {
-        [ordered]@{ artifact = $_.artifact; sha256 = $_.sha256 }
-    })
+    schema = if ($null -ne $selectedProfile) { 2 } else { 1 }
+    profileId = if ($null -ne $selectedProfile) { [string] $selectedProfile.id } else { $null }
+    catalogSha256 = if ($null -ne $selectedProfile) { $catalogSha256 } else { $null }
+    additionalMods = if ($null -ne $selectedProfile) {
+        @($materializedCatalogMods | Sort-Object artifact | ForEach-Object {
+            [ordered]@{ id = $_.id; artifact = $_.artifact; sha256 = $_.sha256 }
+        })
+    } else {
+        @($profileAdditionalMods | Sort-Object artifact | ForEach-Object {
+            [ordered]@{ artifact = $_.artifact; sha256 = $_.sha256 }
+        })
+    }
     expectedLogMarkers = @($profileExpectedMarkers | Sort-Object)
     forbiddenLogMarkers = @($profileForbiddenMarkers | Sort-Object)
 }
@@ -640,15 +1074,31 @@ foreach ($row in $rows) {
     $row | Add-Member -NotePropertyName ImmutableFixture -NotePropertyValue $immutableFixture
 }
 $profileInputPath = $null
+$schema2ProfileInput = $null
 if ($compatibilityProfileRequested) {
-    $profileInputPath = Join-Path $evidenceInputsRoot "compatibility-profile-$profileFingerprint.json"
-    $profileInput = [ordered]@{
-        schema = 1
-        additionalModPaths = @($materializedProfileMods | ForEach-Object { $_.path })
-        expectedLogMarkers = @($profileExpectedMarkers)
-        forbiddenLogMarkers = @($profileForbiddenMarkers)
+    if ($null -ne $selectedProfile) {
+        $schema2ProfileInput = New-Schema2CompatibilityProfileInput `
+            -Profile $selectedProfile `
+            -CatalogSha256 $catalogSha256 `
+            -RuntimeMods $materializedCatalogMods `
+            -Fixture $resolvedCatalogFixture `
+            -EvidenceInputsRoot $evidenceInputsRoot
+        $profileInputPath = [string] $schema2ProfileInput.Path
+        if ($rows.Count -ne 1 -or
+            [string] $rows[0].FixtureHash -ne [string] $schema2ProfileInput.Input.fixture.sha256) {
+            throw "Schema-2 compatibility profile must materialize exactly its selected fixture cell."
+        }
+        $rows[0].ImmutableFixture = [string] $schema2ProfileInput.FixturePath
+    } else {
+        $profileInputPath = Join-Path $evidenceInputsRoot "compatibility-profile-$profileFingerprint.json"
+        $profileInput = [ordered]@{
+            schema = 1
+            additionalModPaths = @($materializedProfileMods | ForEach-Object { $_.path })
+            expectedLogMarkers = @($profileExpectedMarkers)
+            forbiddenLogMarkers = @($profileForbiddenMarkers)
+        }
+        [IO.File]::WriteAllText($profileInputPath, ($profileInput | ConvertTo-Json -Depth 3), [Text.UTF8Encoding]::new($false))
     }
-    [IO.File]::WriteAllText($profileInputPath, ($profileInput | ConvertTo-Json -Depth 3), [Text.UTF8Encoding]::new($false))
 }
 $resultsPath = Join-Path $ResultsRoot 'results.jsonl'
 $summaryPath = Join-Path $ResultsRoot 'summary.json'
@@ -661,10 +1111,9 @@ $expectedEvidenceFingerprints = @{}
 
 foreach ($row in $rows) {
     $index++
-    $useForgeBackend = $row.Loader -eq 'neoforge' -and $compatibilityProfileRequested
     $smokeScript = if ($row.Loader -eq 'fabric') {
         Join-Path $PSScriptRoot 'Smoke-Fabric-Production.ps1'
-    } elseif ($row.Loader -eq 'forge' -or $useForgeBackend) {
+    } elseif ($row.Loader -eq 'forge') {
         Join-Path $PSScriptRoot 'Smoke-Forge-Production.ps1'
     } else {
         Join-Path $PSScriptRoot 'Smoke-NeoForge-Production.ps1'
@@ -672,7 +1121,7 @@ foreach ($row in $rows) {
     $harnessScripts = [Collections.Generic.List[string]]::new()
     [void] $harnessScripts.Add([IO.Path]::GetFullPath($PSCommandPath))
     [void] $harnessScripts.Add([IO.Path]::GetFullPath($smokeScript))
-    if ($row.Loader -eq 'neoforge' -and -not $useForgeBackend) {
+    if ($row.Loader -eq 'neoforge') {
         [void] $harnessScripts.Add([IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'Smoke-Forge-Production.ps1')))
     }
     $harnessIdentity = @($harnessScripts | Select-Object -Unique | ForEach-Object {
@@ -717,8 +1166,11 @@ foreach ($row in $rows) {
             '-JavaPath', [string] $row.Java,
             '-FallbackLibrariesRoot', (Join-Path $supportProfile.Root 'libraries')
         ))
+        if ($null -ne $row.ImmutableFixture) {
+            $arguments.AddRange([string[]] @('-ResourcePackPath', [string] $row.ImmutableFixture))
+        }
     } else {
-        $clientRootParameter = if ($row.Loader -eq 'forge' -or $useForgeBackend) { '-ForgeClientRoot' } else { '-NeoForgeClientRoot' }
+        $clientRootParameter = if ($row.Loader -eq 'forge') { '-ForgeClientRoot' } else { '-NeoForgeClientRoot' }
         $arguments.AddRange([string[]] @(
             $clientRootParameter, [string] $profile.Root,
             '-VersionName', [string] $profile.VersionName,
@@ -729,9 +1181,6 @@ foreach ($row in $rows) {
             '-FallbackLibrariesRoot', (Join-Path $supportProfile.Root 'libraries'),
             '-ResourcePackPath', [string] $row.ImmutableFixture
         ))
-        if ($useForgeBackend) {
-            $arguments.AddRange([string[]] @('-Loader', 'neoforge'))
-        }
     }
     if ($compatibilityProfileRequested) {
         $arguments.AddRange([string[]] @('-CompatibilityProfilePath', $profileInputPath))
@@ -766,7 +1215,8 @@ foreach ($row in $rows) {
         $profileValidationError = Test-ProfileProvenance `
             -Path $provenancePath `
             -Row $row `
-            -ExpectedAdditionalMods @($profileAdditionalMods)
+            -ExpectedAdditionalMods $(if ($null -ne $schema2ProfileInput) { @($schema2ProfileInput.RuntimeMods) } else { @($profileAdditionalMods) }) `
+            -ExpectedSchema2Profile $(if ($null -ne $schema2ProfileInput) { $schema2ProfileInput.Input } else { $null })
         if ($null -ne $profileValidationError) {
             $status = 'FAIL'
             $exitCode = 1
@@ -802,11 +1252,31 @@ foreach ($row in $rows) {
     }
     if ($compatibilityProfileRequested) {
         $record.compatibilityProfile = [ordered]@{
-            additionalMods = @($profileAdditionalMods | ForEach-Object {
-                [ordered]@{ artifact = $_.artifact; sha256 = $_.sha256 }
-            })
+            schema = if ($null -ne $schema2ProfileInput) { 2 } else { 1 }
+            profileId = if ($null -ne $selectedProfile) { [string] $selectedProfile.id } else { $null }
+            catalogSha256 = if ($null -ne $selectedProfile) { $catalogSha256 } else { $null }
+            additionalMods = if ($null -ne $schema2ProfileInput) {
+                @($schema2ProfileInput.RuntimeMods | ForEach-Object {
+                    [ordered]@{ id = $_.id; artifact = $_.artifact; sha256 = $_.sha256 }
+                })
+            } else {
+                @($profileAdditionalMods | ForEach-Object {
+                    [ordered]@{ artifact = $_.artifact; sha256 = $_.sha256 }
+                })
+            }
             expectedLogMarkers = @($profileExpectedMarkers)
             forbiddenLogMarkers = @($profileForbiddenMarkers)
+            expectedPath = if ($null -ne $selectedProfile) { [string] $selectedProfile.expectedPath } else { $null }
+            pathEvidenceMarkers = @($profilePathEvidenceMarkers)
+            result = if ($null -ne $selectedProfile -and $status -eq 'PASS' -and $profilePathEvidenceMarkers.Count -gt 0) {
+                [string] $selectedProfile.expectedPath
+            } elseif ($null -ne $selectedProfile -and $status -eq 'PASS') {
+                'UNTESTED'
+            } elseif ($null -ne $selectedProfile) {
+                'FAILED'
+            } else {
+                $null
+            }
             provenance = $provenancePath
         }
     }

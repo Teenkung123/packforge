@@ -23,6 +23,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $JavaPath,
 
+    [string] $ResourcePackPath,
+
     [string[]] $AdditionalModPaths,
 
     [string[]] $ExpectedLogMarkers,
@@ -30,6 +32,12 @@ param(
     [string[]] $ForbiddenLogMarkers,
 
     [string] $CompatibilityProfilePath,
+
+    [switch] $ValidateCompatibilityProfileOnly,
+
+    [string] $ExpectedProfileTarget,
+
+    [string] $ExpectedProfileMinecraftVersion,
 
     [string] $FallbackLibrariesRoot,
 
@@ -222,7 +230,7 @@ function Import-CompatibilityProfile {
     } catch {
         throw "Compatibility profile input is not valid JSON: $resolved"
     }
-    if ([int] $profile.schema -ne 1) {
+    if ([int] $profile.schema -notin @(1, 2)) {
         throw "Unsupported compatibility profile input schema: $($profile.schema)"
     }
     return $profile
@@ -242,11 +250,125 @@ function Get-CompatibilityProfileStrings {
     return @($values)
 }
 
+function Assert-Schema2CompatibilityProfile {
+    param($Profile, [string] $ExpectedLoader)
+
+    if ([string] $Profile.profileId -notmatch '^[a-z0-9][a-z0-9._-]{0,127}$') {
+        throw "Schema-2 compatibility profile has unsafe profileId '$($Profile.profileId)'."
+    }
+    if ([string] $Profile.catalogSha256 -notmatch '^[A-F0-9]{64}$') {
+        throw 'Schema-2 compatibility profile has invalid catalogSha256.'
+    }
+    if ([string] $Profile.loader -cne $ExpectedLoader) {
+        throw "Schema-2 compatibility profile loader '$($Profile.loader)' does not match '$ExpectedLoader'."
+    }
+    if ([string] $Profile.expectedPath -notin @('FULL_OPTIMIZED_PATH', 'HOOK_PRESERVING_COALESCED_PATH', 'SAFE_ORIGINAL_PATH', 'EXTERNALLY_OWNED_PATH')) {
+        throw "Schema-2 compatibility profile has unsupported expectedPath '$($Profile.expectedPath)'."
+    }
+    $runtimeMods = @($Profile.runtimeMods)
+    if ($runtimeMods.Count -eq 0) { throw 'Schema-2 compatibility profile has no runtimeMods.' }
+    $seenIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $seenArtifacts = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($runtimeMod in $runtimeMods) {
+        $id = [string] $runtimeMod.id
+        $artifact = [string] $runtimeMod.artifact
+        $sha256 = [string] $runtimeMod.sha256
+        if ($id -notmatch '^[a-z0-9][a-z0-9._-]{0,127}$' -or -not $seenIds.Add($id)) {
+            throw "Schema-2 compatibility profile has unsafe or duplicate runtime mod ID '$id'."
+        }
+        if ($artifact -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\-]*\.jar$' -or -not $seenArtifacts.Add($artifact)) {
+            throw "Schema-2 compatibility profile has unsafe or colliding runtime mod artifact '$artifact'."
+        }
+        $resolvedMod = Resolve-RequiredPath -Path ([string] $runtimeMod.path) -Description "Schema-2 runtime mod '$id'"
+        if ([IO.Path]::GetFileName($resolvedMod) -cne $artifact) {
+            throw "Schema-2 runtime mod '$id' path does not match artifact '$artifact'."
+        }
+        $actualHash = (Get-FileHash -LiteralPath $resolvedMod -Algorithm SHA256).Hash.ToUpperInvariant()
+        if ($sha256 -notmatch '^[A-F0-9]{64}$' -or $actualHash -cne $sha256) {
+            throw "Schema-2 runtime mod '$id' SHA-256 mismatch: expected=$sha256 actual=$actualHash"
+        }
+    }
+    $declaredModIds = @(Get-CompatibilityProfileStrings -Profile $Profile -Name 'modIds')
+    $expectedModIds = @($runtimeMods | ForEach-Object { [string] $_.id } | Sort-Object)
+    if (($declaredModIds -join ',') -cne ($expectedModIds -join ',')) {
+        throw 'Schema-2 compatibility profile modIds do not exactly match sorted runtimeMods IDs.'
+    }
+    $fixture = $Profile.fixture
+    if ($null -eq $fixture -or [string] $fixture.id -notmatch '^[a-z0-9][a-z0-9._-]{0,127}$') {
+        throw 'Schema-2 compatibility profile has invalid fixture identity.'
+    }
+    $resolvedFixture = Resolve-RequiredPath -Path ([string] $fixture.path) -Description "Schema-2 fixture '$($fixture.id)'"
+    if ([IO.Path]::GetFileName($resolvedFixture) -cne [string] $fixture.artifact) {
+        throw "Schema-2 fixture path does not match artifact '$($fixture.artifact)'."
+    }
+    $fixtureHash = (Get-FileHash -LiteralPath $resolvedFixture -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ([string] $fixture.sha256 -notmatch '^[A-F0-9]{64}$' -or $fixtureHash -cne [string] $fixture.sha256) {
+        throw "Schema-2 fixture SHA-256 mismatch: expected=$($fixture.sha256) actual=$fixtureHash"
+    }
+    if ($null -eq $Profile.config -or $null -eq $Profile.config.overrides -or $null -eq $Profile.featureOverrides) {
+        throw 'Schema-2 compatibility profile omitted featureOverrides/config transport.'
+    }
+    if (($Profile.config.overrides | ConvertTo-Json -Compress -Depth 10) -cne ($Profile.featureOverrides | ConvertTo-Json -Compress -Depth 10)) {
+        throw 'Schema-2 compatibility profile config overrides differ from featureOverrides.'
+    }
+    if (@($Profile.featureOverrides.PSObject.Properties).Count -gt 0) {
+        throw "Schema-2 compatibility profile '$($Profile.profileId)' declares featureOverrides, but executable override-key validation is not implemented; refusing launch."
+    }
+    [void] (Get-CompatibilityProfileStrings -Profile $Profile -Name 'expectedLogMarkers')
+    [void] (Get-CompatibilityProfileStrings -Profile $Profile -Name 'forbiddenLogMarkers')
+}
+
+function Assert-Schema2RuntimeCell {
+    param($Profile, [string] $ExpectedMinecraftVersion, [string] $ExpectedTarget)
+
+    if ([string]::IsNullOrWhiteSpace($ExpectedMinecraftVersion) -or [string]::IsNullOrWhiteSpace($ExpectedTarget)) {
+        throw 'Schema-2 compatibility runtime-cell validation requires Minecraft version and artifact target.'
+    }
+    if ([string] $Profile.minecraftVersion -cne $ExpectedMinecraftVersion -or [string] $Profile.target -cne $ExpectedTarget) {
+        throw "Schema-2 compatibility profile runtime cell mismatch: declared=$($Profile.minecraftVersion)/$($Profile.target) actual=$ExpectedMinecraftVersion/$ExpectedTarget"
+    }
+}
+
 $compatibilityProfile = Import-CompatibilityProfile -Path $CompatibilityProfilePath
 if ($null -ne $compatibilityProfile) {
-    $AdditionalModPaths = @($AdditionalModPaths) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'additionalModPaths')
-    $ExpectedLogMarkers = @($ExpectedLogMarkers) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'expectedLogMarkers')
-    $ForbiddenLogMarkers = @($ForbiddenLogMarkers) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'forbiddenLogMarkers')
+    if ([int] $compatibilityProfile.schema -eq 2) {
+        Assert-Schema2CompatibilityProfile -Profile $compatibilityProfile -ExpectedLoader 'fabric'
+        if (@($AdditionalModPaths | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) }).Count -gt 0) {
+            throw 'Schema-2 compatibility profile cannot be combined with direct AdditionalModPaths.'
+        }
+        $AdditionalModPaths = @($AdditionalModPaths | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) }) + @($compatibilityProfile.runtimeMods | ForEach-Object { [string] $_.path })
+        $declaredFixturePath = [IO.Path]::GetFullPath([string] $compatibilityProfile.fixture.path)
+        if (-not [string]::IsNullOrWhiteSpace($ResourcePackPath) -and
+            -not [string]::Equals([IO.Path]::GetFullPath($ResourcePackPath), $declaredFixturePath, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Direct ResourcePackPath differs from schema-2 compatibility fixture path.'
+        }
+        $ResourcePackPath = $declaredFixturePath
+    } else {
+        $AdditionalModPaths = @($AdditionalModPaths | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) }) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'additionalModPaths')
+    }
+    $ExpectedLogMarkers = @($ExpectedLogMarkers | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) }) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'expectedLogMarkers')
+    $ForbiddenLogMarkers = @($ForbiddenLogMarkers | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $_) }) + @(Get-CompatibilityProfileStrings -Profile $compatibilityProfile -Name 'forbiddenLogMarkers')
+}
+if ($ValidateCompatibilityProfileOnly.IsPresent) {
+    if ($null -eq $compatibilityProfile) { throw '-ValidateCompatibilityProfileOnly requires -CompatibilityProfilePath.' }
+    if ([int] $compatibilityProfile.schema -eq 2) {
+        Assert-Schema2RuntimeCell `
+            -Profile $compatibilityProfile `
+            -ExpectedMinecraftVersion $ExpectedProfileMinecraftVersion `
+            -ExpectedTarget $ExpectedProfileTarget
+    }
+    $transport = [ordered]@{
+        schema = [int] $compatibilityProfile.schema
+        profileId = [string] (Get-ObjectProperty -Object $compatibilityProfile -Name 'profileId')
+        loader = 'fabric'
+        modIds = if ([int] $compatibilityProfile.schema -eq 2) { [string[]] @($compatibilityProfile.modIds) } else { [string[]] @() }
+        additionalModPaths = [string[]] @($AdditionalModPaths)
+        fixturePath = $ResourcePackPath
+        expectedLogMarkers = [string[]] @($ExpectedLogMarkers)
+        forbiddenLogMarkers = [string[]] @($ForbiddenLogMarkers)
+    }
+    Write-Output ("PROFILE_TRANSPORT " + ($transport | ConvertTo-Json -Compress -Depth 6))
+    return
 }
 
 function Resolve-SafeRelativePath {
@@ -734,6 +856,9 @@ if (-not (Test-ArtifactMinecraftCoverage -ArtifactMinecraft $artifactMinecraft -
     throw "Artifact Minecraft segment '$artifactMinecraft' does not cover '$MinecraftVersion'."
 }
 $targetMarker = Get-ArtifactTargetMarker -ArtifactPath $artifact
+if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
+    Assert-Schema2RuntimeCell -Profile $compatibilityProfile -ExpectedMinecraftVersion $MinecraftVersion -ExpectedTarget $targetMarker
+}
 
 $versionDirectory = Resolve-SafeRelativePath `
     -Root $clientRoot `
@@ -904,6 +1029,12 @@ foreach ($additionalModPath in @($AdditionalModPaths)) {
         throw "Staged additional mod SHA-256 mismatch: source=$additionalSourceHash staged=$additionalStagedHash"
     }
     [void] $stagedAdditionalMods.Add([ordered]@{
+        kind = if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
+            [string] (@($compatibilityProfile.runtimeMods | Where-Object { [IO.Path]::GetFullPath([string] $_.path) -eq [IO.Path]::GetFullPath($additionalMod) })[0].kind)
+        } else { $null }
+        id = if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
+            [string] (@($compatibilityProfile.runtimeMods | Where-Object { [IO.Path]::GetFullPath([string] $_.path) -eq [IO.Path]::GetFullPath($additionalMod) })[0].id)
+        } else { $null }
         artifact = $additionalName
         sourcePath = $additionalMod
         stagedPath = $additionalDestination
@@ -923,20 +1054,55 @@ $provenance = [ordered]@{
     fabricVersion = $VersionName
     target = $targetMarker
 }
-Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 4)
 
 $configPath = Join-Path $configRoot 'packforge.json'
-Write-Utf8NoBom -Path $configPath -Contents @'
-{
-  "configVersion": 12,
-  "reloadOptimizerEnabled": true,
-  "loaderIndexEnabled": true,
-  "loaderTimingsEnabled": true,
-  "reloadListenerTimingsEnabled": false,
-  "startupTimingsEnabled": true,
-  "startupStatusOverlayEnabled": false
+$profileConfig = [ordered]@{
+    configVersion = 12
+    reloadOptimizerEnabled = $true
+    loaderIndexEnabled = $true
+    loaderTimingsEnabled = $true
+    reloadListenerTimingsEnabled = $false
+    startupTimingsEnabled = $true
+    startupStatusOverlayEnabled = $false
 }
-'@
+Write-Utf8NoBom -Path $configPath -Contents ($profileConfig | ConvertTo-Json)
+
+if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
+    $resourcePackSource = Resolve-RequiredPath -Path $ResourcePackPath -Description 'Schema-2 compatibility resource-pack fixture'
+    $resourcePackRoot = Join-Path $runRoot 'resourcepacks'
+    New-Item -ItemType Directory -Path $resourcePackRoot -Force | Out-Null
+    $stagedFixture = Join-Path $resourcePackRoot ([string] $compatibilityProfile.fixture.artifact)
+    Copy-Item -LiteralPath $resourcePackSource -Destination $stagedFixture -Force
+    $stagedFixtureHash = (Get-FileHash -LiteralPath $stagedFixture -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($stagedFixtureHash -cne [string] $compatibilityProfile.fixture.sha256) {
+        throw "Staged schema-2 fixture SHA-256 mismatch: expected=$($compatibilityProfile.fixture.sha256) actual=$stagedFixtureHash"
+    }
+    Write-Utf8NoBom -Path (Join-Path $runRoot 'options.txt') -Contents @"
+resourcePacks:["vanilla","file/$([string] $compatibilityProfile.fixture.artifact)"]
+incompatibleResourcePacks:[]
+"@
+    $provenance.compatibilityProfile = [ordered]@{
+        schema = 2
+        profileId = [string] $compatibilityProfile.profileId
+        catalogSha256 = [string] $compatibilityProfile.catalogSha256
+        loader = [string] $compatibilityProfile.loader
+        minecraftVersion = [string] $compatibilityProfile.minecraftVersion
+        target = [string] $compatibilityProfile.target
+        modIds = @($compatibilityProfile.modIds)
+    }
+    $provenance.fixture = [ordered]@{
+        id = [string] $compatibilityProfile.fixture.id
+        sourcePath = $resourcePackSource
+        stagedPath = $stagedFixture
+        sha256 = $stagedFixtureHash
+    }
+    $provenance.config = [ordered]@{
+        path = $configPath
+        sha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash.ToUpperInvariant()
+        overrides = $compatibilityProfile.config.overrides
+    }
+}
+Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 8)
 
 $nativeJavaPath = Get-NativeSubdirectory -Root $natives -Name 'java'
 $nativeJnaPath = Get-NativeSubdirectory -Root $natives -Name 'jna'
@@ -1047,6 +1213,10 @@ foreach ($environmentOption in @('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA
     if ($startInfo.EnvironmentVariables.ContainsKey($environmentOption)) {
         $startInfo.EnvironmentVariables[$environmentOption] = ''
     }
+}
+if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
+    $startInfo.EnvironmentVariables['PACKFORGE_COMPAT_PROFILE_ID'] = [string] $compatibilityProfile.profileId
+    $startInfo.EnvironmentVariables['PACKFORGE_COMPAT_MOD_IDS'] = [string]::Join(',', @($compatibilityProfile.modIds))
 }
 
 $capabilityPattern = "PackForge capabilities:[^\r\n]*\btarget=$([regex]::Escape($targetMarker))\b"
@@ -1236,5 +1406,15 @@ $finalLog = Get-LogText -Path $latestLog
 if ($finalLog -notmatch $capabilityPattern) { throw 'Final Fabric log is missing the PackForge capability marker.' }
 if ($finalLog.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -lt 0) { throw 'Final Fabric log is missing the PackForge reload marker.' }
 if ($finalLog -notmatch $artifactSourcePattern) { throw 'Final Fabric log is missing the exact PackForge artifact source marker.' }
+
+if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
+    $runtimeEvidencePath = Join-Path $runRoot 'compatibility-runtime-evidence.log'
+    Write-Utf8NoBom -Path $runtimeEvidencePath -Contents $finalText
+    $provenance.runtimeEvidence = [ordered]@{
+        logPath = $runtimeEvidencePath
+        sha256 = (Get-FileHash -LiteralPath $runtimeEvidencePath -Algorithm SHA256).Hash.ToUpperInvariant()
+    }
+    Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 8)
+}
 
 Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"

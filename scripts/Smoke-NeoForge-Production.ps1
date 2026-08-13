@@ -22,6 +22,20 @@ param(
 
     [string] $FallbackLibrariesRoot,
 
+    [string[]] $AdditionalModPaths,
+
+    [string[]] $ExpectedLogMarkers,
+
+    [string[]] $ForbiddenLogMarkers,
+
+    [string] $CompatibilityProfilePath,
+
+    [switch] $ValidateCompatibilityProfileOnly,
+
+    [string] $ExpectedProfileTarget,
+
+    [string] $ExpectedProfileMinecraftVersion,
+
     [ValidateRange(60, 3600)]
     [int] $TimeoutSeconds = 900,
 
@@ -50,6 +64,23 @@ if (-not [string]::IsNullOrWhiteSpace($ResourcePackPath)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($FallbackLibrariesRoot)) {
     $arguments.FallbackLibrariesRoot = $FallbackLibrariesRoot
+}
+if (@($AdditionalModPaths).Count -gt 0) {
+    $arguments.AdditionalModPaths = @($AdditionalModPaths)
+}
+if (@($ExpectedLogMarkers).Count -gt 0) {
+    $arguments.ExpectedLogMarkers = @($ExpectedLogMarkers)
+}
+if (@($ForbiddenLogMarkers).Count -gt 0) {
+    $arguments.ForbiddenLogMarkers = @($ForbiddenLogMarkers)
+}
+if (-not [string]::IsNullOrWhiteSpace($CompatibilityProfilePath)) {
+    $arguments.CompatibilityProfilePath = $CompatibilityProfilePath
+}
+if ($ValidateCompatibilityProfileOnly.IsPresent) {
+    $arguments.ValidateCompatibilityProfileOnly = $true
+    $arguments.ExpectedProfileTarget = $ExpectedProfileTarget
+    $arguments.ExpectedProfileMinecraftVersion = $ExpectedProfileMinecraftVersion
 }
 if ($AllowControlledTermination.IsPresent) {
     $arguments.AllowControlledTermination = $true
