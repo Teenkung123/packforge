@@ -5,8 +5,28 @@ plugins {
 	id "net.minecraftforge.renamer" version "1.1.5"
 }
 
+def physicalPlatformRoot = project.buildFile.parentFile.canonicalFile
+def physicalRepositoryRoot = physicalPlatformRoot.parentFile.parentFile.canonicalFile
+def stonecutterDirectNode = rootProject != project
+if (stonecutterDirectNode) {
+	def pathSegments = project.path.tokenize(':')
+	if (pathSegments != ['forge', project.name]) {
+		throw new GradleException("Direct Forge build script requires a :forge:<target> Stonecutter leaf; found '${project.path}'.")
+	}
+	if (rootProject.projectDir.canonicalFile != physicalRepositoryRoot) {
+		throw new GradleException("Direct Forge node repository mismatch: root=${rootProject.projectDir}, physical=${physicalRepositoryRoot}.")
+	}
+	def currentTargetKey = stonecutter.current.project.toString()
+	if (currentTargetKey != project.name) {
+		throw new GradleException("Direct Forge node target mismatch: path=${project.name}, Stonecutter=${currentTargetKey}.")
+	}
+	ext.packforgeRepositoryRootOverride = physicalRepositoryRoot
+	ext.packforgeTargetKeyOverride = currentTargetKey
+}
+
 ext.packforgePlatformId = "forge"
-apply from: "../../gradle/packforge-target.gradle"
+ext.packforgePlatformSourceRoot = physicalPlatformRoot
+apply from: new File(physicalRepositoryRoot, "gradle/packforge-target.gradle")
 
 version = packforgeModVersion
 group = packforgeMavenGroup
@@ -99,8 +119,8 @@ def mainJavaDirs = [
 	new File(packforgeCommonRoot, "src/client/java"),
 	new File(packforgeAdapterCommonRoot, "src/main/java"),
 	new File(packforgeAdapterCommonRoot, "src/client/java"),
-	file("src/main/java"),
-	file("src/client/java"),
+	new File(packforgePlatformSourceRoot, "src/main/java"),
+	new File(packforgePlatformSourceRoot, "src/client/java"),
 	new File(packforgeAdapterPlatformRoot, "src/main/java"),
 	new File(packforgeAdapterPlatformRoot, "src/client/java")
 ]
@@ -187,8 +207,8 @@ def mainResourceDirs = [
 	new File(packforgeCommonRoot, "src/client/resources"),
 	new File(packforgeAdapterCommonRoot, "src/main/resources"),
 	new File(packforgeAdapterCommonRoot, "src/client/resources"),
-	file("src/main/resources"),
-	file("src/client/resources"),
+	new File(packforgePlatformSourceRoot, "src/main/resources"),
+	new File(packforgePlatformSourceRoot, "src/client/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/main/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/client/resources")
 ]
@@ -208,13 +228,13 @@ if (target.key in ["mc1_21_9", "mc1_21_10"]) {
 def testJavaDirs = [
 	new File(packforgeCommonRoot, "src/test/java"),
 	new File(packforgeAdapterCommonRoot, "src/test/java"),
-	file("src/test/java"),
+	new File(packforgePlatformSourceRoot, "src/test/java"),
 	new File(packforgeAdapterPlatformRoot, "src/test/java")
 ]
 def testResourceDirs = [
 	new File(packforgeCommonRoot, "src/test/resources"),
 	new File(packforgeAdapterCommonRoot, "src/test/resources"),
-	file("src/test/resources"),
+	new File(packforgePlatformSourceRoot, "src/test/resources"),
 	new File(packforgeAdapterPlatformRoot, "src/test/resources")
 ]
 def testJavaSources = testJavaDirs.collect { root ->
@@ -358,4 +378,96 @@ tasks.named("sourcesJar") {
 		duplicatesStrategy = DuplicatesStrategy.FAIL
 	}
 	archiveFileName = "packforge-forge-${project.version}-mc${packforgeArtifactMinecraft}-sources.jar"
+}
+
+if (stonecutterDirectNode) {
+	// Retain Phase D's nested build only as an explicit rollback/parity oracle.
+	// The authoritative direct task below depends solely on Forge's final packaging task.
+	apply from: new File(packforgeRepositoryRoot, "stonecutter-build.gradle")
+
+	def expectedDirectArtifactName = "packforge-forge-${project.version}-mc${packforgeArtifactMinecraft}.jar"
+	def finalDistributionTask = needsLegacyRuntimeRemap
+		? tasks.named("renamePackForgeJar")
+		: tasks.named("jarJar")
+	def directArtifact = layout.buildDirectory.file("libs/${expectedDirectArtifactName}")
+	def delegatedArtifactForParity = new File(
+		packforgePlatformSourceRoot,
+		"build/${target.key}/libs/${expectedDirectArtifactName}"
+	)
+
+	ext.packforgeStonecutterDirectParity = [
+		loaderId: "Forge",
+		artifactProvider: directArtifact,
+		expectedArtifactName: expectedDirectArtifactName,
+		delegatedArtifact: delegatedArtifactForParity,
+		directBuildDependencies: [finalDistributionTask],
+		finalArtifactTask: finalDistributionTask,
+		delegatedBuildTaskName: "buildStonecutterDelegatedNode",
+		loaderSpecificChecks: { File directFile, Map<String, List<String>> ignoredEntries ->
+			def zip = new java.util.zip.ZipFile(directFile)
+			try {
+				def readEntryText = { String path ->
+					def entry = zip.getEntry(path)
+					if (entry == null) {
+						throw new GradleException("Direct Forge artifact is missing required entry '${path}'.")
+					}
+					zip.getInputStream(entry).withCloseable { input -> input.getText("UTF-8") }
+				}
+
+				def modsToml = readEntryText("META-INF/mods.toml")
+				def capabilities = new Properties()
+				new ByteArrayInputStream(readEntryText("packforge-capabilities.properties").getBytes("ISO-8859-1")).withCloseable { input ->
+					capabilities.load(input)
+				}
+				def mainMixin = new groovy.json.JsonSlurper().parseText(readEntryText(mainMixinConfig))
+				def clientMixin = new groovy.json.JsonSlurper().parseText(readEntryText(clientMixinConfig))
+				if (!modsToml.contains('modId="packforge"')
+					|| !modsToml.contains("version=\"${project.version}\"")
+					|| !modsToml.contains("versionRange=\"${loaderConfig.versionRange}\"")
+					|| !modsToml.contains("versionRange=\"${loaderConfig.minecraftVersionRange}\"")
+					|| capabilities.getProperty("target") != target.key.toString()
+					|| capabilities.getProperty("minecraft") != packforgeArtifactMinecraft) {
+					throw new GradleException("Direct Forge artifact metadata does not match registry target '${target.key}'.")
+				}
+
+				if (needsLegacyRuntimeRemap) {
+					def legacyRefmaps = [mainMixin, clientMixin].collect { mixin ->
+						if (mixin.refmap != legacyMixinRefmap) {
+							throw new GradleException("Direct Forge legacy mixin config has incorrect refmap '${mixin.refmap}'.")
+						}
+						def refmapText = readEntryText(legacyMixinRefmap)
+						def intermediarySelector = refmapText =~ /\b(?:method|field)_[0-9]+\b/
+						if (intermediarySelector.find()) {
+							throw new GradleException("Direct Forge legacy refmap retains intermediary selector '${intermediarySelector.group()}'.")
+						}
+						new groovy.json.JsonSlurper().parseText(refmapText)
+					}
+					def legacyMappings = legacyRefmaps.collect { it.mappings ?: [:] }.inject([:]) { merged, mappings ->
+						merged.putAll(mappings as Map)
+						merged
+					}
+					def reloadMappings = legacyMappings["com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin"] as Map
+					def remappedStateFactoryHook = reloadMappings?.find { selector, mapped ->
+						selector.toString().startsWith("Lnet/minecraft/server/packs/resources/SimpleReloadInstance\$StateFactory;create(")
+							&& mapped.toString().contains(";m_")
+					}
+					def spriteMappings = legacyMappings["com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin"] as Map
+					def remappedAtlasHook = spriteMappings?.get("loadAndStitch")?.toString()
+					if (remappedStateFactoryHook == null
+						|| !reloadMappings.containsKey("<init>")
+						|| remappedAtlasHook == null
+						|| !remappedAtlasHook.contains(";m_")) {
+						throw new GradleException("Direct Forge legacy artifact is missing required remapped Mixin structural hooks.")
+					}
+				} else if (mainMixin.refmap != null
+					|| clientMixin.refmap != null
+					|| zip.getEntry(legacyMixinRefmap) != null) {
+					throw new GradleException("Direct Forge modern artifact unexpectedly contains legacy Mixin refmap metadata.")
+				}
+			} finally {
+				zip.close()
+			}
+		}
+	]
+	apply from: new File(packforgeRepositoryRoot, "gradle/packforge-stonecutter-direct-parity.gradle")
 }
