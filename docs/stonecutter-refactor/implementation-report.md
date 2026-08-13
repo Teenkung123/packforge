@@ -52,11 +52,11 @@ Configuration persistence preserves unknown JSON fields. Shared renderer/model c
 
 The compatibility catalog contains 36 recipes:
 
-- Seven `AVAILABLE`/`UNTESTED` recipes: Quick Pack and ImmediatelyFast isolated on Fabric, Forge, and NeoForge 1.21.1, plus combined Quick Pack + ImmediatelyFast on Fabric 1.21.1.
+- Twenty-one `AVAILABLE`/`UNTESTED` recipes with exact loader-family artifacts, dependency sets, runtime IDs, versions, URLs, and SHA-256 pins.
 - Three ResourcePackUnbounded 1.21.1 recipes marked `UNAVAILABLE` with dated public-source evidence for Fabric, Forge, and NeoForge.
-- Twenty-six recipes remain `PENDING_METADATA`/`UNTESTED`.
+- Twelve recipes remain `PENDING_METADATA`/`UNTESTED`. Fabric Quick Pack profiles are among them because public 1.21.1 builds require Fabric Loader `>=0.17.3`, while the exact PackForge cell uses `0.15.11`.
 
-Every available recipe is pinned by URL/version/SHA-256 and requires runtime evidence markers. `CompatibilityProfileReporter` reports profile ID, loader, target, observed mods, Quick Pack state, six handed-off capabilities, and 23 retained capabilities only when profile environment variables are present.
+Every available recipe is pinned by URL/version/SHA-256 and requires runtime evidence markers. Twenty unique newly added pins were independently checked against their SHA-256 and embedded loader metadata; no downloaded artifacts were retained. `CompatibilityProfileReporter` reports profile ID, loader, target, observed mods, Quick Pack state, six handed-off capabilities, and 23 retained capabilities only when profile environment variables are present.
 
 Schema-2 materialization validates the catalog before resolving inputs, uses a hash-addressed cache, derives safe decoded basenames, verifies SHA-256, transports fixture and expected-marker metadata, and rejects unsupported paths. Offline materialization and AST tests pass. No network request, dependency download, Gradle build, or Minecraft launch belongs to this evidence. ImmediatelyFast-only path proof and nonempty configuration overrides currently fail closed.
 

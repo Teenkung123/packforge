@@ -560,3 +560,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: `validateImplementationContracts` passed all 4/4 contracts in 36.9 seconds without compilation; the focused Python release-manifest test passed; independent review passed. A YAML parser was unavailable, so workflow YAML received focused static inspection only.
 - Status: `STATIC_CONTRACTS_VERIFIED`; no compilation, package build, final-JAR manifest verification, compatibility-profile execution, or Minecraft runtime was run. This is not release-ready evidence.
 - Rollback: `git revert 07b087fa1e3c862f086a25e29bab68eec37477d2` removes the aggregate static gate and publication verify-existing step while retaining the reconciled evidence documentation.
+
+## Expanded exact compatibility-profile pins
+
+- Date: 2026-08-13
+- Commit SHA: `a80a83e77ed8190ad4de1e0c07665264af48f1c9`
+- Parent SHA: `293e7aa`
+- Scope: expand the exact 1.21.1 catalog to 21 `AVAILABLE`/`UNTESTED`, 12 `PENDING_METADATA`/`UNTESTED`, and three `UNAVAILABLE`; freeze exact loader floors, dependencies, runtime IDs, URLs, versions, and hashes. Fabric Quick Pack moved to pending because Loader `0.15.11` is below its public artifact floor of `>=0.17.3`.
+- Verification: normal catalog validation and self-test passed all 36 recipes and 19 rejected mutations. Twenty unique new pins were independently verified against SHA-256 and embedded loader metadata; verification downloads were not retained.
+- Status: `PHASE_I_METADATA_EXPANDED_RUNTIME_UNTESTED`; no Minecraft client, compatibility runtime, or PASS profile was produced. The repository remains `PARTIAL_NOT_RELEASE_READY`.
+- Rollback: revert the documentation checkpoint first, then `git revert a80a83e77ed8190ad4de1e0c07665264af48f1c9` to restore the seven-available catalog.

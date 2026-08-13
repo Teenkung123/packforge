@@ -305,3 +305,13 @@
 - Verification: `validateImplementationContracts` passed 4/4 contracts in 36.9 seconds without compilation; the focused Python release-manifest test passed; independent review passed. Workflow YAML received focused static inspection because a YAML parser was unavailable.
 - Limits: no compile, package build, final-JAR manifest verification, compatibility-profile execution, or Minecraft runtime was run.
 - Rollback: `git revert 07b087fa1e3c862f086a25e29bab68eec37477d2`.
+
+## Phase 23 — expanded exact compatibility-profile pins
+
+- Date: 2026-08-13
+- Commit SHA: `a80a83e77ed8190ad4de1e0c07665264af48f1c9`; parent `293e7aa`
+- Status: `METADATA_VERIFIED_RUNTIME_UNTESTED`; 21 `AVAILABLE`, 12 `PENDING_METADATA`, three `UNAVAILABLE`, zero PASS.
+- Scope: pin exact loader-family artifacts, dependencies, runtime IDs, versions, URLs, hashes, and loader floors. Move Fabric Quick Pack recipes to pending because Loader `0.15.11` cannot satisfy `>=0.17.3`.
+- Verification: catalog normal/self-test PASS for 36 recipes and 19 rejected mutations; 20 unique new pins independently matched SHA-256 and embedded metadata. Verification downloads were not retained.
+- Limits: no Minecraft launch, compatibility runtime, or PASS result. `PARTIAL_NOT_RELEASE_READY` remains.
+- Rollback: revert the documentation checkpoint, then `git revert a80a83e77ed8190ad4de1e0c07665264af48f1c9`.

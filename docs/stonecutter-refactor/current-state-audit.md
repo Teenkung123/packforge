@@ -20,7 +20,7 @@ Audited continuation checkpoints through authoritative direct-graph Phase 20. Ov
 | Direct build ownership | Public graph is direct-only; 53 leaves authoritative; direct contract AST/self-test and task PASS; registry dry-run PASS. Nested Gradle remains parity oracle. |
 | Source metrics | 210 production Java files; 16,323 LOC; zero exact/normalized duplicate groups; 15 target/version conditional lines; three renderer bodies; two adapters. |
 | Configuration | Unknown-field preservation, shared integer validation, shared modern renderer, and configured/effective atlas-retry policy have focused evidence. No live full renderer/shader proof. |
-| Compatibility profiles | 36 recipes; seven `AVAILABLE`/`UNTESTED`; three `UNAVAILABLE`; 26 `PENDING_METADATA`/`UNTESTED`; no PASS profiles. |
+| Compatibility profiles | 36 recipes; 21 `AVAILABLE`/`UNTESTED`; three `UNAVAILABLE`; 12 `PENDING_METADATA`/`UNTESTED`; no PASS profiles. Twenty unique new artifact pins were independently checked against SHA-256 and embedded metadata. |
 | Profile transport | Schema-2 materializer and three loader wrappers structurally verified offline; no downloads or launches. |
 | Fixtures | Nine deterministic 1.21.1 fixtures structurally verified; no final-JAR execution. |
 | Default-off candidates | Five `SAFE_KEEP_DEFAULT_OFF`; six `FAILED_WITH_REASON`; zero promoted; runtime/performance gates `NOT_RUN`. |
@@ -56,7 +56,7 @@ Audited continuation checkpoints through authoritative direct-graph Phase 20. Ov
 1. Nested Gradle still exists as parity oracle; all-53 direct parity and true preprocessing ownership are unresolved.
 2. Current complete 20-artifact manifest has not been built and verified.
 3. Current same-binary range proof and all 62 exact runtime cells are absent.
-4. Seven materializable compatibility profiles remain `UNTESTED`; 26 more lack complete metadata; three are explicitly `UNAVAILABLE`.
+4. Twenty-one materializable compatibility profiles remain `UNTESTED`; 12 more lack exact compatible metadata; three are explicitly `UNAVAILABLE`.
 5. Live renderer-family and shader/atlas behavior remain unverified.
 6. No current release-ready hashes or final rollback checkpoint exist.
 

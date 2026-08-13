@@ -43,13 +43,13 @@ Forge 1.21.2, Forge/NeoForge 1.20.5, and NeoForge 1.20.1 are absent because the 
 
 | Profile group | Count | Catalog state | Runtime result |
 |---|---:|---|---|
-| Quick Pack isolated, Fabric/Forge/NeoForge 1.21.1 | 3 | `AVAILABLE` with pinned URL, version, dependencies, and SHA-256 | `UNTESTED` |
-| ImmediatelyFast isolated, Fabric/Forge/NeoForge 1.21.1 | 3 | `AVAILABLE` with pinned URL, version, dependencies, and SHA-256 | `UNTESTED`; path-specific proof currently fails closed |
-| Quick Pack + ImmediatelyFast, Fabric 1.21.1 | 1 | `AVAILABLE` with pinned inputs | `UNTESTED` |
+| Materializable exact-loader recipes | 21 | `AVAILABLE` with pinned URL, version, exact mod IDs/dependencies, loader floors, and SHA-256 | `UNTESTED` |
 | ResourcePackUnbounded, Fabric/Forge/NeoForge 1.21.1 | 3 | `UNAVAILABLE` with dated public-source evidence | `UNAVAILABLE` |
-| Remaining declared profiles | 26 | `PENDING_METADATA` | `UNTESTED` |
+| Remaining declared profiles | 12 | `PENDING_METADATA` | `UNTESTED` |
 
 `AVAILABLE` means inputs can be materialized and hash-verified. It does not mean Minecraft launched or a profile passed. No profile currently has a PASS result.
+
+Twenty unique new artifact pins were independently verified against SHA-256 and embedded loader metadata; exact loader floors, dependencies, and runtime mod IDs are catalogued. Fabric Quick Pack moved to `PENDING_METADATA` because its public 1.21.1 artifacts require Fabric Loader `>=0.17.3`, but the exact PackForge 1.21.1 smoke cell uses `0.15.11`. Verification downloads were not retained.
 
 Quick Pack policy assigns exactly six capabilities to `EXTERNALLY_OWNED_PATH` when detected: resource-pack index, ZIP read pool, font-provider preselection, atlas-mip parallelism, loading-fade control, and loading-status overlay. The other 23 capabilities stay under PackForge policy. This assignment is structurally/unit tested; current final-JAR runtime remains `UNTESTED`.
 
