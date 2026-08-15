@@ -680,3 +680,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: static self-test passed 106 mutations. Source metrics passed in 30 seconds: 217 production files, 16,575 LOC, 110 bridge files / 5,555 LOC (33.51%), zero duplicate groups, ten Stonecutter blocks with maximum 40 lines, and 18 platform `target.key` references. Focused 1.21.5/1.21.6/1.21.8/1.21.9 compile/sourceJar reached BUILD SUCCESSFUL in 46 seconds across 24 tasks (20 executed, four up-to-date). Active source SHA-256 `C30B2016...` matched; inactive physical SHA prefixes `BB0AA935...` and `E94AAB4F...` remained; classes existed. Independent final review passed.
 - Limits: no Minecraft runtime, all-53 build/package parity, full matrix, release verification, or general cross-loader preprocessing proof was run. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert b1ee885`; then revert `731d1c2`, `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, and `b54a40f` in order if removing the preceding Fabric native pilot work.
+
+## Phase E — extend canonical SimpleReload preprocessing to 1.21.5
+
+- Date: 2026-08-15
+- Commit SHA: `0138d6edbad4cebd45773050d81e7897dbbfb7b3`; parent `9ab73924b87b025553a871968c62d2b1a613e07a`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: extend exact active Fabric SimpleReload preprocessing from 1.21.6-1.21.8 to 1.21.5-1.21.8. The 1.21.5 adapter and mixin descriptor remain version-specific; pre-1.21.5 constructor and 1.21.9+ SharedState seams remain physical.
+- Verification: `validateStonecutterDirectContract` passed in 47 seconds across 53 direct cells with four native SimpleReload cells. Focused offline Fabric 1.21.4/1.21.5/1.21.6 `compileJava` plus `sourcesJar` reached BUILD SUCCESSFUL in 51 seconds across 18 executed tasks. The 1.21.5 and 1.21.6 generated/source-JAR entries matched SHA-256 prefix `B2F6321B` and produced 4,648-byte classes; 1.21.4 kept the generated source inactive, retained its 4,641-byte physical class, and produced no generated source-JAR entry. Source metrics passed in 59 seconds with 217 production files, 16,575 LOC, zero duplicate groups, ten Stonecutter blocks with maximum 40 lines, and 103 validator target-key literals. Independent read-only review passed with no required fixes.
+- Limits: no clean build, Minecraft runtime, all-53 build/package parity, full matrix, release verification, or general cross-loader preprocessing proof was run. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert 0138d6e`; then revert `b1ee885`, `731d1c2`, `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, and `b54a40f` in order if removing the preceding Fabric native work.

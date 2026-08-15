@@ -425,3 +425,13 @@
 - Verification: static self-test passed 106 mutations. Metrics passed in 30 seconds: 217 files / 16,575 LOC, 110 bridge files / 5,555 LOC (33.51%), zero duplicates, ten blocks / maximum 40 lines, and 18 platform target-key references. Focused 1.21.5/1.21.6/1.21.8/1.21.9 compile/sourceJar reached BUILD SUCCESSFUL in 46 seconds across 24 tasks (20 executed, four up-to-date); active `C30B2016...` matched, inactive physical `BB0AA935...` / `E94AAB4F...` remained, and classes existed. Independent final review passed.
 - Limits: no runtime, all-53 parity, full matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert b1ee885`; then `731d1c2`, `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, then `b54a40f` if needed.
+
+## Phase E — extend canonical SimpleReload preprocessing to 1.21.5
+
+- Date: 2026-08-15
+- Commit SHA: `0138d6edbad4cebd45773050d81e7897dbbfb7b3`; parent `9ab73924b87b025553a871968c62d2b1a613e07a`
+- Status: `PHASE_E_PARTIAL`.
+- Scope: exact active Fabric SimpleReload now covers 1.21.5 through 1.21.8. The 1.21.5 adapter/descriptor remains distinct; pre-1.21.5 constructor and 1.21.9+ SharedState seams remain physical.
+- Verification: direct contract passed in 47 seconds across 53 direct cells / four native SimpleReload cells. Offline 1.21.4/1.21.5/1.21.6 compileJava+sourcesJar passed in 51 seconds across 18 executed tasks. Generated/source-JAR SHA prefix `B2F6321B` matched for 1.21.5 and 1.21.6 with 4,648-byte classes; 1.21.4 retained the inactive generated output and 4,641-byte physical class. Metrics passed in 59 seconds: 217 files / 16,575 LOC, zero duplicate groups, ten blocks / maximum 40 lines, and 103 validator target-key literals. Independent review passed with no required fixes.
+- Limits: no clean build, runtime, all-53 parity, full matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
+- Rollback: revert later dependants first, then `git revert 0138d6e`; then `b1ee885`, `731d1c2`, `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, then `b54a40f` if needed.

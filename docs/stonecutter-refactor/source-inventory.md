@@ -1,6 +1,6 @@
 # Source inventory
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 Baseline production inventory remains in `baseline.md`. Current deterministic snapshot is checked in under the source-metrics reports.
 
@@ -13,7 +13,7 @@ Baseline production inventory remains in `baseline.md`. Current deterministic sn
 - Registry generation defines 12 source families and 19 registry build targets (direct source nodes), then expands them into 53 authoritative direct loader distributions. Public aggregate graph is direct-only.
 - Nested Gradle remains a temporary parity oracle; it is not authoritative production ownership.
 
-This is a direct registry-derived build graph. Native Stonecutter preprocessing has focused Fabric proof for archive capture across 16 targets, SharedZip across 17, ReloadableResourceManager across 18 pre26 targets, RuntimeResourceHash across 17, LoadingOverlayToast across 14, and Bitmap provider definition across all 19; general cross-loader source transport and full all-53 build/package parity remain open.
+This is a direct registry-derived build graph. Native Stonecutter preprocessing has focused Fabric proof for archive capture across 16 targets, SharedZip across 17, ReloadableResourceManager across 18 pre26 targets, RuntimeResourceHash across 17, LoadingOverlayToast across 14, Bitmap provider definition across all 19, and SimpleReload across four targets from 1.21.5 through 1.21.8; general cross-loader source transport and full all-53 build/package parity remain open.
 
 ## Core seams
 
@@ -50,4 +50,4 @@ Keep Minecraft class names/descriptors, mixin targets, native widget differences
 
 ## Remaining proof
 
-Extend preprocessing beyond the Fabric archive pilot, run current all-53 compilation/package checks, prove Java 17/21/25 and remap/JarJar output, remove the nested parity oracle, and then refresh metrics. Runtime and release acceptance remain separate from this inventory.
+Extend preprocessing beyond the bounded Fabric seams, run current all-53 compilation/package checks, prove Java 17/21/25 and remap/JarJar output, remove the nested parity oracle, and then refresh metrics. Runtime and release acceptance remain separate from this inventory.
