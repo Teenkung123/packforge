@@ -159,7 +159,7 @@ dependencies {
 	if (needsLegacyRuntimeRemap) {
 		annotationProcessor "org.spongepowered:mixin:0.8.7:processor"
 	}
-	implementation(jarJar("io.github.llamalad7:mixinextras-forge:${packforgeMixinExtrasVersion}")) {
+	implementation(jarJar("io.github.llamalad7:mixinextras-forge:${packforgeMixinExtrasVersion}:${packforgeMixinExtrasClassifier}")) {
 		transitive = false
 		jarJar.configure(it) {
 			version = packforgeMixinExtrasVersion
@@ -322,11 +322,14 @@ if (stonecutterDirectNode) {
 							&& mapped.toString().contains(";m_")
 					}
 					def spriteMappings = legacyMappings["com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin"] as Map
-					def remappedAtlasHook = spriteMappings?.get("loadAndStitch")?.toString()
+					def remappedAtlasHook = spriteMappings?.find { selector, mapped ->
+						def selectorName = selector.toString()
+						(selectorName == "loadAndStitch" || selectorName.startsWith("loadAndStitch("))
+							&& mapped.toString().contains(";m_")
+					}?.value?.toString()
 					if (remappedStateFactoryHook == null
 						|| !reloadMappings.containsKey("<init>")
-						|| remappedAtlasHook == null
-						|| !remappedAtlasHook.contains(";m_")) {
+						|| remappedAtlasHook == null) {
 						throw new GradleException("Direct Forge legacy artifact is missing required remapped Mixin structural hooks.")
 					}
 				} else if (mainMixin.refmap != null

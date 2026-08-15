@@ -240,7 +240,7 @@ dependencies {
 	}
 
 	implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${packforgeMixinExtrasVersion}"))
-	include "io.github.llamalad7:mixinextras-fabric:${packforgeMixinExtrasVersion}"
+	include "io.github.llamalad7:mixinextras-fabric:${packforgeMixinExtrasVersion}:${packforgeMixinExtrasClassifier}"
 
 	testImplementation platform("org.junit:junit-bom:5.11.4")
 	testImplementation "org.junit.jupiter:junit-jupiter"

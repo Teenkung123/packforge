@@ -1,5 +1,17 @@
 # Stonecutter refactor work log
 
+## Current 1.4 slim-MixinExtras validation (working tree)
+
+- Date: 2026-08-15
+- Branch: `1.4`
+- Status: `FOCUSED_VERIFIED`; not a release checkpoint until the dedicated commit is recorded.
+- Changes: `mod_version=1.4`; registry classifier `slim` for MixinExtras 0.5.4 on Fabric, Forge, and NeoForge; script-backed `inspectArtifactSizes` task; current evidence reconciliation.
+- Structural commands: `buildAllSupported`, `verifyAllArtifacts`, generated/verified `build/libs/release/manifest.json`, and focused direct/parity builds for Fabric `mc1_21_1`, Forge `mc1_20_2`, and NeoForge `mc1_21_1` all PASS.
+- Runtime commands: one-reload Fabric/Forge/NeoForge production smokes all PASS with MixinExtras initialization, resolved-resource hash `5D6A4D61...B94C5F`, and clean exit; these are focused loader checks, not the ten-reload/62-cell acceptance matrix.
+- Final-JAR inspection: one loader-specific `:slim` nested artifact per representative JAR, no duplicate ZIP entries, mixin configs/refmap intact, Forge slim shim retains its nested common runtime.
+- Size evidence: Fabric 53.8% smaller, Forge 54.5% smaller, NeoForge 54.2% smaller versus pre-slim 1.3.4 root artifacts; the intentional 10,607-byte 128×128 icon remains.
+- Open gates: all-53 direct parity, Phase F 761-LOC shrink shortfall, 62-cell matrix, same-binary runtime ranges, third-party profiles, cancellation/failure execution, live UI/shader checks, and final rollback checkpoint.
+
 ## Phase 0 — baseline and branch safety
 
 - Date: 2026-08-11

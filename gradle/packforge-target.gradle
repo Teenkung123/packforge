@@ -47,6 +47,7 @@ project.ext.packforgeArtifactMinecraft = (platform.artifactMinecraft ?: target.a
 project.ext.packforgeMixinCompatibility = (platform.mixinCompatibility ?: target.mixinCompatibility).toString()
 project.ext.packforgeMixinConfigs = platform.mixinConfigs ?: target.mixinConfigs
 project.ext.packforgeMixinExtrasVersion = registry.mixinExtrasVersion
+project.ext.packforgeMixinExtrasClassifier = registry.mixinExtrasClassifier
 project.ext.packforgeModVersion = rootProperties.getProperty("mod_version") + platform.versionSuffix.toString()
 project.ext.packforgeMavenGroup = rootProperties.getProperty("maven_group")
 project.ext.packforgeCommonRoot = new File(repositoryRoot, "common")

@@ -4,7 +4,7 @@ Date: 2026-08-15
 
 Outcome labels are `FULL_OPTIMIZED_PATH`, `HOOK_PRESERVING_COALESCED_PATH`, `SAFE_ORIGINAL_PATH`, `EXTERNALLY_OWNED_PATH`, `UNAVAILABLE`, `UNTESTED`, and `FAILED`.
 
-Current branch status is **PARTIAL** and **NOT RELEASE READY**. Registry presence, profile metadata, fixture generation, compilation, packaging, and runtime are separate evidence classes.
+Current branch status is **PARTIAL** and **NOT RELEASE READY**. Current version-1.4 artifacts use the resolved MixinExtras `0.5.4:slim` classifier. Registry presence, profile metadata, fixture generation, compilation, packaging, and runtime are separate evidence classes.
 
 ## Exact release ledger
 
@@ -59,13 +59,13 @@ Quick Pack policy assigns exactly six capabilities to `EXTERNALLY_OWNED_PATH` wh
 - Schema-2 profile materialization supports hash-addressed caching, safe decoded names, collision protection, SHA-256 verification, dependency staging, fixture metadata, expected markers, and evidence-path transport across all three loader wrappers.
 - Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy resources; the generator adds one stable `example`-namespace texture marker to every family so controlled hashing cannot silently pass with zero entries.
 - ImmediatelyFast-only path evidence and nonempty configuration overrides fail closed until dedicated instrumentation exists.
-- No network download, Minecraft launch, repeated reload, cancellation, semantic hash, or clean-exit profile evidence has been recorded for current bytes. The controller contract now requires a positive deterministic resolved-resource hash, ten reloads per exact cell, validates fixture entry/duplicate/scenario contracts, preflights the exact release manifest, and binds its uppercase SHA-256 token into matrix resume records; every generated fixture supplies a hash-visible input, but this remains structural evidence only.
+- No third-party compatibility-profile download or profile execution has been recorded for current bytes. Three separate focused slim-MixinExtras final-JAR smokes (Fabric `mc1_21_1`, Forge `mc1_20_2`, NeoForge `mc1_21_1`) did launch, perform one reload, emit a positive deterministic resolved-resource hash, initialize MixinExtras 0.5.4, and cleanly exit. The controller contract still requires ten reloads per exact cell, validates fixture entry/duplicate/scenario contracts, preflights the exact release manifest, and binds its uppercase SHA-256 token into matrix resume records; every generated fixture supplies a hash-visible input, but the full matrix remains unverified.
 
 ## Build and publication state
 
 The authoritative graph contains 53 direct loader distributions. Direct-contract AST/self-tests, the direct contract task, and a registry dry-run pass. Focused Fabric preprocessing proof covers archive capture on 16 targets, SharedZip on 17, ReloadableResourceManager on 18 pre26 targets, RuntimeResourceHash on 17, LoadingOverlayToast on 14, Bitmap provider definition on all 19, and SimpleReload on four targets from 1.21.5 through 1.21.8. Nested Gradle remains a temporary parity oracle; full all-53 compilation/package parity and general cross-loader preprocessing proof are absent.
 
-Registry publication metadata expects 20 artifacts. The local directory has 17 older JARs, of which only five names match; 15 expected names are missing, 12 are stale, structural verification fails, and the release manifest is absent. Therefore publication ranges and all 62 exact runtime cells remain unproven for current bytes. The legacy wrapper parity path is no longer configured by default; direct leaves are authoritative pending all-cell proof.
+Registry publication metadata expects 20 artifacts. `buildAllSupported` now produces exactly 20 version-1.4 JARs; `verifyAllArtifacts` and `verifyReleaseManifest` pass. Each representative final JAR contains exactly one loader-specific slim MixinExtras artifact with no duplicate ZIP entries; the no-rebuild `inspectArtifactSizes` task reports sizes, nested JARs, largest files, and class/resource totals. Publication ranges and all 62 exact runtime cells remain unproven for current bytes until same-binary and ten-reload matrix evidence is retained. The legacy wrapper parity path is no longer configured by default; direct leaves are authoritative pending all-cell proof.
 
 ## Historical runtime evidence
 

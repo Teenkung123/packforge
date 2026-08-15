@@ -37,10 +37,10 @@ class AtlasStateIdentityTest {
 
 	@Test
 	void staleFailureCanOnlyReleaseItsCapturedAtlasState() {
-		ReloadExecutionContext older = ReloadExecutionContext.startForTesting(ReloadFeatureSnapshot.capture());
+		ReloadExecutionContext older = ReloadExecutionContext.startForTesting(snapshot());
 		SpriteMetadataCache.AtlasState olderState = SpriteMetadataCache.bind(ATLAS, PLAN);
 
-		ReloadExecutionContext newer = ReloadExecutionContext.startForTesting(ReloadFeatureSnapshot.capture());
+		ReloadExecutionContext newer = ReloadExecutionContext.startForTesting(snapshot());
 		SpriteMetadataCache.AtlasState newerState = SpriteMetadataCache.bind(ATLAS, PLAN);
 		assertNotSame(olderState, newerState);
 
@@ -52,5 +52,15 @@ class AtlasStateIdentityTest {
 		assertFalse(SpriteMetadataCache.contains(newerState));
 		assertFalse(ReloadExecutionContext.finish(older));
 		ReloadExecutionContext.finish(newer);
+	}
+
+	private static ReloadFeatureSnapshot snapshot() {
+		return new ReloadFeatureSnapshot(
+			true, true, true, false, true, false, true, true, false, false,
+			true, true, true, 64, false, false, false, false, true, false,
+			false, false, 128, false, 128, true, 256, Set.of(), false, 2,
+			false, false, false, false, true, true, true, 1, 4, true,
+			false, false, false, false, ReloadFeatureSnapshot.boundedWorkerBudget(1, 1)
+		);
 	}
 }

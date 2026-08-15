@@ -198,6 +198,7 @@
     "exactReleaseRowsRequired": true
   },
   "mixinExtrasVersion": "0.5.4",
+  "mixinExtrasClassifier": "slim",
   "mixinExtrasFabricLoaderMinimum": "0.14.25",
   "fabricAsmVersion": "9.10.1",
   "fabricMixinVersion": "0.17.3+mixin.0.8.7",

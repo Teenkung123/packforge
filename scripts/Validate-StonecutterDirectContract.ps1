@@ -700,10 +700,10 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $nativeArchive '/*@Inject(method = "<init>", at = @At("RETURN"))' 'Fabric native archive commented legacy constructor'
     Assert-ContainsOnce $nativeArchive 'String name,' 'Fabric native archive legacy name parameter'
     Assert-ContainsOnce $nativeArchive 'boolean closeOnExit,' 'Fabric native archive legacy close parameter'
-    Assert-ContainsCount $nativeArchive 'this.packforge$setArchive(zipFileAccess);' 2 'Fabric native archive constructor delegation'
-    Assert-ContainsOnce $nativeArchive '@Unique' 'Fabric native archive shared helper uniqueness'
-    Assert-ContainsOnce $nativeArchive 'private void packforge$setArchive(Object zipFileAccess) {' 'Fabric native archive shared capture helper'
-    Assert-ContainsOnce $nativeArchive 'holder.packforge$setArchive(bridge);' 'Fabric native archive shared capture behavior'
+    Assert-ContainsCount $nativeArchive 'holder.packforge$setArchive(bridge);' 2 'Fabric native archive constructor delegation'
+    if ($nativeArchive.Contains('@Unique') -or $nativeArchive.Contains('private void packforge$setArchive(Object zipFileAccess) {')) {
+        Fail 'Fabric native archive must keep archive-holder delegation inline in both constructor seams.'
+    }
     Assert-ContainsCount $nativeArchive 'private void packforge$captureArchive(' 2 'Fabric native archive constructor implementations'
     Assert-ContainsCount $nativeArchive '//? if ' 3 'Fabric native archive conditional openers'
     Assert-ContainsCount $nativeArchive '//?}' 4 'Fabric native archive conditional closers'
@@ -1122,7 +1122,7 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-archive-range-drift' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('<=1.21.10', '<=1.21.11') } $Registry $Sources
     Assert-MutationRejected 'native-archive-constructor-seam-drift' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('>=1.20.5', '>=1.20.6') } $Registry $Sources
     Assert-MutationRejected 'native-archive-legacy-branch-active' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('/*@Inject(method = "<init>"', '@Inject(method = "<init>"') } $Registry $Sources
-    Assert-MutationRejected 'native-archive-shared-helper-missing' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('private void packforge$setArchive(Object zipFileAccess) {', 'private void packforge$setMissing(Object zipFileAccess) {') } $Registry $Sources
+    Assert-MutationRejected 'native-archive-inline-holder-delegation-missing' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('holder.packforge$setArchive(bridge);', 'holder.packforge$setMissing(bridge);') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-range-drift' { param($r, $s) $s.FabricNativeSharedZip = $s.FabricNativeSharedZip.Replace('<=1.21.11', '<=1.21.10') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-constructor-drift' { param($r, $s) $s.FabricNativeSharedZip = $s.FabricNativeSharedZip.Replace('<init>(Ljava/io/File;)V', '<init>') } $Registry $Sources
     Assert-MutationRejected 'native-shared-zip-close-drift' { param($r, $s) $s.FabricNativeSharedZip = $s.FabricNativeSharedZip.Replace('@Inject(method = "close", at = @At("HEAD"))', '@Inject(method = "close", at = @At("RETURN"))') } $Registry $Sources

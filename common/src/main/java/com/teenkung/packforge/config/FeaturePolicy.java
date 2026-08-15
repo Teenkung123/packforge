@@ -149,7 +149,11 @@ public final class FeaturePolicy {
 			&& !(config.forceDisablePartIIIWithIris && shaderPipelinePresent);
 	}
 	public boolean atlasRetryShaderGuardEnabled() {
-		return enabled(ATLAS_RETRY, largeAtlasFixerEnabled(), config.forceDisablePartIIIWithIris);
+		// The guard is a compatibility setting, not the retry implementation
+		// itself. Keep its configured state visible even on targets that do not
+		// deliver the retry capability; atlasRetryEnabled() still applies the
+		// capability and shader-pipeline gates to the actual implementation.
+		return largeAtlasFixerEnabled() && config.forceDisablePartIIIWithIris;
 	}
 	public int atlasRetryMaxAttempts() { return config.atlasRetryMaxAttempts; }
 	public boolean atlasExcludes(String atlasId) { return config.atlasExcludeIds != null && config.atlasExcludeIds.contains(atlasId); }

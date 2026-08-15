@@ -1389,7 +1389,7 @@ $profileForbiddenMarkers = if ($null -ne $selectedProfile) {
 } else {
     @(Get-NonEmptyMarkers -Markers $ForbiddenLogMarkers)
 }
-$compatibilityProfileRequested = $null -ne $selectedProfile -or $profileAdditionalMods.Count -gt 0 -or $profileExpectedMarkers.Count -gt 0 -or $profileForbiddenMarkers.Count -gt 0
+$compatibilityProfileRequested = $null -ne $selectedProfile -or @($profileAdditionalMods).Count -gt 0 -or @($profileExpectedMarkers).Count -gt 0 -or @($profileForbiddenMarkers).Count -gt 0
 $profileIdentity = [ordered]@{
     schema = if ($null -ne $selectedProfile) { 2 } else { 1 }
     profileId = if ($null -ne $selectedProfile) { [string] $selectedProfile.id } else { $null }

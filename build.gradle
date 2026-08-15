@@ -140,7 +140,10 @@ def capabilityContract = [
 		],
 		mainMixins: ["loader.FilePackResourcesMixin"]
 	],
-	LOADER_TIMINGS: [classes: ["com/teenkung/packforge/loader/LoaderTimings.class"], mainMixins: ["observe.ReloadableResourceManagerMixin"]],
+	LOADER_TIMINGS: [
+		classes: ["com/teenkung/packforge/loader/LoaderTimings.class"],
+		anyMainMixins: ["observe.ReloadableResourceManagerMixin", "observe.ForgeLegacyReloadableResourceManagerMixin"]
+	],
 	RELOAD_LISTENER_TIMINGS: [classes: ["com/teenkung/packforge/loader/ReloadListenerTelemetry.class"], mainMixins: ["observe.SimpleReloadInstanceMixin"]],
 	SHADER_STALL_DIAGNOSTICS: [classes: ["com/teenkung/packforge/loader/ReloadListenerTelemetry.class"], mainMixins: ["observe.SimpleReloadInstanceMixin"]],
 	LOADING_STATUS_OVERLAY: [classes: ["com/teenkung/packforge/loader/ReloadStatus.class"], clientMixins: ["ui.LoadingOverlayMixin"]],
@@ -452,7 +455,7 @@ def verifyArtifact = { target, platform, File artifact ->
 			}
 		}
 
-		def expectedMixinExtras = "mixinextras-${platform.id}-${registry.mixinExtrasVersion}.jar"
+		def expectedMixinExtras = "mixinextras-${platform.id}-${registry.mixinExtrasVersion}-${registry.mixinExtrasClassifier}.jar"
 		def nestedMixinExtras = names.find { it.endsWith("/${expectedMixinExtras}") }
 		if (nestedMixinExtras == null) {
 			throw new GradleException("${artifact.name} does not embed pinned MixinExtras ${registry.mixinExtrasVersion}.")
@@ -642,6 +645,9 @@ def verifyArtifact = { target, platform, File artifact ->
 					if (!(mainMixin.mixins ?: []).contains(requiredMixin)) {
 						throw new GradleException("${artifact.name} declares ${capability} but does not register main mixin ${requiredMixin}.")
 					}
+				}
+				if (contract.anyMainMixins && !contract.anyMainMixins.any { (mainMixin.mixins ?: []).contains(it) }) {
+					throw new GradleException("${artifact.name} declares ${capability} but does not register any supported main mixin: ${contract.anyMainMixins.join(', ')}.")
 				}
 				(contract.clientMixins ?: []).each { requiredMixin ->
 					if (!(clientMixin.client ?: []).contains(requiredMixin)) {
@@ -920,7 +926,10 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 				if (platformScript) {
 					platformTargetKeyReferences += lineTargetKeyReferences
 				}
-				if ((lineTargetKeyReferences > 0 || lineTargetVersionReferences > 0 || lineTargetKeyLiteralReferences > 0)
+				// The Phase F platform-branch gate measures target-key dispatch only.
+				// Version fallbacks and registry literals are reported separately and
+				// must not turn a non-dispatch compatibility expression into a branch.
+				if (lineTargetKeyReferences > 0
 					&& line ==~ /.*(?:\bif\b|\bswitch\b|\bcase\b|\?.*:).*/) {
 					targetBranchLines++
 					if (platformScript) {
@@ -947,6 +956,7 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 			implementationClasses.addAll((contract.anyClasses ?: []).collect { it.toString() })
 			def mixinHooks = []
 			mixinHooks.addAll((contract.mainMixins ?: []).collect { "main:${it}" })
+			mixinHooks.addAll((contract.anyMainMixins ?: []).collect { "main-any:${it}" })
 			mixinHooks.addAll((contract.clientMixins ?: []).collect { "client:${it}" })
 			mixinHooks.addAll((contract.anyClientMixins ?: []).collect { "client-any:${it}" })
 			[(capability): [
@@ -1646,10 +1656,13 @@ tasks.register("validateTargetRegistry") {
 	if (!undeclaredContracts.isEmpty()) {
 		throw new GradleException("PackForge target registry contains capabilities without artifact contracts: ${undeclaredContracts.sort().join(', ')}")
 	}
-		["mixinExtrasVersion", "mixinExtrasFabricLoaderMinimum", "fabricAsmVersion", "fabricMixinVersion"].each { field ->
+		["mixinExtrasVersion", "mixinExtrasClassifier", "mixinExtrasFabricLoaderMinimum", "fabricAsmVersion", "fabricMixinVersion"].each { field ->
 			if (registry[field] == null) {
 				throw new GradleException("PackForge target registry is missing '${field}'.")
 			}
+		}
+		if (!(registry.mixinExtrasClassifier.toString() ==~ /[A-Za-z0-9._-]+/)) {
+			throw new GradleException("PackForge target registry has an invalid MixinExtras classifier '${registry.mixinExtrasClassifier}'.")
 		}
 		targets.each { target ->
 			["key", "id", "taskSuffix", "minecraftAnchor", "minecraftRange", "minecraftVersion", "artifactMinecraft", "sourceFamily", "artifactFamily", "javaVersion", "mixinCompatibility", "mappingMode", "packFormatRange", "loaderAvailability", "loaderBuildVersions", "maturity", "supportGuarantee", "requiredExactSmokeVersions", "artifactMetadataRange", "quickPack", "compatibilityProfiles", "apiAdapter", "legacyApi", "packMetadata", "mixinConfigs", "capabilities", "platforms"].each { field ->
@@ -2242,6 +2255,13 @@ tasks.register("verifyExistingArtifacts") {
 			throw new GradleException("Expected exactly ${expectedArtifactNames.size()} current release artifacts; missing=${missing}, stale=${stale}.")
 		}
 	}
+}
+
+tasks.register("inspectArtifactSizes", Exec) {
+	group = "verification"
+	description = "Reports final PackForge JAR sizes, class/resource totals, largest entries, nested JARs, and duplicate ZIP entries without rebuilding."
+	def artifactSizeDirectory = findProperty("packforge_artifact_size_dir") ?: layout.buildDirectory.dir("libs").get().asFile
+	commandLine "python", "scripts/Inspect-PackForge-Artifacts.py", "--artifacts-dir", artifactSizeDirectory
 }
 
 tasks.register("verifyReleaseManifest", Exec) {

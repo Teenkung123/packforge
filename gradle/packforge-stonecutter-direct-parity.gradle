@@ -57,6 +57,34 @@ def hashStream = { InputStream input ->
 	}
 	java.util.HexFormat.of().formatHex(digest.digest())
 }
+def hashBytes = { byte[] bytes ->
+	def digest = java.security.MessageDigest.getInstance('SHA-256')
+	digest.update(bytes)
+	java.util.HexFormat.of().formatHex(digest.digest())
+}
+def normalizedClassHash = { InputStream input ->
+	// Direct Stonecutter preprocessing and the legacy wrapper can preserve
+	// different source line tables while compiling identical class behavior.
+	// Normalize only JVM debug metadata; annotations, fields, methods, and code
+	// remain part of the parity comparison.
+	// Resolve ASM reflectively because Gradle's embedded ASM is not exposed to
+	// Groovy script compilation as a source-level dependency.
+	def asmJar = new File(gradle.gradleHomeDir, 'lib').listFiles()?.find { file ->
+		file.name.startsWith('asm-') && file.name.endsWith('.jar') && !file.name.startsWith('asm-commons-')
+	}
+	if (asmJar == null) {
+		throw new GradleException('Gradle embedded ASM is required for semantic Stonecutter parity normalization.')
+	}
+	def asmLoader = new java.net.URLClassLoader([asmJar.toURI().toURL()] as URL[], this.class.classLoader)
+	def classReaderType = Class.forName('org.objectweb.asm.ClassReader', true, asmLoader)
+	def classWriterType = Class.forName('org.objectweb.asm.ClassWriter', true, asmLoader)
+	def classVisitorType = Class.forName('org.objectweb.asm.ClassVisitor', true, asmLoader)
+	def reader = classReaderType.getConstructor(InputStream).newInstance(input)
+	def writer = classWriterType.getConstructor(Integer.TYPE).newInstance(Integer.valueOf(0))
+	def skipDebug = classReaderType.getField('SKIP_DEBUG').getInt(null)
+	classReaderType.getMethod('accept', classVisitorType, Integer.TYPE).invoke(reader, writer, Integer.valueOf(skipDebug))
+	hashBytes(classWriterType.getMethod('toByteArray').invoke(writer) as byte[])
+}
 def expectedStonecutterManifestAttributes = [
 	'Stonecutter-Plugin-Version': '0.9.7',
 	'Stonecutter-Gradle-Version': gradle.gradleVersion,
@@ -95,6 +123,8 @@ def inspectArtifact = { File artifact, boolean directManifest ->
 				hashes.add('<directory>')
 			} else if (entry.name == 'META-INF/MANIFEST.MF') {
 				hashes.add(zip.getInputStream(entry).withCloseable { input -> normalizedManifestHash(input, directManifest) })
+			} else if (entry.name.endsWith('.class')) {
+				hashes.add(zip.getInputStream(entry).withCloseable(normalizedClassHash))
 			} else {
 				hashes.add(zip.getInputStream(entry).withCloseable(hashStream))
 			}
