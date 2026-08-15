@@ -485,3 +485,13 @@
 - Verification: `python scripts/Generate-CompatibilityFixtures.py --self-test` and aggregate `validateImplementationContracts` passed.
 - Limits: this changes deterministic inputs only. No production Java, Minecraft launch, dependency download, final-JAR runtime, profile, 62-cell matrix, cancellation, or release verification was run.
 - Rollback: revert later documentation dependants first, then `git revert c610fc1`.
+
+## Phase K — ten-reload lifecycle gate
+
+- Date: 2026-08-15
+- Commit SHA: `55b5ac4815d4d90f6092f2a22f36af43b4ebbbbe`; parent `6a04e3fbc65fb265c599f0a66a9890997f03a734`
+- Status: `PHASE_K_PARTIAL`.
+- Scope: require ten reloads in the exact matrix, set all three production-smoke defaults to ten, and protect the contract with focused static/self-test assertions.
+- Verification: parse, runtime-resource-hash, resume-evidence, profile-transport, and aggregate implementation-contract checks passed.
+- Limits: this is harness enforcement only. No final JAR, client launch, repeated-reload runtime, cancellation, profile, matrix, or release evidence was produced.
+- Rollback: revert later documentation dependants first, then `git revert 55b5ac4`.

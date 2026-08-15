@@ -740,3 +740,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: `python scripts/Generate-CompatibilityFixtures.py --self-test` passed; aggregate `validateImplementationContracts --offline --no-daemon --console=plain --stacktrace` passed (five actionable tasks).
 - Limits: no production Java, Minecraft launch, dependency download, final-artifact runtime, 62-cell matrix, cancellation, profile, or release verification was run; the marker proves input shape only, not a runtime hash.
 - Rollback: revert later documentation dependants first, then `git revert c610fc1`; the prior fixture catalog remains deterministic but most families no longer satisfy the positive-entry runtime-hash precondition.
+
+## Phase K — ten-reload lifecycle gate
+
+- Date: 2026-08-15
+- Commit SHA: `55b5ac4815d4d90f6092f2a22f36af43b4ebbbbe`; parent `6a04e3fbc65fb265c599f0a66a9890997f03a734`
+- Status: `PHASE_K_PARTIAL`.
+- Scope: make the exact production matrix require ten reloads per cell, align Fabric/Forge/NeoForge production-smoke defaults to ten, and extend the focused hash-contract self-test to protect the default.
+- Verification: PowerShell parse checks, runtime-resource-hash self-test, exact-matrix resume self-test with 21 invalid mutations, three-loader profile transport self-test, and aggregate `validateImplementationContracts` passed.
+- Limits: no production Java, Minecraft launch, dependency download, final-artifact runtime, 62-cell matrix, cancellation, profile, or release verification was run; the gate enforces the planned count but does not prove reload stability.
+- Rollback: revert later documentation dependants first, then `git revert 55b5ac4`; prior matrix logic remains available with the earlier two-reload default.
