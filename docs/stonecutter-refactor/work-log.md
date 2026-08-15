@@ -495,3 +495,13 @@
 - Verification: parse, runtime-resource-hash, resume-evidence, profile-transport, and aggregate implementation-contract checks passed.
 - Limits: this is harness enforcement only. No final JAR, client launch, repeated-reload runtime, cancellation, profile, matrix, or release evidence was produced.
 - Rollback: revert later documentation dependants first, then `git revert 55b5ac4`.
+
+## A/E/F/I/K/L — implemented-unverified structural continuation
+
+- Date: 2026-08-15
+- Implementation commits: `abdf2fe` (direct Stonecutter/parity split and Phase F ledger), `f5a76d7` (Phase I dispositions and Phase K fixture/scenario/release-manifest evidence binding).
+- Status: `IMPLEMENTED_UNVERIFIED` for A, E, F, I, K, and L; overall branch remains `PARTIAL_NOT_RELEASE_READY`.
+- Scope: make the direct Stonecutter leaf always-on while isolating legacy wrapper parity behind explicit opt-in; record the Phase F added-LOC ledger and executable status validator; mark eight exact-loader profiles unavailable with dated public-source evidence; validate fixture entry/required/duplicate/scenario contracts and release-manifest identity before exact runtime; reconcile current evidence documents and counts.
+- Verification: consolidated PowerShell parse/self-tests, direct-contract self-test (53 cells, 106 rejected mutations), compatibility catalog self-test (36 profiles), runtime-resource-hash self-test, exact-matrix resume self-test (22 rejected mutations), profile transport self-test, deterministic fixture self-test, release-manifest self-test, `git diff --check`, and offline Gradle `validateTargetRegistry validateImplementationContracts validateStonecutterDirectContract reportSourceMetrics validatePhaseFSourceReduction` passed. The Phase F metric result is explicitly `FAIL` with a 759-LOC shortfall and 75% platform-branch reduction; the validator reports this as expected `IMPLEMENTED_UNVERIFIED` state.
+- Limits: no clean/full build, all-53 package parity, current 20-JAR manifest, final-JAR runtime, 62-cell matrix, compatibility launch, benchmark, cancellation execution, or release publication was run. Existing `build/libs` remains stale/incomplete and no current release manifest exists.
+- Rollback: revert later documentation dependants first, then `git revert f5a76d7` for Phase I/K harness changes; revert `abdf2fe` afterward to restore the prior direct/parity and source-ledger state.

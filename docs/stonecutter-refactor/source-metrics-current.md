@@ -14,6 +14,14 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 | Normalized version duplicate groups | 0 |
 | Platform `target.key` references | 18 |
 | Target-key/version conditional lines | 15 |
+| Platform target conditional lines | 1 |
+| Phase F raw reduction | 262 LOC (1.56%) |
+| Phase F mandatory added LOC ledger | 2,347 |
+| Phase F ledger-adjusted reduction | 2,609 LOC (15.50%) |
+| Phase F required reduction | 3,368 LOC (20%) |
+| Phase F remaining shortfall | 759 LOC |
+| Phase F metric gate | FAIL |
+| Phase F status | IMPLEMENTED_UNVERIFIED |
 | Configuration renderer bodies | 3 |
 | Configuration renderer adapters | 2 |
 | Exact release cells | 22 |
@@ -21,6 +29,36 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 | Registered build targets | 19 |
 | Publication artifacts | 20 |
 | Quick Pack implementation references | 0 |
+
+## Phase F source-reduction ledger
+
+| Ledger field | Value |
+|---|---:|
+| Baseline commit | 609270f533666e7636d11f7d16590be925ec836f |
+| Baseline production files | 212 |
+| Baseline production nonblank LOC | 16,837 |
+| Baseline normalized duplicate groups | 20 |
+| Baseline normalized surplus LOC | 2,375 |
+| Mandatory added LOC | 2,347 |
+| Required reduction | 3,368 LOC (20%) |
+| Ledger-adjusted reduction | 2,609 LOC (15.50%) |
+| Remaining shortfall | 759 LOC |
+| Platform branch baseline | 4 conditional lines |
+| Platform branch reduction | 1 remaining (75.00%) |
+| Gate result | FAIL |
+| Phase F status | IMPLEMENTED_UNVERIFIED |
+
+The added-LOC ledger counts nonblank production-Java additions from the committed baseline tree, excluding exact-content renames/copies, tests, generated sources, build output, documentation, and resources. Gross historical insertions are not used: the current-tree ledger is 2,347 LOC.
+
+| Production root | Mandatory added LOC |
+|---|---:|
+| common | 1,051 |
+| fabric | 146 |
+| platform | 256 |
+| versions | 894 |
+| Total | 2,347 |
+
+Gate detail: normalized duplicate reduction PASS (0 of 20 groups remain), no byte-identical production group PASS, version-common LOC remains below neutral-common LOC PASS, platform target-conditional reduction FAIL (75% versus the required 80%), and the ledger-adjusted 20% shrink gate FAIL (759 LOC short). The report task records these results; validatePhaseFSourceReduction validates the ledger/status and reports the expected cleanup-gate failure without mislabeling this implementation as complete.
 
 ## Source layers
 

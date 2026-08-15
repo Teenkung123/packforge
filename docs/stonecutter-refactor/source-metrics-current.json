@@ -43,6 +43,40 @@
             }
         }
     },
+    "sourceReduction": {
+        "baselineCommit": "609270f533666e7636d11f7d16590be925ec836f",
+        "baselineProductionFiles": 212,
+        "baselineProductionLoc": 16837,
+        "baselineNormalizedGroups": 20,
+        "baselineNormalizedSurplusLoc": 2375,
+        "mandatoryAddedLoc": 2347,
+        "mandatoryAddedLocByRoot": {
+            "common": 1051,
+            "fabric": 146,
+            "platform": 256,
+            "versions": 894
+        },
+        "addedLocBasis": "Nonblank production-Java additions from the committed baseline tree, with exact-content renames/copies excluded; tests, generated sources, build output, documentation, and resources are excluded.",
+        "rawReductionLoc": 262,
+        "rawReductionPercent": 1.56,
+        "requiredReductionPercent": 20,
+        "requiredReductionLoc": 3368,
+        "ledgerAdjustedReductionLoc": 2609,
+        "ledgerAdjustedReductionPercent": 15.50,
+        "remainingShortfallLoc": 759,
+        "platformBranchBaseline": 4,
+        "platformTargetConditionalLines": 1,
+        "platformBranchReductionPercent": 75.00,
+        "gates": {
+            "normalizedDuplicateReduction": "PASS",
+            "noByteIdenticalTriples": "PASS",
+            "versionLocalBelowShared": "PASS",
+            "platformBranchReduction": "FAIL",
+            "adjustedShrink": "FAIL",
+            "allMetrics": "FAIL"
+        },
+        "status": "IMPLEMENTED_UNVERIFIED"
+    },
     "duplicates": {
         "exactGroups": [
         ],
@@ -59,7 +93,8 @@
         "platformTargetKeyReferences": 18,
         "targetVersionReferences": 15,
         "targetKeyLiteralReferences": 103,
-        "targetConditionalLines": 15
+        "targetConditionalLines": 15,
+        "platformTargetConditionalLines": 1
     },
     "configuration": {
         "rendererBodyCount": 3,

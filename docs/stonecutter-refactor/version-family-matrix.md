@@ -1,6 +1,6 @@
 # Version-family matrix
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Required exact release ledger
 
@@ -40,8 +40,8 @@ Seven publication anchors resolve to 20 expected loader artifacts. Twelve source
 - Registry-derived settings create 19 registry build targets (direct source nodes) and 53 loader distributions from 12 source families.
 - All 53 loader leaves are authoritative direct cells; public aggregate graph is direct-only.
 - `validateStonecutterDirectContract` enforces direct-node ownership and rejects delegated public leaves.
-- Nested Gradle remains a temporary parity rollback oracle.
-- Native Stonecutter preprocessing is proven only for Fabric archive capture across 16 targets. Full all-53 build/structural/package parity, Java 17/21/25 proof, remap/refmap/JarJar proof, and general cross-loader preprocessing are not complete.
+- The always-on direct helper owns the public Stonecutter leaves; the legacy nested Gradle path remains only as an explicit opt-in parity rollback oracle.
+- Native Stonecutter preprocessing is proven only for the bounded Fabric seams recorded in the current audit. Full all-53 build/structural/package parity, Java 17/21/25 proof, remap/refmap/JarJar proof, and general cross-loader preprocessing are not complete.
 
 No intermediate release is inferred from metadata alone. A publication range becomes current-proven only when one current loader JAR passes every exact release it claims.
 
