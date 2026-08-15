@@ -498,6 +498,22 @@ def verifyArtifact = { target, platform, File artifact ->
 		if (!nestedMixinExtrasName.toLowerCase(Locale.ROOT).endsWith("-slim.jar")) {
 			throw new GradleException("${artifact.name} contains a non-slim MixinExtras artifact '${nestedMixinExtrasName}'.")
 		}
+		def directlyShadedMixinExtras = names.findAll { path ->
+			path.startsWith("com/llamalad7/mixinextras/") && path.endsWith(".class")
+		}
+		if (!directlyShadedMixinExtras.isEmpty()) {
+			throw new GradleException("${artifact.name} directly shades MixinExtras classes instead of using the single nested slim artifact: ${directlyShadedMixinExtras.take(3).join(', ')}.")
+		}
+		def renamedNestedMixinExtras = nestedJarEntries.findAll { entry -> entry.name != nestedMixinExtrasName }.findAll { entry ->
+			def candidateEntries = archive.getInputStream(entry).withCloseable { input -> readNestedZipEntries(input.readAllBytes()) }
+			candidateEntries.any { nestedEntry ->
+				nestedEntry.name.startsWith("com/llamalad7/mixinextras/")
+					|| nestedEntry.name.toLowerCase(Locale.ROOT).contains("mixinextras")
+			}
+		}
+		if (!renamedNestedMixinExtras.isEmpty()) {
+			throw new GradleException("${artifact.name} contains additional nested MixinExtras content outside '${nestedMixinExtrasName}': ${renamedNestedMixinExtras.collect { it.name }}.")
+		}
 
 		def requiredMixinExtrasClasses = [
 			"com/llamalad7/mixinextras/MixinExtrasBootstrap.class",
