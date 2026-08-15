@@ -154,6 +154,7 @@ $CanonicalFabricNativeRuntimeResourceHashTargets = @(
 )
 $CanonicalFabricNonNativeRuntimeResourceHashTargets = @('mc1_21_11', 'mc26_1_to_26_2')
 $CanonicalFabricNativeSimpleReloadTargets = @(
+    'mc1_21_5',
     'mc1_21_6',
     'mc1_21_7',
     'mc1_21_8'
@@ -170,7 +171,6 @@ $CanonicalFabricNonNativeSimpleReloadTargets = @(
     'mc1_21_2',
     'mc1_21_3',
     'mc1_21_4',
-    'mc1_21_5',
     'mc1_21_9',
     'mc1_21_10',
     'mc1_21_11',
@@ -464,21 +464,24 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-SameSet @($runtimeResourceHashRoute.targets) $CanonicalFabricNativeRuntimeResourceHashTargets 'registry pre-1.21.11 runtime-resource-hash route targets'
     $nativeSimpleReloadTargets = @($Registry.targets | Where-Object { $_.key -cin $CanonicalFabricNativeSimpleReloadTargets })
     Assert-SameSet @($nativeSimpleReloadTargets.key) $CanonicalFabricNativeSimpleReloadTargets 'registry native SimpleReload target keys'
-    $nativeSimpleReloadIntersection = @($Registry.targets | Where-Object {
-        ($null -ne $_.platforms.PSObject.Properties['fabric']) -and
-        ($_.apiAdapter -ceq 'mc1_21_8') -and
-        ($_.sourcePolicy -ceq 'shared-1.21.6-1.21.8')
-    })
-    Assert-SameSet @($nativeSimpleReloadIntersection.key) $CanonicalFabricNativeSimpleReloadTargets 'registry native SimpleReload adapter/policy intersection'
-    foreach ($target in $nativeSimpleReloadTargets) {
-        if (($target.sourcePolicy -cne 'shared-1.21.6-1.21.8') -or
-            ($target.apiAdapter -cne 'mc1_21_8') -or
-            ($target.mixinConfigs.main -cne 'packforge.fabric.mixins.json')) {
-            Fail "registry native SimpleReload target '$($target.key)' source policy/adapter/descriptor drifted."
+    $nativeSimpleReloadContracts = @{
+        mc1_21_5 = @('bridge-1.21.5', 'mc1_21_4', 'packforge.mc1_21_5.mixins.json')
+        mc1_21_6 = @('shared-1.21.6-1.21.8', 'mc1_21_8', 'packforge.fabric.mixins.json')
+        mc1_21_7 = @('shared-1.21.6-1.21.8', 'mc1_21_8', 'packforge.fabric.mixins.json')
+        mc1_21_8 = @('shared-1.21.6-1.21.8', 'mc1_21_8', 'packforge.fabric.mixins.json')
+    }
+    Assert-SameSet @($nativeSimpleReloadContracts.Keys) $CanonicalFabricNativeSimpleReloadTargets 'registry native SimpleReload contract keys'
+    foreach ($targetKey in $nativeSimpleReloadContracts.Keys) {
+        $target = @($nativeSimpleReloadTargets | Where-Object { $_.key -ceq $targetKey })
+        if ($target.Count -ne 1) { Fail "registry native SimpleReload target '$targetKey' must exist exactly once." }
+        $expected = $nativeSimpleReloadContracts[$targetKey]
+        if (($target[0].sourcePolicy -cne $expected[0]) -or
+            ($target[0].apiAdapter -cne $expected[1]) -or
+            ($target[0].mixinConfigs.main -cne $expected[2])) {
+            Fail "registry native SimpleReload target '$targetKey' source policy/adapter/descriptor drifted."
         }
     }
     $simpleReloadSeamContracts = @{
-        mc1_21_5 = @('bridge-1.21.5', 'mc1_21_4', 'packforge.mc1_21_5.mixins.json')
         mc1_21_9 = @('bridge-1.21.9-1.21.10', 'mc1_21_8', 'packforge.mc1_21_9_10.mixins.json')
         mc1_21_10 = @('bridge-1.21.9-1.21.10', 'mc1_21_8', 'packforge.mc1_21_9_10.mixins.json')
         mc1_21_11 = @('base', 'mc1_21_11', 'packforge.fabric.mixins.json')
@@ -784,7 +787,7 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     $nativeSimpleReload = $Sources.FabricNativeSimpleReload
     $resourceManagerStateFactoryDescriptor = 'Lnet/minecraft/server/packs/resources/SimpleReloadInstance$StateFactory;create(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/server/packs/resources/PreparableReloadListener;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;'
     $sharedStateFactoryDescriptor = 'Lnet/minecraft/server/packs/resources/SimpleReloadInstance$StateFactory;create(Lnet/minecraft/server/packs/resources/PreparableReloadListener$SharedState;Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/PreparableReloadListener;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;'
-    Assert-ContainsOnce $nativeSimpleReload '//? if >=1.21.6 && <=1.21.8 {' 'Fabric native SimpleReload outer target guard'
+    Assert-ContainsOnce $nativeSimpleReload '//? if >=1.21.5 && <=1.21.8 {' 'Fabric native SimpleReload outer target guard'
     Assert-ContainsOnce $nativeSimpleReload '@WrapOperation(method = "prepareTasks"' 'Fabric native SimpleReload prepareTasks hook'
     Assert-ContainsOnce $nativeSimpleReload $resourceManagerStateFactoryDescriptor 'Fabric native SimpleReload ResourceManager StateFactory descriptor'
     Assert-ContainsOnce $nativeSimpleReload 'return original.call(factory, barrier, manager, listener, prepare, apply);' 'Fabric native SimpleReload vanilla fallback'
@@ -963,20 +966,21 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
         $nativeTransport.Contains('versions/mc26/common/src/main/java/com/teenkung/packforge/loader/RuntimeResourceHash.java')) {
         Fail 'Fabric native transport must preserve physical 1.21.11 and mc26 runtime-resource-hash sources.'
     }
-    Assert-ContainsOnce $nativeTransport 'def legacySimpleReloadSource = stonecutterDirectNode' 'Fabric legacy SimpleReload source identity'
+    Assert-ContainsOnce $nativeTransport 'def legacySimpleReloadSources = stonecutterDirectNode' 'Fabric legacy SimpleReload source identities'
+    Assert-ContainsOnce $nativeTransport 'versions/mc1_21_5/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java' 'Fabric legacy 1.21.5 SimpleReload source path'
     Assert-ContainsOnce $nativeTransport 'versions/mc1_21_8/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java' 'Fabric legacy 1.21.8 SimpleReload source path'
     Assert-ContainsOnce $nativeTransport 'def generatedSimpleReloadSource = stonecutterDirectNode' 'Fabric generated SimpleReload source identity'
     Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.file("main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java").get().asFile.canonicalFile' 'Fabric generated SimpleReload source path'
     Assert-ContainsOnce $nativeTransport 'def nativeSimpleReloadActive = false' 'Fabric native SimpleReload default state'
     foreach ($preservedPath in @(
         'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java',
-        'versions/mc1_21_5/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java',
         'versions/mc1_21_9/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java',
         'versions/mc1_21_11/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java',
         'versions/mc26/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java'
     )) {
         if ($nativeTransport.Contains($preservedPath)) { Fail "Fabric native transport must preserve physical SimpleReload seam '$preservedPath'." }
     }
+    Assert-ContainsOnce $nativeTransport 'legacyNativeSources.addAll(legacySimpleReloadSources)' 'Fabric exact SimpleReload exclusion-set merge'
     Assert-ContainsOnce $nativeTransport 'def legacyLoadingOverlayToastSources = stonecutterDirectNode' 'Fabric legacy loading-toast source identities'
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java' 'Fabric legacy common loading-toast source path'
     Assert-ContainsOnce $nativeTransport 'versions/shared/modern/src/client/java/com/teenkung/packforge/client/mixin/ui/LoadingOverlayToastMixin.java' 'Fabric legacy modern loading-toast source path'
@@ -993,14 +997,14 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric legacy archive exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/mc1_21_shared/common/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java' 'Fabric modern archive exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java' 'Fabric legacy SharedZip exclusion'
-    Assert-ContainsCount $nativeTransport 'new File(physicalRepositoryRoot, ' 11 'Fabric exact legacy native exclusions'
+    Assert-ContainsCount $nativeTransport 'new File(physicalRepositoryRoot, ' 12 'Fabric exact legacy native exclusions'
     Assert-ContainsOnce $nativeTransport 'versions/shared/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java' 'Fabric legacy shared bitmap-provider exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/mc1_21_11/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java' 'Fabric legacy 1.21.11 bitmap-provider exclusion'
     Assert-ContainsOnce $nativeTransport 'versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java' 'Fabric legacy mc26 bitmap-provider exclusion'
     Assert-ContainsOnce $nativeTransport 'nativeSharedZipActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySharedZipSource }' 'Fabric registry-selected SharedZip activation'
     Assert-ContainsOnce $nativeTransport 'nativeReloadManagerActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyReloadManagerSource }' 'Fabric registry-selected reload-manager activation'
     Assert-ContainsOnce $nativeTransport 'nativeRuntimeResourceHashActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyRuntimeResourceHashSource }' 'Fabric registry-selected runtime-resource-hash activation'
-    Assert-ContainsOnce $nativeTransport 'nativeSimpleReloadActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySimpleReloadSource }' 'Fabric registry-selected SimpleReload activation'
+    Assert-ContainsOnce $nativeTransport 'nativeSimpleReloadActive = selectedMainJavaSources.files.any { source -> source.canonicalFile in legacySimpleReloadSources }' 'Fabric registry-selected SimpleReload activation'
     Assert-ContainsOnce $nativeTransport 'selectedMainJavaSources.filter { source -> source.canonicalFile !in legacyNativeSources }' 'Fabric native source replacement'
     Assert-ContainsOnce $nativeTransport 'stonecutter.tasks.generatedSourcesDir.dir("main/java")' 'Fabric generated Java compile root'
     Assert-ContainsOnce $nativeTransport 'selectedClientJavaSources.filter { source -> source.canonicalFile !in legacyNativeClientSources }' 'Fabric native client source replacement'
@@ -1127,7 +1131,7 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-simple-reload-target-policy-drift' { param($r, $s) $target = @($r.targets | Where-Object { $_.key -ceq 'mc1_21_7' })[0]; $target.sourcePolicy = 'base' } $Registry $Sources
     Assert-MutationRejected 'native-simple-reload-seam-policy-drift' { param($r, $s) $target = @($r.targets | Where-Object { $_.key -ceq 'mc1_21_9' })[0]; $target.sourcePolicy = 'shared-1.21.6-1.21.8' } $Registry $Sources
     Assert-MutationRejected 'native-simple-reload-legacy-route-drift' { param($r, $s) $route = @($r.sharedJavaSources | Where-Object { $_.id -ceq 'simple-reload-through-1.21.4' })[0]; $route.targets = @($route.targets | Where-Object { $_ -cne 'mc1_21_4' }) } $Registry $Sources
-    Assert-MutationRejected 'native-simple-reload-lower-range-drift' { param($r, $s) $s.FabricNativeSimpleReload = $s.FabricNativeSimpleReload.Replace('>=1.21.6', '>=1.21.5') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-lower-range-drift' { param($r, $s) $s.FabricNativeSimpleReload = $s.FabricNativeSimpleReload.Replace('>=1.21.5', '>=1.21.6') } $Registry $Sources
     Assert-MutationRejected 'native-simple-reload-upper-range-missing' { param($r, $s) $s.FabricNativeSimpleReload = $s.FabricNativeSimpleReload.Replace(' && <=1.21.8', '') } $Registry $Sources
     Assert-MutationRejected 'native-simple-reload-behavior-drift' { param($r, $s) $s.FabricNativeSimpleReload = $s.FabricNativeSimpleReload.Replace('ReloadListenerTelemetry.observeListenerFuture', 'ReloadListenerTelemetry.missing') } $Registry $Sources
     Assert-MutationRejected 'native-simple-reload-retained-parity-drift' { param($r, $s) $s.Mc1218SimpleReload = $s.Mc1218SimpleReload.Replace('ReloadExecutionContext.current()', 'null') } $Registry $Sources
@@ -1170,8 +1174,9 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'native-runtime-resource-hash-activation-drift' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('nativeRuntimeResourceHashActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacyRuntimeResourceHashSource }', 'nativeRuntimeResourceHashActive = true') } $Registry $Sources
     Assert-MutationRejected 'native-runtime-resource-hash-inactive-generated-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('|| (!nativeRuntimeResourceHashActive && details.file.canonicalFile == generatedRuntimeResourceHashSource)', '') } $Registry $Sources
     Assert-MutationRejected 'native-simple-reload-legacy-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/mc1_21_8/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java', 'versions/mc1_21_8/common/src/main/java/com/teenkung/packforge/mixin/observe/Missing.java') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-1.21.5-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/mc1_21_5/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java', 'versions/mc1_21_5/common/src/main/java/com/teenkung/packforge/mixin/observe/Missing.java') } $Registry $Sources
     Assert-MutationRejected 'native-simple-reload-physical-exclusion-leak' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace("`tlegacyNativeSources = [", "`tlegacyNativeSources = [`n`t`tnew File(physicalRepositoryRoot, `"versions/mc1_21_9/common/src/main/java/com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin.java`"),") } $Registry $Sources
-    Assert-MutationRejected 'native-simple-reload-activation-drift' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('nativeSimpleReloadActive = selectedMainJavaSources.files.any { source -> source.canonicalFile == legacySimpleReloadSource }', 'nativeSimpleReloadActive = true') } $Registry $Sources
+    Assert-MutationRejected 'native-simple-reload-activation-drift' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('nativeSimpleReloadActive = selectedMainJavaSources.files.any { source -> source.canonicalFile in legacySimpleReloadSources }', 'nativeSimpleReloadActive = true') } $Registry $Sources
     Assert-MutationRejected 'native-simple-reload-inactive-generated-filter-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('|| (!nativeSimpleReloadActive && details.file.canonicalFile == generatedSimpleReloadSource)', '') } $Registry $Sources
     Assert-MutationRejected 'native-bitmap-client-exclusion-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/BitmapProviderDefinitionMixin.java', 'versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/font/Missing.java') } $Registry $Sources
     Assert-MutationRejected 'native-bitmap-generated-client-root-missing' { param($r, $s) $s['Loader:fabric'] = $s['Loader:fabric'].Replace('stonecutter.tasks.generatedSourcesDir.dir("client/java")', 'files()') } $Registry $Sources
