@@ -3,6 +3,7 @@ import groovy.json.JsonSlurper
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 import java.security.MessageDigest
+import java.util.zip.ZipInputStream
 import java.util.zip.ZipFile
 
 abstract class PackForgeNeoForgeBuildGate implements BuildService<BuildServiceParameters.None>, AutoCloseable {
@@ -231,6 +232,36 @@ def readZipBytes = { ZipFile archive, String path ->
 	archive.getInputStream(entry).withCloseable { input -> input.readAllBytes() }
 }
 
+def readNestedZipEntries = { byte[] bytes ->
+	def entries = []
+	new ZipInputStream(new java.io.ByteArrayInputStream(bytes)).withCloseable { input ->
+		java.util.zip.ZipEntry entry
+		while ((entry = input.getNextEntry()) != null) {
+			def entryBytes = entry.isDirectory() ? new byte[0] : input.readAllBytes()
+			entries << [name: entry.name, bytes: entryBytes]
+		}
+	}
+	entries
+}
+
+def readPngDimensions = { byte[] bytes, String description ->
+	def signature = [137, 80, 78, 71, 13, 10, 26, 10]
+	if (bytes.length < 24 || !(0..<signature.size()).every { index -> Byte.toUnsignedInt(bytes[index]) == signature[index] }) {
+		throw new GradleException("${description} is not a valid PNG.")
+	}
+	def chunkType = new String(bytes, 12, 4, java.nio.charset.StandardCharsets.US_ASCII)
+	if (chunkType != "IHDR") {
+		throw new GradleException("${description} does not begin with a PNG IHDR chunk.")
+	}
+	def readUnsignedInt = { int offset ->
+		((Byte.toUnsignedInt(bytes[offset]) << 24)
+			| (Byte.toUnsignedInt(bytes[offset + 1]) << 16)
+			| (Byte.toUnsignedInt(bytes[offset + 2]) << 8)
+			| Byte.toUnsignedInt(bytes[offset + 3]))
+	}
+	[width: readUnsignedInt(16), height: readUnsignedInt(20)]
+}
+
 def inspectWrapOperationTargets = { byte[] classBytes ->
 	// Read only the annotation structures needed here, without depending on
 	// Gradle's internal ASM classpath.
@@ -429,17 +460,94 @@ def verifyArtifact = { target, platform, File artifact ->
 			"com/teenkung/packforge/client/config/PackForgeConfigScreen.class",
 			"com/teenkung/packforge/client/mixin/config/PackSelectionScreenMixin.class",
 			"assets/packforge/lang/en_us.json",
-			"assets/packforge/textures/gui/sprites/config_cog.png"
+			"assets/packforge/textures/gui/sprites/config_cog.png",
+			"assets/packforge/icon.png"
 		].each { requiredPath ->
 			if (!names.contains(requiredPath)) {
 				throw new GradleException("${artifact.name} is missing configuration-menu entry '${requiredPath}'.")
 			}
 		}
 
-		def expectedMixinExtras = "mixinextras-${platform.id}-${registry.mixinExtrasVersion}-${registry.mixinExtrasClassifier}.jar"
-		def nestedMixinExtras = names.find { it.endsWith("/${expectedMixinExtras}") }
-		if (nestedMixinExtras == null) {
-			throw new GradleException("${artifact.name} does not embed pinned MixinExtras ${registry.mixinExtrasVersion}.")
+		def iconBytes = readZipBytes(archive, "assets/packforge/icon.png")
+		if (iconBytes.length > 32 * 1024) {
+			throw new GradleException("${artifact.name} icon.png is ${iconBytes.length} bytes; the release limit is 32 KiB.")
+		}
+		def iconDimensions = readPngDimensions(iconBytes, "${artifact.name} assets/packforge/icon.png")
+		if (iconDimensions.width != 128 || iconDimensions.height != 128) {
+			throw new GradleException("${artifact.name} icon.png is ${iconDimensions.width}x${iconDimensions.height}; expected 128x128.")
+		}
+
+		if (registry.mixinExtrasClassifier.toString() != "slim") {
+			throw new GradleException("PackForge release verification requires the MixinExtras slim classifier, but the registry requests '${registry.mixinExtrasClassifier}'.")
+		}
+		def expectedMixinExtras = "mixinextras-${platform.id}-${registry.mixinExtrasVersion}-slim.jar"
+		def nestedJarEntries = archive.entries().toList().findAll { entry ->
+			!entry.isDirectory() && entry.name.toLowerCase(Locale.ROOT).endsWith(".jar")
+		}
+		def nestedMixinExtrasEntries = nestedJarEntries.findAll { entry ->
+			entry.name.toLowerCase(Locale.ROOT).contains("mixinextras")
+		}
+		if (nestedMixinExtrasEntries.size() != 1) {
+			throw new GradleException("${artifact.name} must contain exactly one top-level MixinExtras artifact; found ${nestedMixinExtrasEntries.collect { it.name }}.")
+		}
+		def nestedMixinExtrasEntry = nestedMixinExtrasEntries[0]
+		def nestedMixinExtrasName = nestedMixinExtrasEntry.name
+		if (!nestedMixinExtrasName.endsWith("/${expectedMixinExtras}")) {
+			throw new GradleException("${artifact.name} embeds '${nestedMixinExtrasName}', expected exactly '${expectedMixinExtras}' for ${platform.id}.")
+		}
+		if (!nestedMixinExtrasName.toLowerCase(Locale.ROOT).endsWith("-slim.jar")) {
+			throw new GradleException("${artifact.name} contains a non-slim MixinExtras artifact '${nestedMixinExtrasName}'.")
+		}
+
+		def requiredMixinExtrasClasses = [
+			"com/llamalad7/mixinextras/MixinExtrasBootstrap.class",
+			"com/llamalad7/mixinextras/injector/wrapoperation/WrapOperation.class",
+			"com/llamalad7/mixinextras/injector/ModifyExpressionValue.class"
+		]
+		def nestedMixinExtrasBytes = archive.getInputStream(nestedMixinExtrasEntry).withCloseable { input -> input.readAllBytes() }
+		def nestedMixinExtrasEntriesByName = readNestedZipEntries(nestedMixinExtrasBytes)
+		def nestedMixinExtrasNames = nestedMixinExtrasEntriesByName.collect { it.name }
+		def nestedMixinExtrasDuplicates = nestedMixinExtrasNames.countBy { it }.findAll { name, count -> count > 1 }.keySet()
+		if (!nestedMixinExtrasDuplicates.isEmpty()) {
+			throw new GradleException("${artifact.name} MixinExtras artifact '${nestedMixinExtrasName}' contains duplicate entries: ${nestedMixinExtrasDuplicates.sort().join(', ')}")
+		}
+
+		if (platform.id == "forge") {
+			["META-INF/jarjar/metadata.json", "mixinextras.init.mixins.json", "com/llamalad7/mixinextras/platform/forge/MixinExtrasConfigPlugin.class"].each { requiredPath ->
+				if (!nestedMixinExtrasNames.contains(requiredPath)) {
+					throw new GradleException("${artifact.name} Forge MixinExtras slim wrapper is missing '${requiredPath}'.")
+				}
+			}
+			def expectedCommonRuntime = "META-INF/jars/MixinExtras-${registry.mixinExtrasVersion}.jar"
+			def commonRuntimeEntries = nestedMixinExtrasEntriesByName.findAll { entry -> entry.name.toLowerCase(Locale.ROOT).endsWith(".jar") }
+			if (commonRuntimeEntries.size() != 1 || commonRuntimeEntries[0].name != expectedCommonRuntime) {
+				throw new GradleException("${artifact.name} Forge MixinExtras slim wrapper must contain only '${expectedCommonRuntime}', found ${commonRuntimeEntries.collect { it.name }}.")
+			}
+			def metadataBytes = nestedMixinExtrasEntriesByName.find { it.name == "META-INF/jarjar/metadata.json" }.bytes
+			def metadata = new JsonSlurper().parseText(new String(metadataBytes, java.nio.charset.StandardCharsets.UTF_8))
+			def metadataJars = metadata.jars ?: []
+			if (metadataJars.size() != 1
+				|| metadataJars[0].path?.toString() != expectedCommonRuntime
+				|| metadataJars[0].version?.artifactVersion?.toString() != registry.mixinExtrasVersion.toString()) {
+				throw new GradleException("${artifact.name} Forge MixinExtras metadata does not pin the expected ${expectedCommonRuntime} common runtime.")
+			}
+			def commonRuntimeBytes = commonRuntimeEntries[0].bytes
+			def commonRuntimeNames = readNestedZipEntries(commonRuntimeBytes).collect { it.name }
+			def missingCommonRuntimeClasses = requiredMixinExtrasClasses.findAll { !commonRuntimeNames.contains(it) }
+			if (!missingCommonRuntimeClasses.isEmpty()) {
+				throw new GradleException("${artifact.name} Forge MixinExtras common runtime is missing required classes: ${missingCommonRuntimeClasses.join(', ')}.")
+			}
+		} else {
+			def unexpectedNestedRuntimeJars = nestedMixinExtrasEntriesByName.findAll { entry ->
+				entry.name.toLowerCase(Locale.ROOT).endsWith(".jar")
+			}
+			if (!unexpectedNestedRuntimeJars.isEmpty()) {
+				throw new GradleException("${artifact.name} ${platform.id} slim MixinExtras artifact unexpectedly nests additional runtime jars: ${unexpectedNestedRuntimeJars.collect { it.name }}.")
+			}
+			def missingMixinExtrasClasses = requiredMixinExtrasClasses.findAll { !nestedMixinExtrasNames.contains(it) }
+			if (!missingMixinExtrasClasses.isEmpty()) {
+				throw new GradleException("${artifact.name} ${platform.id} slim MixinExtras artifact is missing required classes: ${missingMixinExtrasClasses.join(', ')}.")
+			}
 		}
 
 		def packMetadata = new JsonSlurper().parseText(readZipText(archive, "pack.mcmeta")).pack

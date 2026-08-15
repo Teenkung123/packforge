@@ -5,8 +5,13 @@ from __future__ import annotations
 
 import argparse
 import pathlib
+import struct
 import sys
 import zipfile
+
+
+ICON_PATH = "assets/packforge/icon.png"
+MAX_ICON_BYTES = 32 * 1024
 
 
 def inspect_artifact(path: pathlib.Path) -> bool:
@@ -16,6 +21,8 @@ def inspect_artifact(path: pathlib.Path) -> bool:
     duplicates: list[str] = []
     packforge_class_bytes = 0
     resource_bytes = 0
+    icon_bytes = None
+    icon_dimensions = None
 
     with zipfile.ZipFile(path) as archive:
         for info in archive.infolist():
@@ -37,19 +44,26 @@ def inspect_artifact(path: pathlib.Path) -> bool:
                 resource_bytes += size
             if nested_path:
                 nested.append((info.filename, size, compressed_size))
+            if info.filename == ICON_PATH:
+                icon_bytes = archive.read(info)
+                if len(icon_bytes) >= 24 and icon_bytes[:8] == b"\x89PNG\r\n\x1a\n" and icon_bytes[12:16] == b"IHDR":
+                    icon_dimensions = struct.unpack(">II", icon_bytes[16:24])
 
     largest = sorted(entries, key=lambda item: item[1], reverse=True)[:5]
     largest_text = ",".join(f"{name}:{size}" for name, size, _ in largest)
     nested_text = ",".join(f"{name}:{size}/{compressed}" for name, size, compressed in nested)
     duplicate_text = ",".join(sorted(set(duplicates))) if duplicates else "none"
+    icon_text = "missing" if icon_bytes is None else f"{len(icon_bytes)}:{icon_dimensions[0]}x{icon_dimensions[1]}" if icon_dimensions else f"{len(icon_bytes)}:invalid"
     print(
         f"artifactSize name={path.name} bytes={path.stat().st_size} "
         f"packforgeClassBytes={packforge_class_bytes} resourceBytes={resource_bytes}"
     )
     print(f"artifactSize largest={largest_text}")
     print(f"artifactSize nested={nested_text}")
+    print(f"artifactSize icon={icon_text}")
     print(f"artifactSize duplicateZipEntries={duplicate_text}")
-    return not duplicates
+    icon_valid = icon_bytes is not None and len(icon_bytes) <= MAX_ICON_BYTES and icon_dimensions == (128, 128)
+    return not duplicates and icon_valid
 
 
 def main() -> int:
