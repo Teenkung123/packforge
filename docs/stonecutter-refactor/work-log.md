@@ -4,7 +4,7 @@
 
 - Date: 2026-08-15
 - Branch: `1.4`
-- Status: `FOCUSED_VERIFIED`; not a release checkpoint until the dedicated commit is recorded.
+- Status: `FOCUSED_VERIFIED`; dedicated checkpoint `bce7f76b113d3f9d5c05fc812832c4810f238419` (rollback by reverting this commit).
 - Changes: `mod_version=1.4`; registry classifier `slim` for MixinExtras 0.5.4 on Fabric, Forge, and NeoForge; script-backed `inspectArtifactSizes` task; current evidence reconciliation.
 - Structural commands: `buildAllSupported`, `verifyAllArtifacts`, generated/verified `build/libs/release/manifest.json`, and focused direct/parity builds for Fabric `mc1_21_1`, Forge `mc1_20_2`, and NeoForge `mc1_21_1` all PASS.
 - Runtime commands: one-reload Fabric/Forge/NeoForge production smokes all PASS with MixinExtras initialization, resolved-resource hash `5D6A4D61...B94C5F`, and clean exit; these are focused loader checks, not the ten-reload/62-cell acceptance matrix.
