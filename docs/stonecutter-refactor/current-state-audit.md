@@ -12,7 +12,7 @@ This addendum supersedes the older snapshot below for current source and artifac
 - Fabric Quick Pack profiles carry a profile-only Fabric Loader `0.17.3` override; no profile launch or download evidence is claimed.
 - Fresh representative `mc1_21_1` Fabric, Forge, and NeoForge final artifacts pass the structural verifier, including one exact `0.5.4:slim` loader artifact, recursive Forge common-runtime metadata/classes, required mixins/refmaps, and a 128x128 PNG icon of 10,607 bytes. `inspectArtifactSizes` reports the same nested-JAR and duplicate-entry details.
 - `verifyExistingArtifacts` across the stale root directory is intentionally not current proof: it fails on stale target-capability metadata in the remaining 17 old files. The three representative artifacts were rebuilt and verified; the full 20-artifact rebuild remains open.
-- The bounded PackIndex benchmark attempt timed out before producing samples; no end-to-end or comparative runtime benchmark result is claimed.
+- Direct Fabric PackIndex microbenchmark (`platform/fabric`, target `mc1_21_1`) now passes: 20,014 entries, 18.4206 ms index build, 80.299 ms baseline median, 0.2406 ms indexed median, 99.70% query improvement, and equal semantic hash `bf864f1dbb4a77bc7e15193856a33c392ee3a8f7114d8d764a9aa0c11face66d`. This is microbenchmark evidence only; no end-to-end or comparative Minecraft reload result is claimed.
 
 Audited every phase and completion gate in `PackForge_Missing_Implementation_Plan.md` against branch `1.4`, including the current 1.4/slim-MixinExtras build and focused loader evidence. Historical implementation checkpoints remain `abdf2fe`, `f5a76d7`, and documentation checkpoint `40275dd`. Overall state: **PARTIAL** and **NOT RELEASE READY**.
 

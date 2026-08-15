@@ -6,7 +6,7 @@
 - Branch/HEAD: `1.4` / `8aa6844` (parent `6591e79`)
 - Scope: recursive slim-MixinExtras verification, required runtime-class checks, 128x128 <=32KiB icon gate, and artifact-size icon reporting.
 - Validation: `validateTargetRegistry` PASS; representative Fabric/Forge/NeoForge `mc1_21_1` direct final builds PASS; `verifyTargetArtifacts` PASS for the three fresh artifacts; `inspectArtifactSizes` PASS with nested JAR/duplicate-entry/icon output; source-metrics checkpoint refreshed with Phase F shortfall 0.
-- Boundary: `verifyExistingArtifacts` correctly rejects the mixed root directory's 17 stale files; no all-20 current artifact set, manifest, runtime matrix, Quick Pack profile, or comparative benchmark PASS is claimed. The bounded PackIndex benchmark timed out before samples and its process tree was stopped.
+- Boundary: `verifyExistingArtifacts` correctly rejects the mixed root directory's 17 stale files; no all-20 current artifact set, manifest, runtime matrix, Quick Pack profile, or comparative Minecraft reload benchmark PASS is claimed. The direct Fabric PackIndex microbenchmark passed with 20,014 entries, 18.4206 ms index build, 80.299 ms baseline median, 0.2406 ms indexed median, 99.70% improvement, and equal hash `bf864f1dbb4a77bc7e15193856a33c392ee3a8f7114d8d764a9aa0c11face66d`.
 - Rollback: revert `6591e79` to remove only this verifier/report hardening; retain `014f71a` and earlier implementation checkpoints.
 
 ## Current 1.4 slim-MixinExtras validation (working tree)

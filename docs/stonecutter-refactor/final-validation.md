@@ -8,7 +8,7 @@ Current HEAD is `8aa6844` on branch `1.4`. The current source snapshot is 209 pr
 
 The artifact verifier now enforces one exact loader-specific MixinExtras `0.5.4:slim` outer artifact, rejects alternate top-level copies, recursively validates Forge's `MixinExtras-0.5.4.jar` metadata/classes, and enforces the 128x128, <=32KiB icon. Fresh representative Fabric/Forge/NeoForge final artifacts pass. The root directory is not a current all-20 proof because 17 old artifacts fail stale-capability metadata; no manifest/full-matrix claim is carried forward.
 
-The bounded current PackIndex benchmark attempt timed out before producing sample rows and was cleaned up without a result. Comparative reload, Quick Pack profile, same-binary range, ten-reload, cancellation, and 62-cell runtime evidence remain unexecuted.
+The direct Fabric PackIndex microbenchmark now passes for target `mc1_21_1`: 20,014 entries, 18.4206 ms index build, 80.299 ms baseline median, 0.2406 ms indexed median, 99.70% query improvement, and equal semantic hash `bf864f1dbb4a77bc7e15193856a33c392ee3a8f7114d8d764a9aa0c11face66d`. Comparative Minecraft reload, Quick Pack profile, same-binary range, ten-reload, cancellation, and 62-cell runtime evidence remain unexecuted.
 
 ## Outcome
 
