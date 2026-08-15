@@ -46,6 +46,12 @@ if (-not (Test-Path -LiteralPath $compatibilityConfigHelperPath -PathType Leaf))
 }
 . $compatibilityConfigHelperPath
 
+$runtimeResourceHashHelperPath = Join-Path $PSScriptRoot 'RuntimeResourceHashEvidence.ps1'
+if (-not (Test-Path -LiteralPath $runtimeResourceHashHelperPath -PathType Leaf)) {
+    throw "Runtime resource hash evidence helper is missing: $runtimeResourceHashHelperPath"
+}
+. $runtimeResourceHashHelperPath
+
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $registryPath = Join-Path $repositoryRoot 'gradle\minecraft-targets.json'
 $artifactsRoot = Join-Path $repositoryRoot 'build\libs'
@@ -805,6 +811,11 @@ function Get-ExactMatrixPassRecordError {
         return 'reload count does not match the current matrix evidence'
     }
 
+    $resolvedResourceSha256 = [string] (Get-RecordProperty -Record $Record -Name 'resolvedResourceSha256')
+    if ($resolvedResourceSha256 -notmatch '^[A-F0-9]{64}$') {
+        return 'resolvedResourceSha256 is not an uppercase SHA-256'
+    }
+
     $loaderDisplay = switch ([string] $ExpectedRow.Loader) {
         'fabric' { 'Fabric' }
         'forge' { 'Forge' }
@@ -815,9 +826,18 @@ function Get-ExactMatrixPassRecordError {
     if ([string]::IsNullOrWhiteSpace($passLine) -or $passLine -notmatch "^PASS $([regex]::Escape($loaderDisplay)) production smoke:") {
         return 'missing exact production PASS line'
     }
+    try {
+        $passResolvedResourceSha256 = Get-PackForgePassResolvedResourceSha256 -PassLine $passLine -Required
+    } catch {
+        return $_.Exception.Message
+    }
+    if ([string] $passResolvedResourceSha256 -cne $resolvedResourceSha256) {
+        return 'PASS line resolvedResourceSha256 does not match the result record'
+    }
     foreach ($token in @(
         "artifact=$([regex]::Escape([IO.Path]::GetFileName([string] $ExpectedRow.Artifact)))",
         "sha256=$([regex]::Escape([string] $ExpectedRow.ArtifactHash))",
+        "resolvedResourceSha256=$([regex]::Escape($resolvedResourceSha256))",
         "reloads=$ExpectedReloads",
         'cleanExit=true'
     )) {
@@ -928,7 +948,8 @@ function Invoke-ResumeEvidenceSelfTest {
             FixtureHash = ('B' * 64)
         }
         $fingerprint = 'C' * 64
-        $passLine = "PASS Fabric production smoke: artifact=$([IO.Path]::GetFileName($row.Artifact)) sha256=$($row.ArtifactHash) reloads=2 cleanExit=true controlledTermination=true provenance=$provenancePath"
+        $resolvedResourceSha256 = 'D' * 64
+        $passLine = "PASS Fabric production smoke: artifact=$([IO.Path]::GetFileName($row.Artifact)) sha256=$($row.ArtifactHash) resolvedResourceSha256=$resolvedResourceSha256 reloads=2 cleanExit=true controlledTermination=true provenance=$provenancePath"
         [IO.File]::WriteAllText($logPath, $passLine + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText($provenancePath, '{"schema":3}', [Text.UTF8Encoding]::new($false))
         $newRecord = {
@@ -942,6 +963,7 @@ function Invoke-ResumeEvidenceSelfTest {
                 artifact = [IO.Path]::GetFileName($row.Artifact)
                 artifactHash = $row.ArtifactHash
                 fixtureHash = $row.FixtureHash
+                resolvedResourceSha256 = $resolvedResourceSha256
                 reloads = 2
                 evidenceFingerprint = $fingerprint
                 cleanExit = $true
@@ -975,7 +997,11 @@ function Invoke-ResumeEvidenceSelfTest {
         & $assertRejected 'oversized-exit' { param($record) $record.exitCode = '999999999999999999999999999999' }
         & $assertRejected 'wrong-reload' { param($record) $record.reloads = 3 }
         & $assertRejected 'oversized-reload' { param($record) $record.reloads = '999999999999999999999999999999' }
-        & $assertRejected 'wrong-artifact-hash' { param($record) $record.artifactHash = 'D' * 64 }
+        & $assertRejected 'wrong-artifact-hash' { param($record) $record.artifactHash = 'E' * 64 }
+        & $assertRejected 'missing-resolved-resource-hash' { param($record) [void] $record.Remove('resolvedResourceSha256') }
+        & $assertRejected 'malformed-resolved-resource-hash' { param($record) $record.resolvedResourceSha256 = 'G' * 64 }
+        & $assertRejected 'mismatched-resolved-resource-hash' { param($record) $record.resolvedResourceSha256 = 'E' * 64 }
+        & $assertRejected 'missing-resolved-resource-pass-token' { param($record) $record.passLine = $record.passLine.Replace(" resolvedResourceSha256=$resolvedResourceSha256", '') }
         & $assertRejected 'wrong-cell' { param($record) $record.cell = '1.21.2/fabric' }
         & $assertRejected 'wrong-fingerprint' { param($record) $record.evidenceFingerprint = 'E' * 64 }
         & $assertRejected 'missing-pass-line' { param($record) $record.passLine = '' }
@@ -1014,7 +1040,7 @@ function Invoke-ResumeEvidenceSelfTest {
 
 if ($SelfTestResumeEvidence.IsPresent) {
     Invoke-ResumeEvidenceSelfTest
-    Write-Output 'Exact production matrix resume-evidence self-test PASS: valid controlled graceful exit accepted; 17 invalid mutations and later-invalid summary failure rejected.'
+    Write-Output 'Exact production matrix resume-evidence self-test PASS: valid controlled graceful exit accepted; 21 invalid mutations and later-invalid summary failure rejected.'
     return
 }
 
@@ -1207,8 +1233,6 @@ foreach ($cell in $registry.releaseCells) {
         $isCatalogProfileCell = $null -ne $selectedProfile -and [string]::Equals($cellId, $profileCell, [StringComparison]::OrdinalIgnoreCase)
         $fixture = if ($isCatalogProfileCell) {
             [string] $resolvedCatalogFixture.path
-        } elseif ($loader -eq 'fabric') {
-            $null
         } else {
             Resolve-ResourcePackFixture -Target ([string] $target.key) -PreferredLoader $loader
         }
@@ -1222,8 +1246,8 @@ foreach ($cell in $registry.releaseCells) {
             Artifact = $artifact
             ArtifactHash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToUpperInvariant()
             Fixture = $fixture
-            FixtureId = if ($isCatalogProfileCell) { [string] $resolvedCatalogFixture.id } elseif ($null -eq $fixture) { 'fabric-active-pack-stack-v1' } else { 'deterministic-large-pack' }
-            FixtureHash = if ($null -eq $fixture) { 'fabric-active-pack-stack-v1' } else { (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash.ToUpperInvariant() }
+            FixtureId = if ($isCatalogProfileCell) { [string] $resolvedCatalogFixture.id } else { 'deterministic-large-pack' }
+            FixtureHash = (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash.ToUpperInvariant()
         })
     }
 }
@@ -1388,6 +1412,7 @@ foreach ($row in $rows) {
     [void] $harnessScripts.Add([IO.Path]::GetFullPath($PSCommandPath))
     [void] $harnessScripts.Add([IO.Path]::GetFullPath($smokeScript))
     [void] $harnessScripts.Add([IO.Path]::GetFullPath($compatibilityConfigHelperPath))
+    [void] $harnessScripts.Add([IO.Path]::GetFullPath($runtimeResourceHashHelperPath))
     if ($row.Loader -eq 'neoforge') {
         [void] $harnessScripts.Add([IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'Smoke-Forge-Production.ps1')))
     }
@@ -1497,7 +1522,22 @@ foreach ($row in $rows) {
     $passLine = @($lines | Where-Object { $_ -match '^PASS .+ production smoke:' } | Select-Object -Last 1)
     $cleanExit = $passLine.Count -eq 1 -and $passLine[0] -match 'cleanExit=true'
     $controlledTermination = $passLine.Count -eq 1 -and $passLine[0] -match 'controlledTermination=true'
-    $status = if ($exitCode -eq 0 -and $cleanExit) { 'PASS' } else { 'FAIL' }
+    $resolvedResourceSha256 = $null
+    $resolvedResourceValidationError = $null
+    try {
+        $resolvedResourceSha256 = Get-PackForgePassResolvedResourceSha256 `
+            -PassLine $(if ($passLine.Count -eq 1) { $passLine[0] } else { '' }) `
+            -Required
+    } catch {
+        $resolvedResourceValidationError = $_.Exception.Message
+    }
+    $status = if ($exitCode -eq 0 -and $cleanExit -and $null -eq $resolvedResourceValidationError) { 'PASS' } else { 'FAIL' }
+    if ($null -ne $resolvedResourceValidationError) {
+        $validationLine = "RESOURCE_HASH_VALIDATION_FAILED $resolvedResourceValidationError"
+        [void] $lines.Add($validationLine)
+        Write-Host $validationLine
+        [IO.File]::WriteAllLines($logPath, @($lines), [Text.UTF8Encoding]::new($false))
+    }
     $durationSeconds = [math]::Round(([datetime]::UtcNow - $started).TotalSeconds, 1)
     $provenancePath = $null
     if ($passLine.Count -eq 1 -and $passLine[0] -match '(?:^|\s)provenance=(?<path>.+)$') {
@@ -1537,6 +1577,8 @@ foreach ($row in $rows) {
         artifact = [IO.Path]::GetFileName($row.Artifact)
         artifactHash = $row.ArtifactHash
         fixtureHash = $row.FixtureHash
+        resolvedResourceSha256 = $resolvedResourceSha256
+        resolvedResourceValidationError = $resolvedResourceValidationError
         reloads = $ReloadCount
         profileFingerprint = $profileFingerprint
         evidenceFingerprint = $evidenceFingerprint

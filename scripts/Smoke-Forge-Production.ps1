@@ -57,6 +57,12 @@ if (-not (Test-Path -LiteralPath $compatibilityConfigHelperPath -PathType Leaf))
 }
 . $compatibilityConfigHelperPath
 
+$runtimeResourceHashHelperPath = Join-Path $PSScriptRoot 'RuntimeResourceHashEvidence.ps1'
+if (-not (Test-Path -LiteralPath $runtimeResourceHashHelperPath -PathType Leaf)) {
+    throw "Runtime resource hash evidence helper is missing: $runtimeResourceHashHelperPath"
+}
+. $runtimeResourceHashHelperPath
+
 if (-not ('PackForgeProductionSmokeNative' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -818,7 +824,7 @@ try {
         $hasRuntimeReady = (-not $AllowControlledTermination.IsPresent) -or
             $logText.IndexOf('PackForge runtime smoke ready:', [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasResourceHash = (-not $AllowControlledTermination.IsPresent) -or
-            $logText.IndexOf('PackForge resolved-resource hash:', [StringComparison]::OrdinalIgnoreCase) -ge 0
+            @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count -ge 1
         if ($process.HasExited) { throw "Production Forge exited before readiness with code $($process.ExitCode)." }
         if ($hasArtifact -and $hasCapabilities -and $hasReload -and $hasRuntimeReady -and $hasResourceHash `
             -and ($AllowControlledTermination.IsPresent -or $ReloadCount -eq 0 -or $window -ne [IntPtr]::Zero)) {
@@ -838,7 +844,7 @@ try {
             [string] $logText = Get-LogText -Path $latestLog
             Assert-NoFatalLog -Text $logText -Context 'controller reload'
             $controllerReloadCount = Get-MarkerCount -Text $logText -Marker 'PackForge reload session:'
-            $controllerHashCount = Get-MarkerCount -Text $logText -Marker 'PackForge resolved-resource hash:'
+            $controllerHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count
             $controllerComplete = $logText.IndexOf('PackForge runtime smoke complete:', [StringComparison]::OrdinalIgnoreCase) -ge 0
             if ($controllerReloadCount -ge $expectedReloadCount -and
                 $controllerHashCount -ge $expectedReloadCount -and $controllerComplete) {
@@ -849,7 +855,7 @@ try {
         }
         [string] $logText = Get-LogText -Path $latestLog
         $controllerReloadCount = Get-MarkerCount -Text $logText -Marker 'PackForge reload session:'
-        $controllerHashCount = Get-MarkerCount -Text $logText -Marker 'PackForge resolved-resource hash:'
+        $controllerHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count
         $controllerComplete = $logText.IndexOf('PackForge runtime smoke complete:', [StringComparison]::OrdinalIgnoreCase) -ge 0
         if ($controllerReloadCount -lt $expectedReloadCount -or
             $controllerHashCount -lt $expectedReloadCount -or -not $controllerComplete) {
@@ -909,6 +915,14 @@ if (-not $passed) { throw "Production $loaderDisplay smoke failed." }
 $finalText = Get-RunText -GameRoot $gameRoot -Paths @($latestLog, $stdoutPath, $stderrPath)
 Assert-NoFatalLog -Text $finalText -Context 'production shutdown'
 Assert-ProfileLogMarkers -Text $finalText -Context 'production shutdown' -Expected $ExpectedLogMarkers -Forbidden $ForbiddenLogMarkers
+$resolvedResourceSha256 = if ($AllowControlledTermination.IsPresent) {
+    Resolve-PackForgeResolvedResourceSha256 `
+        -Text (Get-LogText -Path $latestLog) `
+        -MinimumCount ($ReloadCount + 1) `
+        -Context "$loaderDisplay production smoke"
+} else {
+    $null
+}
 if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
     $runtimeEvidencePath = Join-Path $gameRoot 'compatibility-runtime-evidence.log'
     Write-Utf8NoBom -Path $runtimeEvidencePath -Contents $finalText
@@ -918,4 +932,5 @@ if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 
     }
     Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 8)
 }
-Write-Output "PASS $loaderDisplay production smoke: version=$VersionName artifact=$artifactName sha256=$sourceHash additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot provenance=$provenancePath"
+$resolvedResourceToken = if ($null -eq $resolvedResourceSha256) { '' } else { " resolvedResourceSha256=$resolvedResourceSha256" }
+Write-Output "PASS $loaderDisplay production smoke: version=$VersionName artifact=$artifactName sha256=$sourceHash$resolvedResourceToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot provenance=$provenancePath"

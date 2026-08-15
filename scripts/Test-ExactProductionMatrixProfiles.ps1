@@ -429,7 +429,14 @@ try {
         Assert-Failure $tampered $schemaTamperCase.Name $schemaTamperCase.Pattern
     }
 
-    Write-Output 'Exact production matrix profile self-test PASS: selection states, path-evidence gate, typed override rejection, offline hash cache, fixture/schema-2 materialization, fixed config merge/hash, filename collision, and exact Fabric/Forge/NeoForge transport verified without network, build, or smoke launch.'
+    $resumeEvidence = Invoke-Runner @('-SelfTestResumeEvidence')
+    Assert-Success $resumeEvidence 'resume-evidence self-test'
+    $resumeOutput = @($resumeEvidence.Output) -join [Environment]::NewLine
+    if ($resumeOutput -notmatch '21 invalid mutations') {
+        throw 'Resume-evidence self-test did not report the current resolved-resource hash mutations.'
+    }
+
+    Write-Output 'Exact production matrix profile self-test PASS: selection states, path-evidence gate, typed override rejection, offline hash cache, fixture/schema-2 materialization, fixed config merge/hash, filename collision, resume evidence, and exact Fabric/Forge/NeoForge transport verified without network, build, or smoke launch.'
 } finally {
     if (Test-Path -LiteralPath $testRoot) {
         Remove-Item -LiteralPath $testRoot -Recurse -Force

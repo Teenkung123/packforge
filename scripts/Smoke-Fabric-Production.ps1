@@ -59,6 +59,12 @@ if (-not (Test-Path -LiteralPath $compatibilityConfigHelperPath -PathType Leaf))
 }
 . $compatibilityConfigHelperPath
 
+$runtimeResourceHashHelperPath = Join-Path $PSScriptRoot 'RuntimeResourceHashEvidence.ps1'
+if (-not (Test-Path -LiteralPath $runtimeResourceHashHelperPath -PathType Leaf)) {
+    throw "Runtime resource hash evidence helper is missing: $runtimeResourceHashHelperPath"
+}
+. $runtimeResourceHashHelperPath
+
 if (-not ('PackForgeFabricProductionSmokeNative' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -1108,6 +1114,23 @@ incompatibleResourcePacks:[]
         sha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash.ToUpperInvariant()
         overrides = $compatibilityProfileConfigContract.Overrides
     }
+} elseif ($AllowControlledTermination.IsPresent) {
+    $resourcePackSource = Resolve-RequiredPath -Path $ResourcePackPath -Description 'Deterministic production resource-pack fixture'
+    $resourcePackRoot = Join-Path $runRoot 'resourcepacks'
+    New-Item -ItemType Directory -Path $resourcePackRoot -Force | Out-Null
+    $stagedFixture = Join-Path $resourcePackRoot 'deterministic-large-pack.zip'
+    Copy-Item -LiteralPath $resourcePackSource -Destination $stagedFixture -Force
+    $stagedFixtureHash = (Get-FileHash -LiteralPath $stagedFixture -Algorithm SHA256).Hash.ToUpperInvariant()
+    Write-Utf8NoBom -Path (Join-Path $runRoot 'options.txt') -Contents @(
+        'resourcePacks:["vanilla","file/deterministic-large-pack.zip"]'
+        'incompatibleResourcePacks:[]'
+    )
+    $provenance.fixture = [ordered]@{
+        id = 'deterministic-large-pack'
+        sourcePath = $resourcePackSource
+        stagedPath = $stagedFixture
+        sha256 = $stagedFixtureHash
+    }
 }
 Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 8)
 
@@ -1221,6 +1244,9 @@ foreach ($environmentOption in @('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA
         $startInfo.EnvironmentVariables[$environmentOption] = ''
     }
 }
+if ($controllerMode) {
+    $startInfo.EnvironmentVariables['PACKFORGE_RUNTIME_RESOURCE_HASH'] = 'true'
+}
 if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
     $startInfo.EnvironmentVariables['PACKFORGE_COMPAT_PROFILE_ID'] = [string] $compatibilityProfile.profileId
     $startInfo.EnvironmentVariables['PACKFORGE_COMPAT_MOD_IDS'] = [string]::Join(',', @($compatibilityProfile.modIds))
@@ -1254,18 +1280,19 @@ try {
         $hasCapabilities = $logText -match $capabilityPattern
         $hasReload = $logText.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasArtifact = $logText -match $artifactSourcePattern
+        $hasResourceHash = (-not $controllerMode) -or @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count -ge 1
         if ($process.HasExited) {
             $process.Refresh()
             throw "Fabric production client exited before readiness with code $($process.ExitCode)."
         }
-        if ($hasCapabilities -and $hasReload -and $hasArtifact -and ($ReloadCount -eq 0 -or $minecraftWindow -ne [IntPtr]::Zero)) {
+        if ($hasCapabilities -and $hasReload -and $hasArtifact -and $hasResourceHash -and ($ReloadCount -eq 0 -or $minecraftWindow -ne [IntPtr]::Zero)) {
             $ready = $true
             break
         }
         Start-Sleep -Seconds 2
     }
     if (-not $ready) {
-        throw 'Fabric production client did not reach capability, reload, and exact-artifact markers before timeout.'
+        throw "Fabric production client did not reach capability, reload, exact-artifact, and resolved-resource hash markers before timeout: resourceHash=$hasResourceHash."
     }
     if ($ReloadCount -gt 0 -and $minecraftWindow -eq [IntPtr]::Zero) {
         throw 'A visible Minecraft window is required for the requested F3+T reload validation.'
@@ -1274,12 +1301,15 @@ try {
     if ($controllerMode) {
         $beforeText = Get-LogText -Path $latestLog
         $expectedReloadCount = (Get-LogMarkerCount -Text $beforeText -Marker $reloadMarker) + $ReloadCount
+        $expectedResourceHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $beforeText).Count + $ReloadCount
         $reloadDeadline = [datetime]::UtcNow.AddSeconds(300)
         if ($reloadDeadline -gt $deadline) { $reloadDeadline = $deadline }
         while ([datetime]::UtcNow -lt $reloadDeadline) {
             $reloadText = Get-LogText -Path $latestLog
             Assert-NoFatalLog -Text $reloadText -Context 'Fabric controlled reloads'
-            if ((Get-LogMarkerCount -Text $reloadText -Marker $reloadMarker) -ge $expectedReloadCount) { break }
+            $currentReloadCount = Get-LogMarkerCount -Text $reloadText -Marker $reloadMarker
+            $currentResourceHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $reloadText).Count
+            if ($currentReloadCount -ge $expectedReloadCount -and $currentResourceHashCount -ge $expectedResourceHashCount) { break }
             if ($process.HasExited) {
                 $process.Refresh()
                 throw "Fabric production client exited during controlled reloads with code $($process.ExitCode)."
@@ -1287,8 +1317,10 @@ try {
             Start-Sleep -Seconds 2
         }
         $finalReloadText = Get-LogText -Path $latestLog
-        if ((Get-LogMarkerCount -Text $finalReloadText -Marker $reloadMarker) -lt $expectedReloadCount) {
-            throw "Fabric controlled reloads did not emit $ReloadCount new completion markers before timeout."
+        $finalReloadCount = Get-LogMarkerCount -Text $finalReloadText -Marker $reloadMarker
+        $finalResourceHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $finalReloadText).Count
+        if ($finalReloadCount -lt $expectedReloadCount -or $finalResourceHashCount -lt $expectedResourceHashCount) {
+            throw "Fabric controlled reloads did not emit the required completion/hash markers before timeout: reloads=$finalReloadCount/$expectedReloadCount hashes=$finalResourceHashCount/$expectedResourceHashCount."
         }
     } else {
         for ($reload = 1; $reload -le $ReloadCount; $reload++) {
@@ -1413,6 +1445,14 @@ $finalLog = Get-LogText -Path $latestLog
 if ($finalLog -notmatch $capabilityPattern) { throw 'Final Fabric log is missing the PackForge capability marker.' }
 if ($finalLog.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -lt 0) { throw 'Final Fabric log is missing the PackForge reload marker.' }
 if ($finalLog -notmatch $artifactSourcePattern) { throw 'Final Fabric log is missing the exact PackForge artifact source marker.' }
+$resolvedResourceSha256 = if ($controllerMode) {
+    Resolve-PackForgeResolvedResourceSha256 `
+        -Text $finalLog `
+        -MinimumCount ($ReloadCount + 1) `
+        -Context 'Fabric production smoke'
+} else {
+    $null
+}
 
 if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
     $runtimeEvidencePath = Join-Path $runRoot 'compatibility-runtime-evidence.log'
@@ -1424,4 +1464,5 @@ if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 
     Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 8)
 }
 
-Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"
+$resolvedResourceToken = if ($null -eq $resolvedResourceSha256) { '' } else { " resolvedResourceSha256=$resolvedResourceSha256" }
+Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash$resolvedResourceToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"

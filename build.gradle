@@ -1204,6 +1204,7 @@ def compatibilityProfileContractScript = file("scripts/Validate-CompatibilityPro
 def compatibilityProfileConfigScript = file("scripts/CompatibilityProfileConfig.ps1")
 def defaultOffCandidateContractScript = file("scripts/Validate-DefaultOffCandidateCatalog.ps1")
 def compatibilityFixtureGenerator = file("scripts/Generate-CompatibilityFixtures.py")
+def runtimeResourceHashEvidenceScript = file("scripts/Test-RuntimeResourceHashEvidence.ps1")
 
 def validateConfigScreenContract = tasks.register("validateConfigScreenContract", Exec) {
 	group = "verification"
@@ -1262,6 +1263,23 @@ def validateCompatibilityFixtures = tasks.register("validateCompatibilityFixture
 	}
 }
 
+def validateRuntimeResourceHashEvidence = tasks.register("validateRuntimeResourceHashEvidence", Exec) {
+	group = "verification"
+	description = "Validates resolved-resource hash parsing, determinism, and cross-loader smoke wiring."
+	workingDir projectDir
+	inputs.files(
+		runtimeResourceHashEvidenceScript,
+		file("scripts/RuntimeResourceHashEvidence.ps1"),
+		file("scripts/Smoke-Fabric-Production.ps1"),
+		file("scripts/Smoke-Forge-Production.ps1"),
+		file("scripts/Smoke-NeoForge-Production.ps1"),
+		file("scripts/Run-Exact-ProductionMatrix.ps1")
+	)
+	doFirst {
+		commandLine resolvePowerShellExecutable(), "-NoProfile", "-NonInteractive", "-File", runtimeResourceHashEvidenceScript.absolutePath
+	}
+}
+
 def validateImplementationContracts = tasks.register("validateImplementationContracts") {
 	group = "verification"
 	description = "Runs all authoritative implementation-contract validators once."
@@ -1269,6 +1287,7 @@ def validateImplementationContracts = tasks.register("validateImplementationCont
 	dependsOn validateCompatibilityProfileCatalog
 	dependsOn validateDefaultOffCandidateCatalog
 	dependsOn validateCompatibilityFixtures
+	dependsOn validateRuntimeResourceHashEvidence
 }
 
 def validateStonecutterDirectContract = tasks.register("validateStonecutterDirectContract", Exec) {
