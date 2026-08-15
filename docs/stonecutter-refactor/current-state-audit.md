@@ -2,7 +2,7 @@
 
 Date: 2026-08-15
 
-Audited continuation checkpoints through the Fabric 1.21.5 SimpleReload Phase E boundary. Overall state: **PARTIAL** and **NOT RELEASE READY**.
+Audited every phase and completion gate in `PackForge_Missing_Implementation_Plan.md` against branch `1.4` at implementation checkpoint `0138d6edbad4cebd45773050d81e7897dbbfb7b3` and documentation checkpoint `42cfd18342abad235a95650bdb74869fb23801f5`. Overall state: **PARTIAL** and **NOT RELEASE READY**.
 
 ## Audit boundary
 
@@ -24,25 +24,45 @@ Audited continuation checkpoints through the Fabric 1.21.5 SimpleReload Phase E 
 | Profile transport | Schema-2 materializer and three loader wrappers structurally verified offline; no downloads or launches. |
 | Fixtures | Nine deterministic 1.21.1 fixtures structurally verified; no final-JAR execution. |
 | Default-off candidates | Five `SAFE_KEEP_DEFAULT_OFF`; six `FAILED_WITH_REASON`; zero promoted; runtime/performance gates `NOT_RUN`. |
-| Release manifest | Verifier and mutation self-test implemented; complete current 20-JAR verification NOT RUN. |
+| Current artifacts | Registry expects 20 names. `build/libs` contains 17 older JARs: five names match, 15 expected names are missing, and 12 names are stale. `verifyExistingArtifacts` fails on the existing mc26 Fabric JAR because its version-selection mixin plugins are absent. |
+| Release manifest | Verifier and mutation self-test exist, but `build/libs/release/manifest.json` is absent. No current 20-JAR manifest is bound to HEAD. |
 | Runtime matrix | Current all-62 exact final-JAR matrix NOT RUN. |
 
-## Phase classification
+## Whole-plan phase classification
 
-| Requirement | Status | Current evidence | Remaining gate |
-|---|---|---|---|
-| **A — reconcile state and source gates** | `VERIFIED_COMPLETE` | Deterministic metrics cover source layers, duplicate groups, ownership, build branches, renderer families, and artifact declarations. | Refresh after later structural edits. |
-| **B — Quick Pack capability ownership** | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Exactly six overlap capabilities are externally owned; other 23 remain PackForge-governed; UI effective state is ownership-aware. | Current final-JAR profile runs. |
-| **C — safe optional-mod detection** | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Loader-neutral detection and environment-gated reporter exist; failure is conservative. | Required Forge/NeoForge and combined runtime profiles. |
-| **D — registry-derived graph** | `STRUCTURAL_VERIFIED` | 12 source families, 19 registry build targets (direct source nodes), 53 loader distributions, separate 62-cell ledger; registry/direct-node contract mandatory. | Maintain bijection gate. |
-| **E — authoritative direct build** | `PARTIAL` | 53 leaves are authoritative direct cells and public graph is direct-only. Seven bounded Fabric source seams have focused compile/source-archive proof; SimpleReload now covers 1.21.5 through 1.21.8. | Extend preprocessing beyond the bounded Fabric seams; all-53 compile/package parity; Java 17/21/25; remap/refmap/JarJar; runtime; remove nested oracle. |
-| **F — reduce duplication and clarify ownership** | `PARTIAL` | Zero duplicate groups, 15 conditional lines, source-policy centralization. | Raw shrink target not met; preserve justification and prevent regression. |
-| **G — consolidate configuration renderers** | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Unknown fields preserved; shared validation/model; three renderer bodies plus two adapters. | Live renderer parity and current final-JAR checks. |
-| **H — same-binary range artifacts** | `IMPLEMENTED_UNVERIFIED` | Registry expresses 20 artifacts without maturity crossing. | Rebuild current bytes and repeat every same-JAR range cell. |
-| **I — compatibility-profile harness** | `STRUCTURAL_VERIFIED_RUNTIME_UNTESTED` | Catalog, pins, reporter, materializer, provenance transport, and fixtures exist. | Resolve remaining metadata/instrumentation and execute available profiles. |
-| **J — default-off candidates** | `VERIFIED_COMPLETE_CONSERVATIVE` | Exact 11-candidate catalog; five keep off, six fail with reason, zero promotion. | Evidence needed only before any future promotion. |
-| **K — exact final-artifact matrix** | `PARTIAL` | Controller, verifier, provenance, and fixtures exist. | Current manifest and full 62-cell startup/reload/fixture/semantic/exit run. |
-| **L — docs and rollback state** | `PARTIAL` | Current docs distinguish present structural evidence from historical runtime proof. | New final evidence and rollback checkpoint after H/K/profile completion. |
+Only the five statuses defined by the assignment are used below.
+
+| Requirement | Status | Source evidence | Test/artifact evidence | Action |
+|---|---|---|---|---|
+| **A — current-state audit** | `PARTIAL` | `reportSourceMetrics`, JSON/Markdown output, source ownership, duplicate, branch, renderer, registry, and artifact metrics exist. This table now uses the required schema and vocabulary. | Registry/matrix/metrics and direct-contract checks pass, but no current `buildAllSupported` plus `verifyAllArtifacts` result exists after the direct-build changes. Existing artifacts fail structural verification. | Keep A open until a current authoritative build records the actual compile/package result; refresh this audit after each later structural unit. |
+| **B — Quick Pack capability ownership** | `IMPLEMENTED_UNVERIFIED` | `QuickPackCompatibility` owns exactly six overlap capabilities. Mixin plugins select only version shapes; loading toast/startup status and diagnostics are isolated, and configured/effective values remain separate. | Focused policy/model tests and historical artifact structure checks passed. The current final-distribution set has not passed `verifyAllArtifacts`, so no current artifact proves the split. | Build current final JARs, run structural verification, then execute Quick Pack profiles while asserting every retained capability. |
+| **C — safe optional-mod detection** | `IMPLEMENTED_UNVERIFIED` | Loader-neutral `OptionalModPresence` is initialized through `PackForgeServices`; detection failure conservatively hands off overlap. Forge API differences are two thin family bridges, and mixin plugins do not query Quick Pack or `ModList`. | Static/focused tests exist, but zero current Quick Pack final-JAR profiles have PASS evidence. | Resolve profile inputs, mark genuine absence `UNAVAILABLE`, and run every available Fabric/Forge/NeoForge family with ten reloads, semantic hash, ownership/retained assertions, fatal-mixin scan, and clean exit. |
+| **D — registry-derived Stonecutter graph** | `VERIFIED_COMPLETE` | `settings.gradle` derives source nodes and loader distributions from schema-v2 registry data. Root validation enforces the 19-node/53-distribution bijection separately from 22 releases/62 runtime cells. | Registry and Stonecutter consistency checkpoints passed; no second manually maintained node list was found. | Retain the bijection gate whenever registry/settings code changes. |
+| **E — authoritative direct build** | `PARTIAL` | Public tasks use 53 direct leaves and registry toolchains. Seven bounded Fabric seams have focused preprocessing proof. `stonecutter-build.gradle` still resolves a wrapper and registers nested `Exec`; the direct/parity helper still requires that delegated task during configuration. | Focused boundary compilation/source-JAR checks pass. No current all-53 compile/package, Java 17/21/25, remap/refmap/JarJar, or runtime proof exists. | Extract always-on direct task/structural registration, keep parity optional, complete capability migrations in plan order, prove all cells, then remove nested delegation. |
+| **F — source ownership and reduction** | `PARTIAL` | Metrics report 217 files, 16,575 LOC, zero duplicate groups, 15 target/version conditional lines, and exact-version bridge LOC below version-common LOC. The two Forge mod-list files are thin API-family bridges. | Duplicate/branch metrics pass, but behavior parity is historical and no exhaustive dead-path audit exists. Raw source is only 1.56% below the 16,837-line baseline; the 20% exception is described but not backed by a precise added-LOC ledger or enforced gate. | Add enforceable cleanup/exception gates, audit semantic ownership and obsolete mixin/source paths, and bind behavior parity to current artifacts. |
+| **G — configuration renderer consolidation** | `IMPLEMENTED_UNVERIFIED` | One screen model owns seven categories, state, validation, ownership, and apply scope. Three renderer bodies plus two adapters serve the widget families; Fabric, Forge, NeoForge, and pack-screen routes converge on `PackForgeConfigScreen`. Config writes use a temporary file and prefer atomic replacement. | Unit/structural tests cover IDs, state, unknown fields, detached save, and failed live installation. No current live route/renderer parity exists; replacement-failure coverage does not exercise failure while replacing an existing live file. | Add focused replacement-failure coverage, then run the four entry routes across renderer families and verify Beta/Stable support display where surfaced. |
+| **H — same-binary range artifacts** | `IMPLEMENTED_UNVERIFIED` | The registry declares a current 20-artifact baseline without crossing beta/stable maturity. | Existing local output is not the declared set: 15 expected names missing, 12 stale, five matching, manifest absent, and structural verification fails. This invalid output does not prove a source/runtime regression; historical same-binary evidence is simply not current proof. | After E/G stabilize, rebuild and verify the current 20-artifact baseline, then minimize toward 17 or fewer only through fresh unchanged-JAR proof on every claimed exact release/loader. |
+| **I — compatibility-profile harness** | `PARTIAL` | The schema-2 catalog represents all 30 isolated and six high-risk recipes; materializer, hash cache, provenance, fixtures, and three loader transports exist. | 21 profiles are `AVAILABLE`/`UNTESTED`, 12 `PENDING_METADATA`/`UNTESTED`, three `UNAVAILABLE`, and zero PASS. Some pending reasons require retargeting or evidence-backed `UNAVAILABLE`; the default-on Quick Pack profile has no promoted feature set. | Resolve every pending disposition, retain immutable input/evidence hashes, add any missing path instrumentation, and execute all available isolated/high-risk recipes. |
+| **J — default-off candidates** | `VERIFIED_COMPLETE` | The exact 11-candidate catalog records five `SAFE_KEEP_DEFAULT_OFF`, six `FAILED_WITH_REASON`, and zero promotions. Saved defaults remain conservative. | Catalog/self-test evidence exists. Promotion gates are not applicable because no candidate was promoted; all runtime/performance fields remain honestly `NOT_RUN`. | Keep defaults unchanged. Reopen one candidate at a time only with all semantic, lifecycle, performance, compatibility, and configuration gates. |
+| **K — exact final-artifact matrix** | `PARTIAL` | Registry-derived controller, smoke wrappers, manifest verifier, provenance, resume checks, and nine deterministic fixture definitions exist for 62 cells. | No current final manifest or 62-cell result exists. Existing artifacts fail before runtime; cancellation/failure remains a scenario, and cross-loader semantic-hash result binding is incomplete. | Produce the fresh verified artifact set, require semantic hashes consistently, then execute all 62 base cells plus fixture/reload/cancellation acceptance and clean exits. |
+| **L — documentation and rollback** | `PARTIAL` | Required documents exist and core current-status files distinguish historical evidence. | Several reports still describe older coverage/counts; live artifact conflict is newly recorded here. No current fully verified final rollback point or separate final evidence/docs commits exist. | Reconcile all named reports and README from final evidence, distinguish latest historical runtime from current structural checkpoints, and commit final evidence/docs separately. |
+
+## Validation used for this audit
+
+- Reused the successful registry, resolved-matrix, implementation-contract, and source-metrics validation because later changes affected only the focused SimpleReload preprocessing boundary and its direct contract.
+- Current focused direct contract PASS: 53 direct cells and four native SimpleReload cells.
+- Current focused Fabric 1.21.4/1.21.5/1.21.6 `compileJava` plus `sourcesJar` PASS across 18 executed tasks; generated/source-JAR ownership matched at the changed boundary.
+- Current `reportSourceMetrics` PASS: 217 files, 16,575 LOC, zero duplicate groups, 15 conditional lines, ten Stonecutter blocks, and 20 declared artifacts.
+- Current `verifyExistingArtifacts` FAIL: `packforge-fabric-1.3.4-mc26.1-26.2.jar` is missing the expected version-selection mixin plugins. The task did not reach a valid current artifact set or manifest.
+- No clean build, all-53 build, runtime cell, third-party profile, benchmark, or release publication was run for this audit.
+
+## Contradictions with earlier reports
+
+- [implementation-report.md](implementation-report.md) still labels A `VERIFIED_COMPLETE`, uses non-assignment statuses for B, C, G, and J, and describes H without today's invalid artifact-directory evidence. The canonical classifications in this audit supersede those current-status rows until final reconciliation.
+- [compatibility-matrix.md](compatibility-matrix.md) describes native preprocessing as only the 16-target archive pilot, omitting the later SharedZip, reload-manager, runtime-hash, loading-toast, bitmap, and SimpleReload checkpoints.
+- [quick-pack-compatibility.md](quick-pack-compatibility.md) says the catalog has four Quick Pack-containing recipes; the live catalog has six.
+- [rollback.md](rollback.md) calls `a3402866` the latest fully verified checkpoint without distinguishing historical full-runtime proof from the newer current structural checkpoints. It is the latest historical full-runtime checkpoint only.
+- [artifact-consolidation.md](artifact-consolidation.md) correctly marks its older hashes and range evidence historical; its current-evidence notice remains authoritative until fresh artifacts replace it.
 
 ## Historical evidence invalidated as current proof
 
@@ -54,16 +74,18 @@ Audited continuation checkpoints through the Fabric 1.21.5 SimpleReload Phase E 
 ## Current blockers to completion
 
 1. Nested Gradle still exists as parity oracle; all-53 direct parity and preprocessing ownership beyond the bounded Fabric seams are unresolved.
-2. Current complete 20-artifact manifest has not been built and verified.
+2. The local artifact directory conflicts with the registry and fails structural verification; a current complete 20-artifact manifest does not exist.
 3. Current same-binary range proof and all 62 exact runtime cells are absent.
-4. Twenty-one materializable compatibility profiles remain `UNTESTED`; 12 more lack exact compatible metadata; three are explicitly `UNAVAILABLE`.
-5. Live renderer-family and shader/atlas behavior remain unverified.
-6. No current release-ready hashes or final rollback checkpoint exist.
+4. Twenty-one materializable compatibility profiles remain `UNTESTED`; 12 more lack an executable disposition; three are explicitly `UNAVAILABLE`.
+5. Live renderer-family, entry-route, shader/atlas, and existing-file replacement-failure behavior remain unverified.
+6. The Phase F raw shrink exception lacks a precise added-LOC ledger and executable gate.
+7. No current release-ready hashes or final rollback checkpoint exists.
 
 ## Dependency-ordered continuation
 
-1. Extend the proven Fabric preprocessing pilot, finish Phase E direct build/package parity, and remove the nested parity oracle only after equivalent proof.
-2. Rebuild and verify exact 20-artifact manifest.
-3. Execute H/K same-binary and 62-cell runtime matrix using deterministic fixtures.
-4. Execute all currently available Phase I profiles; keep unresolved cells `UNTESTED` or evidence-backed `UNAVAILABLE`.
-5. Complete live G checks, refresh source metrics, then create final evidence and rollback checkpoints.
+1. Separate always-on direct task registration from optional legacy parity, then finish Phase E capability migration and all-53 build/package proof before deleting the nested path.
+2. Complete focused Phase F/G structural gaps and rerun their unit/contract checks.
+3. Build a fresh exact 20-artifact set, pass structural verification, and generate/verify the release manifest.
+4. Execute H/K unchanged-JAR ranges and the full 62-cell runtime matrix using deterministic fixtures and consistent semantic-hash evidence.
+5. Resolve Phase I pending dispositions and execute every available isolated/high-risk profile, including required Quick Pack Phase C coverage.
+6. Reconcile every Phase L document and README, then create separate final evidence and documentation rollback checkpoints.
