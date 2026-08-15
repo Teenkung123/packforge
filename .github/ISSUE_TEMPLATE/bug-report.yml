@@ -84,7 +84,6 @@ body:
     attributes:
       label: Client logs
       description: Required. Paste the relevant client log or attach latest.log. Remove personal paths and tokens.
-      render: shell
       placeholder: Paste client logs here.
     validations:
       required: true
@@ -94,7 +93,6 @@ body:
     attributes:
       label: Crash report (optional)
       description: If Minecraft crashed, paste or attach the crash report here.
-      render: text
 
   - type: textarea
     id: related_content

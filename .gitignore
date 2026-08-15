@@ -43,4 +43,5 @@ replay_*.log
 
 # local agent settings and source archive
 /.claude/
+/.codegraph/
 /PackForge.zip
