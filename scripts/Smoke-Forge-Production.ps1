@@ -43,7 +43,7 @@ param(
     [int] $TimeoutSeconds = 900,
 
     [ValidateRange(0, 10)]
-    [int] $ReloadCount = 2,
+    [int] $ReloadCount = 10,
 
     [switch] $AllowControlledTermination
 )

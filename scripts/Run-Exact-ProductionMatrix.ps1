@@ -33,8 +33,8 @@ param(
     [ValidateRange(60, 3600)]
     [int] $TimeoutSeconds = 900,
 
-    [ValidateRange(1, 10)]
-    [int] $ReloadCount = 2
+    [ValidateRange(10, 10)]
+    [int] $ReloadCount = 10
 )
 
 Set-StrictMode -Version 2.0
@@ -949,7 +949,7 @@ function Invoke-ResumeEvidenceSelfTest {
         }
         $fingerprint = 'C' * 64
         $resolvedResourceSha256 = 'D' * 64
-        $passLine = "PASS Fabric production smoke: artifact=$([IO.Path]::GetFileName($row.Artifact)) sha256=$($row.ArtifactHash) resolvedResourceSha256=$resolvedResourceSha256 reloads=2 cleanExit=true controlledTermination=true provenance=$provenancePath"
+        $passLine = "PASS Fabric production smoke: artifact=$([IO.Path]::GetFileName($row.Artifact)) sha256=$($row.ArtifactHash) resolvedResourceSha256=$resolvedResourceSha256 reloads=10 cleanExit=true controlledTermination=true provenance=$provenancePath"
         [IO.File]::WriteAllText($logPath, $passLine + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText($provenancePath, '{"schema":3}', [Text.UTF8Encoding]::new($false))
         $newRecord = {
@@ -964,7 +964,7 @@ function Invoke-ResumeEvidenceSelfTest {
                 artifactHash = $row.ArtifactHash
                 fixtureHash = $row.FixtureHash
                 resolvedResourceSha256 = $resolvedResourceSha256
-                reloads = 2
+                reloads = 10
                 evidenceFingerprint = $fingerprint
                 cleanExit = $true
                 controlledTermination = $true
@@ -988,7 +988,7 @@ function Invoke-ResumeEvidenceSelfTest {
             $record = & $newRecord $Mutate
             $resultsPath = Join-Path $testRoot "$Name.jsonl"
             [IO.File]::WriteAllText($resultsPath, ($record | ConvertTo-Json -Compress) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
-            $passes = Get-PriorPasses -Path $resultsPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 2
+            $passes = Get-PriorPasses -Path $resultsPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 10
             if ($passes.Count -ne 0) { throw "Resume evidence self-test accepted mutation '$Name'." }
         }
         & $assertRejected 'missing-clean-exit' { param($record) [void] $record.Remove('cleanExit') }
@@ -1018,7 +1018,7 @@ function Invoke-ResumeEvidenceSelfTest {
         $validRecord = & $newRecord { param($record) }
         $validResultsPath = Join-Path $testRoot 'valid.jsonl'
         [IO.File]::WriteAllText($validResultsPath, ($validRecord | ConvertTo-Json -Compress) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
-        $validPasses = Get-PriorPasses -Path $validResultsPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 2
+        $validPasses = Get-PriorPasses -Path $validResultsPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 10
         if ($validPasses.Count -ne 1) { throw 'Resume evidence self-test rejected the valid controlled-graceful exit record.' }
 
         $laterInvalidRecord = & $newRecord { param($record) $record.cleanExit = $false }
@@ -1027,9 +1027,9 @@ function Invoke-ResumeEvidenceSelfTest {
             ($validRecord | ConvertTo-Json -Compress),
             ($laterInvalidRecord | ConvertTo-Json -Compress)
         ) -join [Environment]::NewLine) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
-        $chronologicalPasses = Get-PriorPasses -Path $chronologicalPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 2
+        $chronologicalPasses = Get-PriorPasses -Path $chronologicalPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 10
         if ($chronologicalPasses.Count -ne 0) { throw 'Resume evidence self-test retained a PASS after its later invalid record.' }
-        $latestChronological = Get-LatestExactMatrixRecords -Path $chronologicalPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 2
+        $latestChronological = Get-LatestExactMatrixRecords -Path $chronologicalPath -ExpectedRowsByCell $expectedRows -ExpectedEvidenceFingerprints $expectedFingerprints -ExpectedReloads 10
         if ($latestChronological.Count -ne 1 -or [string] $latestChronological[$row.Cell].status -cne 'FAIL' -or -not (Test-ExactMatrixSummaryHasFailure -LatestRecords $latestChronological)) {
             throw "Resume evidence self-test did not surface the later invalid PASS as a final summary failure (count=$($latestChronological.Count) status=$([string] $latestChronological[$row.Cell].status) summaryFailure=$(Test-ExactMatrixSummaryHasFailure -LatestRecords $latestChronological))."
         }

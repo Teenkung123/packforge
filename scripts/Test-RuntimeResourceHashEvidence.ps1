@@ -59,7 +59,7 @@ if ($resolved -cne $firstHash.ToUpperInvariant()) {
 }
 
 foreach ($loaderDisplay in @('Fabric', 'Forge', 'NeoForge')) {
-    $passLine = "PASS $loaderDisplay production smoke: artifact=packforge-test.jar sha256=$('A' * 64) resolvedResourceSha256=$resolved reloads=2 cleanExit=true"
+    $passLine = "PASS $loaderDisplay production smoke: artifact=packforge-test.jar sha256=$('A' * 64) resolvedResourceSha256=$resolved reloads=10 cleanExit=true"
     $parsed = Get-PackForgePassResolvedResourceSha256 -PassLine $passLine -Required
     if ($parsed -cne $resolved) {
         throw "$loaderDisplay PASS token parsing changed."
@@ -112,6 +112,7 @@ $neoForgePath = Join-Path $PSScriptRoot 'Smoke-NeoForge-Production.ps1'
 $matrixPath = Join-Path $PSScriptRoot 'Run-Exact-ProductionMatrix.ps1'
 Assert-SourceContract -Path $fabricPath -Patterns @(
     'RuntimeResourceHashEvidence\.ps1',
+    '\[int\]\s+\$ReloadCount\s*=\s*10',
     "PACKFORGE_RUNTIME_RESOURCE_HASH.+true",
     'deterministic-large-pack\.zip',
     'Resolve-PackForgeResolvedResourceSha256',
@@ -119,17 +120,21 @@ Assert-SourceContract -Path $fabricPath -Patterns @(
 )
 Assert-SourceContract -Path $forgePath -Patterns @(
     'RuntimeResourceHashEvidence\.ps1',
+    '\[int\]\s+\$ReloadCount\s*=\s*10',
     "PACKFORGE_RUNTIME_RESOURCE_HASH.+true",
     'Resolve-PackForgeResolvedResourceSha256',
     'resolvedResourceSha256=\$resolvedResourceSha256'
 )
 Assert-SourceContract -Path $neoForgePath -Patterns @(
+    '\[int\]\s+\$ReloadCount\s*=\s*10',
     "Loader\s*=\s*'neoforge'",
     'Smoke-Forge-Production\.ps1',
     'AllowControlledTermination'
 )
 Assert-SourceContract -Path $matrixPath -Patterns @(
     'RuntimeResourceHashEvidence\.ps1',
+    '\[ValidateRange\(10,\s*10\)\]',
+    '\[int\]\s+\$ReloadCount\s*=\s*10',
     'Resolve-ResourcePackFixture.*PreferredLoader.*\$loader',
     'runtimeResourceHashHelperPath',
     'Get-PackForgePassResolvedResourceSha256',
