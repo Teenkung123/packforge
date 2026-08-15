@@ -2,6 +2,16 @@
 
 Date: 2026-08-15
 
+## Superseding 1.4 checkpoint (2026-08-16)
+
+Use this section for current status; later tables preserve historical checkpoint wording. HEAD is `6591e79` on branch `1.4`.
+
+- Capability metadata now excludes unreachable atlas-mip, model adaptive/cache/timing, and startup-async scaffolding. The configuration fields remain readable for backward compatibility but are marked unavailable.
+- Quick Pack policy is version-aware and no longer claims ZIP pooling or the PackForge status overlay as externally supplied. The Fabric profile-only Loader `0.17.3` override is structural only.
+- Current source metrics: 209 production files, 15,814 LOC, 3,370 ledger-adjusted reduction / 3,368 required, zero shortfall, and `phaseFMetricGate=PASS`; Phase F remains `IMPLEMENTED_UNVERIFIED` pending behavior parity.
+- Artifact hardening commit `6591e79` verifies one exact loader-specific `mixinextras-*-0.5.4-slim.jar`, rejects normal/alternate top-level copies, recursively checks Forge's `MixinExtras-0.5.4.jar` metadata and required classes, and gates the 128x128, <=32KiB icon. Representative Fabric/Forge/NeoForge target verification passes.
+- The root directory still contains 17 stale artifacts from an earlier build; all-20 current rebuild, manifest proof, same-binary ranges, runtime profiles, and full matrix remain open. The PackIndex benchmark attempt timed out and is not evidence.
+
 Current status: **PARTIAL** on `1.4`; **NOT RELEASE READY**. Current loader artifacts use MixinExtras `0.5.4:slim`.
 
 This report describes current implementation state. Earlier full-matrix and Quick Pack runs are preserved below as historical evidence, but later direct-build and artifact changes invalidate them as current final-JAR proof. See `final-validation.md` for current acceptance gaps.

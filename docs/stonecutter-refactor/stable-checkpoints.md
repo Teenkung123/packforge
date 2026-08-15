@@ -2,6 +2,15 @@
 
 Checkpoint entries are chronological and must include commit SHA, parent, scope, exact verification, result, and rollback instruction.
 
+## 1.4 artifact-hardening checkpoint
+
+- Commit SHA: `6591e79`
+- Parent SHA: `014f71a`
+- Scope: enforce one exact loader-specific MixinExtras `0.5.4:slim` artifact, recursive Forge common-runtime metadata/classes, required mixin/runtime entries, 128x128 <=32KiB icon, and size-report icon output.
+- Verification: `validateTargetRegistry`; representative Fabric/Forge/NeoForge `mc1_21_1` direct builds; `verifyTargetArtifacts`; `inspectArtifactSizes`; refreshed `updateSourceMetricsCheckpoint`.
+- Result: PASS for the three fresh representative artifacts; source metrics report 209 files / 15,814 LOC and zero Phase F shortfall. The mixed root 20-file directory remains stale in 17 files; full all-20/current manifest/runtime evidence is not claimed, and the bounded PackIndex benchmark timed out before samples.
+- Rollback: `git revert 6591e79` removes only artifact verification/report hardening.
+
 ## Baseline documentation
 
 - Commit SHA: `71b6ba396b60b79ed0cf2bdfb8c31ab7f7c76ce0`

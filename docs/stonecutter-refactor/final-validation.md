@@ -2,6 +2,14 @@
 
 Date: 2026-08-15
 
+## Superseding 1.4 checkpoint (2026-08-16)
+
+Current HEAD is `6591e79` on branch `1.4`. The current source snapshot is 209 production files / 15,814 LOC; the Phase F ledger gate passes at 3,370 adjusted reduction versus 3,368 required, while the status remains `IMPLEMENTED_UNVERIFIED` pending behavior parity.
+
+The artifact verifier now enforces one exact loader-specific MixinExtras `0.5.4:slim` outer artifact, rejects alternate top-level copies, recursively validates Forge's `MixinExtras-0.5.4.jar` metadata/classes, and enforces the 128x128, <=32KiB icon. Fresh representative Fabric/Forge/NeoForge final artifacts pass. The root directory is not a current all-20 proof because 17 old artifacts fail stale-capability metadata; no manifest/full-matrix claim is carried forward.
+
+The bounded current PackIndex benchmark attempt timed out before producing sample rows and was cleaned up without a result. Comparative reload, Quick Pack profile, same-binary range, ten-reload, cancellation, and 62-cell runtime evidence remain unexecuted.
+
 ## Outcome
 
 Current continuation state is **PARTIAL** and **NOT RELEASE READY**. The current version is `1.4`; all-loader MixinExtras packaging uses the resolved `0.5.4:slim` classifier.

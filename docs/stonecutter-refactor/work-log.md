@@ -1,5 +1,14 @@
 # Stonecutter refactor work log
 
+## Current 1.4 artifact-hardening checkpoint
+
+- Date: 2026-08-16
+- Branch/HEAD: `1.4` / `6591e79` (parent `014f71a`)
+- Scope: recursive slim-MixinExtras verification, required runtime-class checks, 128x128 <=32KiB icon gate, and artifact-size icon reporting.
+- Validation: `validateTargetRegistry` PASS; representative Fabric/Forge/NeoForge `mc1_21_1` direct final builds PASS; `verifyTargetArtifacts` PASS for the three fresh artifacts; `inspectArtifactSizes` PASS with nested JAR/duplicate-entry/icon output; source-metrics checkpoint refreshed with Phase F shortfall 0.
+- Boundary: `verifyExistingArtifacts` correctly rejects the mixed root directory's 17 stale files; no all-20 current artifact set, manifest, runtime matrix, Quick Pack profile, or comparative benchmark PASS is claimed. The bounded PackIndex benchmark timed out before samples and its process tree was stopped.
+- Rollback: revert `6591e79` to remove only this verifier/report hardening; retain `014f71a` and earlier implementation checkpoints.
+
 ## Current 1.4 slim-MixinExtras validation (working tree)
 
 - Date: 2026-08-15

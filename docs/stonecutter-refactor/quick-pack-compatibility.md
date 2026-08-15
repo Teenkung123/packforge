@@ -2,6 +2,17 @@
 
 Date: 2026-08-15
 
+## Superseding 1.4 policy checkpoint (2026-08-16)
+
+The ownership list in the older body is superseded by the current version-aware implementation at HEAD `6591e79`:
+
+- unknown, unparsable, or detection-failure metadata: resource indexing only;
+- Quick Pack `<1.4`: resource indexing;
+- Quick Pack `>=1.4,<1.5`: resource indexing plus loading-fade control;
+- Quick Pack `>=1.5`: the preceding modules plus font-provider preselection and atlas-mipmap generation.
+
+ZIP read pooling and PackForge's loading-status overlay are not externally owned. PackForge retains its diagnostics, summary toast, sprite decode, model scheduling, atlas protection, and recovery paths. The Fabric profile-only Loader `0.17.3` override is present structurally; all current Quick Pack profiles remain `UNTESTED`.
+
 ## Clean-room boundary
 
 PackForge is MIT-licensed and Quick Pack is GPLv3. PackForge may detect public mod ID/version metadata, observe public behavior, and implement independent ownership rules. It must not copy Quick Pack source or mixins, import internal interfaces, shade Quick Pack, or depend on unstable internal APIs.
