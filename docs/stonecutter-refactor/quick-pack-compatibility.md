@@ -1,6 +1,6 @@
 # Quick Pack compatibility
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Clean-room boundary
 
@@ -28,10 +28,10 @@ This policy deliberately avoids Quick Pack internal classes and configuration ke
 - Unit tests cover absent, present, old, current, future, malformed, missing-version, and detection-failure policy states.
 - Packaging/structural checks cover ownership boundaries.
 - `CompatibilityProfileReporter` can emit profile ID, loader/target, loader-observed mod presence, Quick Pack state, six handed-off capabilities, and 23 retained capabilities.
-- Catalog has pinned Quick Pack 1.21.1 isolated recipes for Fabric, Forge, and NeoForge, plus a pinned Fabric Quick Pack + ImmediatelyFast recipe.
+- Catalog declares six Quick Pack-containing recipes. The isolated Forge and NeoForge recipes are pinned `AVAILABLE`; the isolated Fabric recipe and three Fabric high-risk combinations remain `PENDING_METADATA`.
 - Schema-2 materialization can hash-verify and stage profile dependencies through all three loader wrappers.
 
-All four Quick Pack-containing catalog recipes remain `UNTESTED`. No current final-JAR Minecraft launch, reload, resource/semantic result, or clean-exit result exists. `AVAILABLE` describes pinned materializable inputs, not compatibility PASS.
+All six Quick Pack-containing catalog recipes remain `UNTESTED`: two are `AVAILABLE` and four are `PENDING_METADATA`. No current final-JAR Minecraft launch, reload, resource/semantic result, or clean-exit result exists. `AVAILABLE` describes pinned materializable inputs, not compatibility PASS.
 
 Quick Pack 1.4 and older remain best-effort/not guaranteed. Unit policy equality across version strings proves ownership selection only; it does not prove those versions run correctly.
 

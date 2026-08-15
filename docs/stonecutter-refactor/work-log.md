@@ -435,3 +435,13 @@
 - Verification: direct contract passed in 47 seconds across 53 direct cells / four native SimpleReload cells. Offline 1.21.4/1.21.5/1.21.6 compileJava+sourcesJar passed in 51 seconds across 18 executed tasks. Generated/source-JAR SHA prefix `B2F6321B` matched for 1.21.5 and 1.21.6 with 4,648-byte classes; 1.21.4 retained the inactive generated output and 4,641-byte physical class. Metrics passed in 59 seconds: 217 files / 16,575 LOC, zero duplicate groups, ten blocks / maximum 40 lines, and 103 validator target-key literals. Independent review passed with no required fixes.
 - Limits: no clean build, runtime, all-53 parity, full matrix, release verification, or cross-loader native preprocessing proof. Phase E remains `PARTIAL`.
 - Rollback: revert later dependants first, then `git revert 0138d6e`; then `b1ee885`, `731d1c2`, `f74e0a7`, `aba98b3`, `c5b61e2`, `7efd43f`, `4f82154`, then `b54a40f` if needed.
+
+## Whole-plan A-L current-state audit
+
+- Date: 2026-08-15
+- Commit SHA: `1d03c6dcd4bd010bde9ccd9d2d326e8f95ef7a97`; parent `42cfd18342abad235a95650bdb74869fb23801f5`
+- Status: `PARTIAL_NOT_RELEASE_READY`.
+- Scope: classify every phase with the assignment's canonical statuses and five-column evidence schema, identify stale report claims, and record the live artifact-directory conflict.
+- Verification: 12/12 phase rows and schema/status checks passed. Independent review passed after one repair cycle. Artifact inventory is 20 expected / 17 present / five matching / 15 missing / 12 stale; existing-artifact verification failed and the release manifest is absent.
+- Limits: no production source, clean build, all-53 build, runtime cell, third-party profile, benchmark, or publication was run.
+- Rollback: revert later documentation dependants first, then `git revert 1d03c6d`.

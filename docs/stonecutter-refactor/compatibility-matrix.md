@@ -1,6 +1,6 @@
 # Compatibility matrix
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 Outcome labels are `FULL_OPTIMIZED_PATH`, `HOOK_PRESERVING_COALESCED_PATH`, `SAFE_ORIGINAL_PATH`, `EXTERNALLY_OWNED_PATH`, `UNAVAILABLE`, `UNTESTED`, and `FAILED`.
 
@@ -63,9 +63,9 @@ Quick Pack policy assigns exactly six capabilities to `EXTERNALLY_OWNED_PATH` wh
 
 ## Build and publication state
 
-The authoritative graph contains 53 direct loader distributions. Direct-contract AST/self-tests, the direct contract task, and a registry dry-run pass. Native Stonecutter preprocessing is proven for Fabric archive capture across 16 targets. Nested Gradle remains a temporary parity oracle; full all-53 compilation/package parity and general cross-loader preprocessing proof are absent.
+The authoritative graph contains 53 direct loader distributions. Direct-contract AST/self-tests, the direct contract task, and a registry dry-run pass. Focused Fabric preprocessing proof covers archive capture on 16 targets, SharedZip on 17, ReloadableResourceManager on 18 pre26 targets, RuntimeResourceHash on 17, LoadingOverlayToast on 14, Bitmap provider definition on all 19, and SimpleReload on four targets from 1.21.5 through 1.21.8. Nested Gradle remains a temporary parity oracle; full all-53 compilation/package parity and general cross-loader preprocessing proof are absent.
 
-Registry publication metadata expects 20 artifacts, but a complete current manifest has not been verified after direct artifact changes. Therefore publication ranges and all 62 exact runtime cells remain unproven for current bytes.
+Registry publication metadata expects 20 artifacts. The local directory has 17 older JARs, of which only five names match; 15 expected names are missing, 12 are stale, structural verification fails, and the release manifest is absent. Therefore publication ranges and all 62 exact runtime cells remain unproven for current bytes.
 
 ## Historical runtime evidence
 
