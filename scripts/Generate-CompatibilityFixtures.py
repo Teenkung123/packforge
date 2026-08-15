@@ -25,6 +25,7 @@ PACK_FORMAT = 34
 HIGH_ENTRY_COUNT = 20_000
 MODEL_COUNT = 256
 FONT_PROVIDER_COUNT = 32
+SEMANTIC_HASH_MARKER = "assets/example/textures/fixture-marker.txt"
 
 
 def json_bytes(value: object) -> bytes:
@@ -86,6 +87,7 @@ def base_entries(description: str) -> list[ArchiveEntry]:
         ArchiveEntry("pack.mcmeta", pack_metadata(description)),
         ArchiveEntry("assets/minecraft/textures/fixture.txt", b"PackForge fixture\n"),
         ArchiveEntry("assets/minecraft/models/item/fixture.json", json_bytes({"parent": "item/generated"})),
+        ArchiveEntry(SEMANTIC_HASH_MARKER, b"PackForge semantic hash fixture\n"),
     ]
 
 
@@ -219,7 +221,7 @@ FIXTURES = (
         "Baseline resource-pack startup and reload path.",
         normal_entries,
         ("pack.mcmeta", "assets/minecraft/textures/fixture.txt"),
-        3,
+        4,
     ),
     FixtureSpec(
         "high-entry-count-resource-pack",
@@ -227,7 +229,7 @@ FIXTURES = (
         "Archive enumeration and ZIP-pool pressure with 20,000 generated resources; also covers overlay, namespace, duplicate central-directory, and malformed-but-ZIP-readable paths.",
         high_entry_count_entries,
         ("pack.mcmeta", "assets/generated7/textures/generated/19999.bin", "overlay/assets/example/textures/duplicate.txt", "assets/minecraft/../escape.txt"),
-        14 + HIGH_ENTRY_COUNT,
+        15 + HIGH_ENTRY_COUNT,
         (("assets/minecraft/textures/duplicate.txt", (b"first-zip-entry\n", b"last-zip-entry\n")),),
     ),
     FixtureSpec(
@@ -236,7 +238,7 @@ FIXTURES = (
         "Shader-resource discovery with deterministic core shader metadata and sources.",
         shader_entries,
         ("pack.mcmeta", "assets/minecraft/shaders/core/packforge_fixture.json", "assets/minecraft/shaders/core/packforge_fixture.fsh"),
-        6,
+        7,
     ),
     FixtureSpec(
         "connected-textures-resource-pack",
@@ -244,7 +246,7 @@ FIXTURES = (
         "Connected-texture metadata and texture resources for Continuity-style profile paths.",
         connected_textures_entries,
         ("pack.mcmeta", "assets/minecraft/optifine/ctm/packforge/fixture.properties", "assets/minecraft/optifine/ctm/packforge/0.png"),
-        6,
+        7,
     ),
     FixtureSpec(
         "cit-resource-pack",
@@ -252,7 +254,7 @@ FIXTURES = (
         "Custom-item-texture metadata and texture resources for CIT Resewn profile paths.",
         cit_entries,
         ("pack.mcmeta", "assets/minecraft/optifine/cit/packforge/fixture.properties", "assets/minecraft/optifine/cit/packforge/fixture.png"),
-        5,
+        6,
     ),
     FixtureSpec(
         "entity-resource-pack",
@@ -260,7 +262,7 @@ FIXTURES = (
         "Entity texture and model metadata for ETF/EMF profile paths.",
         entity_entries,
         ("pack.mcmeta", "assets/minecraft/optifine/random/entity/cow/cow.properties", "assets/minecraft/optifine/cem/cow.jem"),
-        6,
+        7,
     ),
     FixtureSpec(
         "font-heavy-resource-pack",
@@ -268,7 +270,7 @@ FIXTURES = (
         "Bitmap font-provider discovery and font reload work with 32 deterministic providers.",
         font_heavy_entries,
         ("pack.mcmeta", "assets/minecraft/font/default.json", "assets/minecraft/font/fixture_31.png"),
-        3 + FONT_PROVIDER_COUNT + 1,
+        4 + FONT_PROVIDER_COUNT + 1,
     ),
     FixtureSpec(
         "model-heavy-resource-pack",
@@ -276,7 +278,7 @@ FIXTURES = (
         "Model and blockstate loading with 256 deterministic model pairs.",
         model_heavy_entries,
         ("pack.mcmeta", "assets/minecraft/models/item/fixture_255.json", "assets/minecraft/blockstates/fixture_255.json"),
-        3 + MODEL_COUNT * 2,
+        4 + MODEL_COUNT * 2,
     ),
     FixtureSpec(
         "mipmap-heavy-resource-pack",
@@ -284,7 +286,7 @@ FIXTURES = (
         "High-resolution texture decode and atlas mipmap work with 256, 512, and 1024 pixel PNGs.",
         mipmap_high_resolution_entries,
         ("pack.mcmeta", "assets/minecraft/textures/fixture/mipmap_1024.png", "assets/minecraft/textures/fixture/mipmap_1024.png.mcmeta"),
-        7,
+        8,
     ),
 )
 EXPECTED_FIXTURE_IDS = (
@@ -350,7 +352,7 @@ def fixture_manifest_entry(spec: FixtureSpec, path: Path) -> dict[str, object]:
         "entryCount": spec.expected_entry_count,
         "size": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
-        "requiredEntries": list(spec.required_entries),
+        "requiredEntries": [*spec.required_entries, SEMANTIC_HASH_MARKER],
         "duplicateEntries": duplicates,
     }
 
@@ -387,6 +389,8 @@ def assert_zip_contract(spec: FixtureSpec, path: Path) -> None:
         for required_entry in spec.required_entries:
             if required_entry not in names:
                 raise AssertionError(f"missing {required_entry} in {spec.fixture_id}")
+        if SEMANTIC_HASH_MARKER not in names:
+            raise AssertionError(f"missing semantic hash marker in {spec.fixture_id}")
         if json.loads(archive.read("pack.mcmeta").decode("utf-8"))["pack"]["pack_format"] != PACK_FORMAT:
             raise AssertionError(f"invalid pack metadata in {spec.fixture_id}")
         for duplicate_name, expected_contents in spec.duplicate_contents:
