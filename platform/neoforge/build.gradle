@@ -153,6 +153,20 @@ repositories {
 	mavenCentral()
 }
 
+// NeoGradle's NeoForge 20.6 dependency graph includes net.minecraftforge:unsafe,
+// whose historical runtime POM requests Log4j 2.11.+.  NeoForged Releases
+// currently serves an empty metadata document for that range, so pin only that
+// transitive request to the final 2.11.x release; NeoForge's declared Log4j
+// 2.22.1 dependency remains untouched.
+configurations.configureEach {
+	resolutionStrategy.eachDependency { details ->
+		if (details.requested.group == "org.apache.logging.log4j"
+			&& details.requested.version == "2.11.+") {
+			details.useVersion("2.11.2")
+		}
+	}
+}
+
 dependencies {
 	if (usesNeoGradle) {
 		implementation "net.neoforged:neoforge:${neoForgeDependencyVersion}"
