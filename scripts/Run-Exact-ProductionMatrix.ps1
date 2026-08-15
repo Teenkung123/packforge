@@ -311,6 +311,83 @@ function Resolve-CompatibilityFixture {
     if ($expectedHash -notmatch '^[A-F0-9]{64}$' -or $actualHash -ne $expectedHash) {
         throw "Compatibility fixture '$fixtureId' SHA-256 mismatch: expected=$expectedHash actual=$actualHash"
     }
+    $entryCountValue = Get-PropertyValue -Object $fixture -Name 'entryCount'
+    $entryCount = 0
+    if ($null -eq $entryCountValue -or -not [int]::TryParse(
+        [string] $entryCountValue,
+        [Globalization.NumberStyles]::Integer,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref] $entryCount
+    ) -or $entryCount -le 0) {
+        throw "Compatibility fixture '$fixtureId' must declare a positive manifest entryCount."
+    }
+    $requiredEntries = @(Get-PropertyValue -Object $fixture -Name 'requiredEntries' | ForEach-Object { [string] $_ })
+    if ($requiredEntries.Count -eq 0 -or @($requiredEntries | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
+        throw "Compatibility fixture '$fixtureId' must declare non-empty requiredEntries."
+    }
+    $requiredEntrySet = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($requiredEntry in $requiredEntries) {
+        if (-not $requiredEntrySet.Add($requiredEntry)) {
+            throw "Compatibility fixture '$fixtureId' declares duplicate required entry '$requiredEntry'."
+        }
+    }
+    $duplicateEntries = @(Get-PropertyValue -Object $fixture -Name 'duplicateEntries')
+    $duplicatePaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($duplicateEntry in $duplicateEntries) {
+        $duplicatePath = [string] (Get-PropertyValue -Object $duplicateEntry -Name 'path')
+        $duplicateCount = 0
+        if ([string]::IsNullOrWhiteSpace($duplicatePath) -or -not [int]::TryParse(
+            [string] (Get-PropertyValue -Object $duplicateEntry -Name 'count'),
+            [Globalization.NumberStyles]::Integer,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [ref] $duplicateCount
+        ) -or $duplicateCount -lt 2 -or -not $duplicatePaths.Add($duplicatePath)) {
+            throw "Compatibility fixture '$fixtureId' has an invalid duplicateEntries declaration."
+        }
+    }
+    $allFixtureIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($manifestFixture in @($manifest.fixtures)) {
+        [void] $allFixtureIds.Add([string] (Get-PropertyValue -Object $manifestFixture -Name 'id'))
+    }
+    $scenarioIds = [Collections.Generic.List[string]]::new()
+    $scenarioIdSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $executionScenarios = @(Get-PropertyValue -Object $manifest -Name 'executionScenarios')
+    foreach ($scenario in $executionScenarios) {
+        $scenarioId = [string] (Get-PropertyValue -Object $scenario -Name 'id')
+        if ($scenarioId -notmatch '^[a-z0-9][a-z0-9-]{0,63}$' -or -not $scenarioIdSet.Add($scenarioId)) {
+            throw "Compatibility fixture manifest contains an invalid or duplicate execution scenario ID '$scenarioId'."
+        }
+        $materialized = Get-PropertyValue -Object $scenario -Name 'materialized'
+        if ($materialized -isnot [bool] -or $materialized) {
+            throw "Compatibility fixture execution scenario '$scenarioId' must remain non-materialized until runtime evidence exists."
+        }
+        $scenarioFixtures = @(Get-PropertyValue -Object $scenario -Name 'fixtureIds')
+        if ($scenarioFixtures.Count -eq 0) {
+            throw "Compatibility fixture execution scenario '$scenarioId' must name at least one fixture."
+        }
+        foreach ($scenarioFixtureId in $scenarioFixtures) {
+            if (-not $allFixtureIds.Contains([string] $scenarioFixtureId)) {
+                throw "Compatibility fixture execution scenario '$scenarioId' names unknown fixture '$scenarioFixtureId'."
+            }
+            if ([string] $scenarioFixtureId -ceq $fixtureId) {
+                [void] $scenarioIds.Add($scenarioId)
+            }
+        }
+    }
+    $scenarioIds = @($scenarioIds | Sort-Object -Unique)
+    $fixtureContract = [ordered]@{
+        id = $fixtureId
+        filename = $filename
+        entryCount = $entryCount
+        requiredEntries = @($requiredEntries | Sort-Object)
+        duplicateEntries = @($duplicateEntries | ForEach-Object {
+            [ordered]@{
+                path = [string] (Get-PropertyValue -Object $_ -Name 'path')
+                count = [int] (Get-PropertyValue -Object $_ -Name 'count')
+            }
+        } | Sort-Object path)
+        executionScenarioIds = $scenarioIds
+    }
     return [pscustomobject]@{
         id = $fixtureId
         path = $fixturePath
@@ -318,6 +395,28 @@ function Resolve-CompatibilityFixture {
         sha256 = $expectedHash
         manifestPath = $resolvedManifest
         manifestSha256 = (Get-FileHash -LiteralPath $resolvedManifest -Algorithm SHA256).Hash.ToUpperInvariant()
+        entryCount = $entryCount
+        requiredEntries = @($requiredEntries)
+        duplicateEntries = @($duplicateEntries)
+        executionScenarioIds = $scenarioIds
+        contractSha256 = Get-Sha256Text -Text ($fixtureContract | ConvertTo-Json -Compress -Depth 8)
+    }
+}
+
+function Assert-VerifiedReleaseManifest {
+    $manifestDirectory = Join-Path $artifactsRoot 'release'
+    $manifestPath = Join-Path $manifestDirectory 'manifest.json'
+    $generator = Resolve-RequiredFile -Path (Join-Path $PSScriptRoot 'Generate-ReleaseManifest.py') -Description 'Release manifest verifier'
+    if (-not (Test-Path -LiteralPath $manifestDirectory -PathType Container)) {
+        throw "Verified release manifest directory is missing: $manifestDirectory"
+    }
+    & python $generator --verify-existing --output-dir $manifestDirectory --artifacts-dir $artifactsRoot | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Release manifest verification failed with exit code $LASTEXITCODE."
+    }
+    return [pscustomobject]@{
+        path = [IO.Path]::GetFullPath($manifestPath)
+        sha256 = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToUpperInvariant()
     }
 }
 
@@ -559,6 +658,11 @@ function New-Schema2CompatibilityProfileInput {
             sha256 = [string] $Fixture.sha256
             manifestPath = [string] $Fixture.manifestPath
             manifestSha256 = [string] $Fixture.manifestSha256
+            entryCount = [int] $Fixture.entryCount
+            requiredEntries = @($Fixture.requiredEntries)
+            duplicateEntries = @($Fixture.duplicateEntries)
+            executionScenarioIds = @($Fixture.executionScenarioIds)
+            contractSha256 = [string] $Fixture.contractSha256
         }
         expectedPath = [string] $Profile.expectedPath
     }
@@ -815,6 +919,10 @@ function Get-ExactMatrixPassRecordError {
     if ($resolvedResourceSha256 -notmatch '^[A-F0-9]{64}$') {
         return 'resolvedResourceSha256 is not an uppercase SHA-256'
     }
+    $releaseManifestSha256 = [string] (Get-RecordProperty -Record $Record -Name 'releaseManifestSha256')
+    if ($releaseManifestSha256 -notmatch '^[A-F0-9]{64}$') {
+        return 'releaseManifestSha256 is not an uppercase SHA-256'
+    }
 
     $loaderDisplay = switch ([string] $ExpectedRow.Loader) {
         'fabric' { 'Fabric' }
@@ -962,8 +1070,9 @@ function Invoke-ResumeEvidenceSelfTest {
                 coordinate = $row.Coordinate
                 artifact = [IO.Path]::GetFileName($row.Artifact)
                 artifactHash = $row.ArtifactHash
-                fixtureHash = $row.FixtureHash
-                resolvedResourceSha256 = $resolvedResourceSha256
+        fixtureHash = $row.FixtureHash
+        releaseManifestSha256 = ('E' * 64)
+        resolvedResourceSha256 = $resolvedResourceSha256
                 reloads = 10
                 evidenceFingerprint = $fingerprint
                 cleanExit = $true
@@ -1001,6 +1110,7 @@ function Invoke-ResumeEvidenceSelfTest {
         & $assertRejected 'missing-resolved-resource-hash' { param($record) [void] $record.Remove('resolvedResourceSha256') }
         & $assertRejected 'malformed-resolved-resource-hash' { param($record) $record.resolvedResourceSha256 = 'G' * 64 }
         & $assertRejected 'mismatched-resolved-resource-hash' { param($record) $record.resolvedResourceSha256 = 'E' * 64 }
+        & $assertRejected 'missing-release-manifest-hash' { param($record) [void] $record.Remove('releaseManifestSha256') }
         & $assertRejected 'missing-resolved-resource-pass-token' { param($record) $record.passLine = $record.passLine.Replace(" resolvedResourceSha256=$resolvedResourceSha256", '') }
         & $assertRejected 'wrong-cell' { param($record) $record.cell = '1.21.2/fabric' }
         & $assertRejected 'wrong-fingerprint' { param($record) $record.evidenceFingerprint = 'E' * 64 }
@@ -1040,7 +1150,7 @@ function Invoke-ResumeEvidenceSelfTest {
 
 if ($SelfTestResumeEvidence.IsPresent) {
     Invoke-ResumeEvidenceSelfTest
-    Write-Output 'Exact production matrix resume-evidence self-test PASS: valid controlled graceful exit accepted; 21 invalid mutations and later-invalid summary failure rejected.'
+    Write-Output 'Exact production matrix resume-evidence self-test PASS: valid controlled graceful exit accepted; 22 invalid mutations and later-invalid summary failure rejected.'
     return
 }
 
@@ -1248,6 +1358,9 @@ foreach ($cell in $registry.releaseCells) {
             Fixture = $fixture
             FixtureId = if ($isCatalogProfileCell) { [string] $resolvedCatalogFixture.id } else { 'deterministic-large-pack' }
             FixtureHash = (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash.ToUpperInvariant()
+            FixtureManifestSha256 = if ($isCatalogProfileCell) { [string] $resolvedCatalogFixture.manifestSha256 } else { $null }
+            FixtureScenarioIds = if ($isCatalogProfileCell) { @($resolvedCatalogFixture.executionScenarioIds) } else { @() }
+            FixtureContractSha256 = if ($isCatalogProfileCell) { [string] $resolvedCatalogFixture.contractSha256 } else { $null }
         })
     }
 }
@@ -1330,6 +1443,8 @@ foreach ($releaseGroup in $rows | Group-Object Release) {
 
 Write-Output "READY profiles=$($rows.Count)"
 if ($PrepareOnly.IsPresent) { return }
+
+$verifiedReleaseManifest = Assert-VerifiedReleaseManifest
 
 if ([string]::IsNullOrWhiteSpace($ResultsRoot)) {
     $runId = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss')
@@ -1428,6 +1543,10 @@ foreach ($row in $rows) {
         coordinate = [string] $row.Coordinate
         artifactHash = [string] $row.ArtifactHash
         fixtureHash = [string] $row.FixtureHash
+        fixtureManifestSha256 = [string] $row.FixtureManifestSha256
+        fixtureScenarioIds = @($row.FixtureScenarioIds)
+        fixtureContractSha256 = [string] $row.FixtureContractSha256
+        releaseManifestSha256 = [string] $verifiedReleaseManifest.sha256
         profileFingerprint = $profileFingerprint
         reloads = $ReloadCount
         harnesses = $harnessIdentity
@@ -1577,6 +1696,10 @@ foreach ($row in $rows) {
         artifact = [IO.Path]::GetFileName($row.Artifact)
         artifactHash = $row.ArtifactHash
         fixtureHash = $row.FixtureHash
+        fixtureManifestSha256 = $row.FixtureManifestSha256
+        fixtureScenarioIds = @($row.FixtureScenarioIds)
+        fixtureContractSha256 = $row.FixtureContractSha256
+        releaseManifestSha256 = [string] $verifiedReleaseManifest.sha256
         resolvedResourceSha256 = $resolvedResourceSha256
         resolvedResourceValidationError = $resolvedResourceValidationError
         reloads = $ReloadCount

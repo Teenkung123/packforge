@@ -70,13 +70,21 @@ function Write-FixtureManifest {
     $fixturePath = Join-Path $Directory $artifact
     Write-Bytes -Path $fixturePath -Bytes $Bytes
     $manifestPath = Join-Path $Directory 'compatibility-fixtures-manifest.json'
-    $manifest = [ordered]@{
+		$manifest = [ordered]@{
         schemaVersion = 1
         fixtures = @([ordered]@{
             id = $FixtureId
             filename = $artifact
             supportedMinecraft = @('1.21.1')
+            entryCount = 1
+            requiredEntries = @('pack.mcmeta')
+            duplicateEntries = @()
             sha256 = Get-BytesSha256 -Bytes $Bytes
+        })
+        executionScenarios = @([ordered]@{
+            id = 'repeated-reload'
+            fixtureIds = @($FixtureId)
+            materialized = $false
         })
     }
     [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
@@ -432,7 +440,7 @@ try {
     $resumeEvidence = Invoke-Runner @('-SelfTestResumeEvidence')
     Assert-Success $resumeEvidence 'resume-evidence self-test'
     $resumeOutput = @($resumeEvidence.Output) -join [Environment]::NewLine
-    if ($resumeOutput -notmatch '21 invalid mutations') {
+    if ($resumeOutput -notmatch '22 invalid mutations') {
         throw 'Resume-evidence self-test did not report the current resolved-resource hash mutations.'
     }
 
