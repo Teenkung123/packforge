@@ -4,6 +4,7 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 
 ## 1.4 artifact-hardening checkpoint
 
+- Follow-up repair SHA: `8aa6844` (parent `6591e79`); content-aware nested-JAR scan and direct-shading rejection pass on the three representative artifacts.
 - Commit SHA: `6591e79`
 - Parent SHA: `014f71a`
 - Scope: enforce one exact loader-specific MixinExtras `0.5.4:slim` artifact, recursive Forge common-runtime metadata/classes, required mixin/runtime entries, 128x128 <=32KiB icon, and size-report icon output.

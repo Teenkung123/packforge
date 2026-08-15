@@ -4,7 +4,7 @@ Date: 2026-08-15
 
 ## Superseding 1.4 policy checkpoint (2026-08-16)
 
-The ownership list in the older body is superseded by the current version-aware implementation at HEAD `6591e79`:
+The ownership list in the older body is superseded by the current version-aware implementation at HEAD `8aa6844`:
 
 - unknown, unparsable, or detection-failure metadata: resource indexing only;
 - Quick Pack `<1.4`: resource indexing;

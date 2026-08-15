@@ -4,7 +4,7 @@ Date: 2026-08-15
 
 ## Superseding 1.4 checkpoint (2026-08-16)
 
-This addendum supersedes the older snapshot below for current source and artifact status. HEAD is `6591e79` on branch `1.4`, after the capability/Quick Pack correction (`1177e23`), unreachable-scaffolding removal (`014f71a`), and artifact-hardening checkpoint (`6591e79`).
+This addendum supersedes the older snapshot below for current source and artifact status. HEAD is `8aa6844` on branch `1.4`, after the capability/Quick Pack correction (`1177e23`), unreachable-scaffolding removal (`014f71a`), artifact-hardening checkpoint (`6591e79`), and content-aware duplicate scan repair (`8aa6844`).
 
 - Source metrics are now 209 production Java files / 15,814 nonblank LOC, 110 bridge files / 5,553 LOC (35.11%), zero exact or normalized duplicate groups, six target/version conditional lines, and zero platform target-key conditional lines.
 - The Phase F ledger-adjusted reduction is 3,370 LOC against 3,368 required; the executable metric gate is `PASS`, while the implementation status remains `IMPLEMENTED_UNVERIFIED` until behavior parity is proven.

@@ -4,7 +4,7 @@
 
 ## Superseding 1.4 structural checkpoint (2026-08-16)
 
-HEAD `6591e79` adds current final-JAR invariants: one exact loader-specific `mixinextras-*-0.5.4-slim.jar` at the outer distribution level, no alternate normal top-level MixinExtras copy, recursive Forge slim-wrapper/common-runtime metadata and class checks, required mixin/refmap checks, and a 128x128 PNG icon capped at 32KiB. Fresh representative Fabric/Forge/NeoForge artifacts pass these checks; the measured icon is 10,607 bytes. The existing root directory remains mixed current/stale, so its 17 unrecreated artifacts must not be used as a current 20-artifact release set. No current all-20 manifest, same-binary range, or runtime matrix proof is asserted.
+HEAD `8aa6844` adds current final-JAR invariants: one exact loader-specific `mixinextras-*-0.5.4-slim.jar` at the outer distribution level, no alternate normal top-level MixinExtras copy, recursive content scanning of every other nested JAR, recursive Forge slim-wrapper/common-runtime metadata and class checks, required mixin/refmap checks, and a 128x128 PNG icon capped at 32KiB. Fresh representative Fabric/Forge/NeoForge artifacts pass these checks; the measured icon is 10,607 bytes. The existing root directory remains mixed current/stale, so its 17 unrecreated artifacts must not be used as a current 20-artifact release set. No current all-20 manifest, same-binary range, or runtime matrix proof is asserted.
 
 Baseline published/build artifact count was 17:
 

@@ -4,7 +4,7 @@ Date: 2026-08-15
 
 ## Superseding 1.4 checkpoint (2026-08-16)
 
-The current source checkpoint is `6591e79`. The six-capability Quick Pack statement in the older body is historical and is superseded by the version-aware policy: `<1.4` owns resource indexing; `1.4.x` adds loading fade; `1.5+` adds font-provider preselection and atlas-mipmap generation. ZIP pooling, the PackForge loading-status overlay, diagnostics, toast, atlas protection, sprite decode, and model scheduling remain PackForge-owned.
+The current source checkpoint is `8aa6844`. The six-capability Quick Pack statement in the older body is historical and is superseded by the version-aware policy: `<1.4` owns resource indexing; `1.4.x` adds loading fade; `1.5+` adds font-provider preselection and atlas-mipmap generation. ZIP pooling, the PackForge loading-status overlay, diagnostics, toast, atlas protection, sprite decode, and model scheduling remain PackForge-owned.
 
 The current source metrics are 209 production files / 15,814 LOC with a zero-shortfall Phase F metric gate. Representative current 1.4 Fabric, Forge, and NeoForge artifacts pass the hardened slim-MixinExtras/icon verifier. The root 20-file directory is mixed current/stale: `verifyExistingArtifacts` correctly rejects stale capability metadata in the 17 unrecreated files, so no all-20 current artifact or manifest PASS is claimed here. The full exact runtime cells and PackIndex/comparative reload benchmark remain `UNTESTED`; the bounded benchmark attempt timed out before samples.
 

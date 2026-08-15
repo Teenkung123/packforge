@@ -4,7 +4,7 @@ Date: 2026-08-15
 
 ## Superseding 1.4 checkpoint (2026-08-16)
 
-Use this section for current status; later tables preserve historical checkpoint wording. HEAD is `6591e79` on branch `1.4`.
+Use this section for current status; later tables preserve historical checkpoint wording. HEAD is `8aa6844` on branch `1.4`.
 
 - Capability metadata now excludes unreachable atlas-mip, model adaptive/cache/timing, and startup-async scaffolding. The configuration fields remain readable for backward compatibility but are marked unavailable.
 - Quick Pack policy is version-aware and no longer claims ZIP pooling or the PackForge status overlay as externally supplied. The Fabric profile-only Loader `0.17.3` override is structural only.
