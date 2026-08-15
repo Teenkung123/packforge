@@ -20,7 +20,7 @@ This report describes current implementation state. Earlier full-matrix and Quic
 | H — range artifacts | `IMPLEMENTED_UNVERIFIED` | Registry expresses seven publication anchors and 20 loader artifacts without crossing maturity boundaries. | Rebuild current bytes and repeat same-JAR proof for every exact release in each range. |
 | I — compatibility profiles | `PARTIAL` | 36-profile catalog, pinned available inputs, unavailability evidence, profile reporter, schema-2 materializer, three-loader transport, and deterministic fixtures. | Resolve 12 pending dispositions, then download/launch every available profile and retain current final-JAR evidence. |
 | J — default-off evaluation | `VERIFIED_COMPLETE` | Eleven candidates frozen: five `SAFE_KEEP_DEFAULT_OFF`, six `FAILED_WITH_REASON`, zero promoted. | Runtime/performance gates only if a future promotion is proposed. |
-| K — exact final-artifact matrix | `PARTIAL` | Existing-manifest verifier, exact-cell controller, provenance transport, nine deterministic fixtures, and a shared resolved-resource hash contract exist. Controlled Fabric/Forge/NeoForge smoke PASS lines carry a deterministic hash, and the matrix binds it into resumable records. | Current 20-JAR manifest plus full 62-cell runtime/reload/fixture/exit proof. |
+| K — exact final-artifact matrix | `PARTIAL` | Existing-manifest verifier, exact-cell controller, provenance transport, nine deterministic fixtures with a hash-visible marker, and a shared resolved-resource hash contract exist. Controlled Fabric/Forge/NeoForge smoke PASS lines carry a deterministic hash, and the matrix binds it into resumable records. | Current 20-JAR manifest plus full 62-cell runtime/reload/fixture/exit proof. |
 | L — final reconciliation | `PARTIAL` | Current-status docs no longer present historical 62-cell, Quick Pack, manifest, or hashes as current proof. | Final evidence and rollback checkpoint after H/K and required profiles pass. |
 
 ## Current build architecture
@@ -66,7 +66,7 @@ Every available recipe is pinned by URL/version/SHA-256 and requires runtime evi
 
 Schema-2 materialization validates the catalog before resolving inputs, uses a hash-addressed cache, derives safe decoded basenames, verifies SHA-256, transports fixture and expected-marker metadata, and rejects unsupported paths. Offline materialization and AST tests pass. Exactly five safe boolean overrides are merged against a complete 50-field v12 baseline; unsupported keys and values fail closed. No network request, dependency download, Gradle build, or Minecraft launch belongs to this evidence. ImmediatelyFast-only path proof remains unavailable.
 
-Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected-textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy packs. Manifest contracts also cover overlay/namespace/duplicate and malformed-but-ZIP-readable entries. Fixture generation is deterministic; runtime, repeated reload, and cancellation evidence remain open.
+Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected-textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy packs. Each includes a stable `example`-namespace texture marker for positive resolved-resource hashing. Manifest contracts also cover overlay/namespace/duplicate and malformed-but-ZIP-readable entries. Fixture generation is deterministic; runtime, repeated reload, and cancellation evidence remain open.
 
 ## Current default-off decisions
 

@@ -730,3 +730,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: helper, matrix resume, profile transport, PowerShell parse, focused `validateRuntimeResourceHashEvidence`, and aggregate `validateImplementationContracts` checks passed. No Minecraft launch, dependency download, final-JAR runtime, 62-cell matrix, or release verification was run.
 - Limits: this proves the acceptance contract and fixture transport only. Current artifacts remain invalid/stale and no semantic hash has been observed from current final JARs; Phase K remains `PARTIAL`.
 - Rollback: revert later documentation dependants first, then `git revert 6ac8858`; the prior matrix remains structurally usable but without the resolved-resource hash contract.
+
+## Phase I/K — hash-visible compatibility fixtures
+
+- Date: 2026-08-15
+- Commit SHA: `c610fc1936bbff61aca6ae6cbd48490f05a63a29`; parent `4d4596acdc95985b35d5d8466c0aa5ea83a03858`
+- Status: `PHASE_I_K_FIXTURE_INPUTS_STRUCTURAL_VERIFIED`.
+- Scope: add one deterministic `assets/example/textures/fixture-marker.txt` resource to every compatibility fixture, update manifest entry counts/required entries, and make the ZIP contract assert its presence. This aligns all nine Phase I fixture families with the Phase K positive-entry semantic-hash gate without broadening the runtime namespace filter.
+- Verification: `python scripts/Generate-CompatibilityFixtures.py --self-test` passed; aggregate `validateImplementationContracts --offline --no-daemon --console=plain --stacktrace` passed (five actionable tasks).
+- Limits: no production Java, Minecraft launch, dependency download, final-artifact runtime, 62-cell matrix, cancellation, profile, or release verification was run; the marker proves input shape only, not a runtime hash.
+- Rollback: revert later documentation dependants first, then `git revert c610fc1`; the prior fixture catalog remains deterministic but most families no longer satisfy the positive-entry runtime-hash precondition.

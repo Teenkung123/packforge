@@ -57,9 +57,9 @@ Quick Pack policy assigns exactly six capabilities to `EXTERNALLY_OWNED_PATH` wh
 
 - Environment-gated profile reporting emits profile identity, loader/target, loader-observed mods, Quick Pack status, six overlap capabilities, and 23 retained capabilities.
 - Schema-2 profile materialization supports hash-addressed caching, safe decoded names, collision protection, SHA-256 verification, dependency staging, fixture metadata, expected markers, and evidence-path transport across all three loader wrappers.
-- Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy resources.
+- Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy resources; the generator adds one stable `example`-namespace texture marker to every family so controlled hashing cannot silently pass with zero entries.
 - ImmediatelyFast-only path evidence and nonempty configuration overrides fail closed until dedicated instrumentation exists.
-- No network download, Minecraft launch, repeated reload, cancellation, semantic hash, or clean-exit profile evidence has been recorded for current bytes. The controller contract now requires a positive deterministic resolved-resource hash and binds its uppercase SHA-256 token into matrix resume records; this is structural evidence only.
+- No network download, Minecraft launch, repeated reload, cancellation, semantic hash, or clean-exit profile evidence has been recorded for current bytes. The controller contract now requires a positive deterministic resolved-resource hash and binds its uppercase SHA-256 token into matrix resume records; every generated fixture supplies a hash-visible input, but this remains structural evidence only.
 
 ## Build and publication state
 

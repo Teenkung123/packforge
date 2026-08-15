@@ -475,3 +475,13 @@
 - Verification: helper self-test, exact matrix resume self-test with 21 invalid mutations, profile transport self-test, all affected PowerShell parses, focused Gradle contract, aggregate implementation-contract gate, and independent Luna review passed.
 - Limits: no production Java, Minecraft launch, dependency download, final-artifact runtime, 62-cell matrix, cancellation, or release verification was run.
 - Rollback: revert later documentation dependants first, then `git revert 6ac8858`.
+
+## Phase I/K — hash-visible compatibility fixtures
+
+- Date: 2026-08-15
+- Commit SHA: `c610fc1936bbff61aca6ae6cbd48490f05a63a29`; parent `4d4596acdc95985b35d5d8466c0aa5ea83a03858`
+- Status: `PHASE_I_K_FIXTURE_INPUTS_STRUCTURAL_VERIFIED`.
+- Scope: seed every generated compatibility fixture with one deterministic `example`-namespace texture marker and enforce its presence in the ZIP/manifest contract, so the Phase K `entries > 0` semantic-hash gate has a valid input for every fixture family.
+- Verification: `python scripts/Generate-CompatibilityFixtures.py --self-test` and aggregate `validateImplementationContracts` passed.
+- Limits: this changes deterministic inputs only. No production Java, Minecraft launch, dependency download, final-JAR runtime, profile, 62-cell matrix, cancellation, or release verification was run.
+- Rollback: revert later documentation dependants first, then `git revert c610fc1`.
