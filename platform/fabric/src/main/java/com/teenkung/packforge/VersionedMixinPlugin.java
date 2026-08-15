@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Set;
 
 /** Applies only version-dependent Mixin selection during early bootstrap. */
-public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
+public final class VersionedMixinPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		FabricLoader loader = FabricLoader.getInstance();

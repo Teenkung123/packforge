@@ -529,25 +529,30 @@ function Ensure-LauncherProfileFile {
 }
 
 function Ensure-FabricProfile {
-    param([string] $Release, [string] $Coordinate)
+    param([string] $Release, [string] $Coordinate, [string] $LoaderVersionOverride)
 
-    $profile = Find-Profile -Loader 'fabric' -Release $Release -Coordinate $Coordinate
+    $effectiveCoordinate = if ([string]::IsNullOrWhiteSpace($LoaderVersionOverride)) {
+        $Coordinate
+    } else {
+        $LoaderVersionOverride.Trim()
+    }
+    $profile = Find-Profile -Loader 'fabric' -Release $Release -Coordinate $effectiveCoordinate
     if ($PlanOnly.IsPresent) { return $profile }
 
     $root = if ($null -eq $profile) { $sharedRoots.fabric } else { [string] $profile.Root }
-    $isolatedNatives = Join-Path $root (Join-Path 'natives' "$Release-fabric-$Coordinate")
+    $isolatedNatives = Join-Path $root (Join-Path 'natives' "$Release-fabric-$effectiveCoordinate")
     $nativesReady = Test-Path -LiteralPath $isolatedNatives -PathType Container
     if ($null -eq $profile -or -not $nativesReady) {
-        Write-Host "PREPARE Fabric $Release / $Coordinate"
+        Write-Host "PREPARE Fabric $Release / $effectiveCoordinate"
         & (Join-Path $PSScriptRoot 'Prepare-Fabric-ProductionRoot.ps1') `
             -MinecraftVersion $Release `
-            -LoaderVersion $Coordinate `
+            -LoaderVersion $effectiveCoordinate `
             -ClientRoot $root | Out-Host
     }
-    $profile = Find-Profile -Loader 'fabric' -Release $Release -Coordinate $Coordinate
-    if ($null -eq $profile) { throw "Fabric profile preparation did not create $Release / $Coordinate." }
+    $profile = Find-Profile -Loader 'fabric' -Release $Release -Coordinate $effectiveCoordinate
+    if ($null -eq $profile) { throw "Fabric profile preparation did not create $Release / $effectiveCoordinate." }
     if (-not (Test-Path -LiteralPath $profile.NativesRoot -PathType Container)) {
-        throw "Fabric profile preparation did not create isolated natives for $Release / $Coordinate."
+        throw "Fabric profile preparation did not create isolated natives for $Release / $effectiveCoordinate."
     }
     return $profile
 }
@@ -638,6 +643,7 @@ function New-Schema2CompatibilityProfileInput {
         catalogSha256 = $CatalogSha256
         minecraftVersion = [string] $Profile.minecraftVersion
         loader = [string] $Profile.loader
+        runtimeLoaderVersion = Get-PropertyValue -Object $Profile -Name 'runtimeLoaderVersion'
         target = [string] $Profile.packForgeArtifact.targetKey
         runtimeMods = @($materializedMods)
         modIds = @($materializedMods | ForEach-Object { [string] $_.id } | Sort-Object)
@@ -1189,6 +1195,7 @@ $profileCell = $null
 $profileRelease = $null
 $profileLoader = $null
 $profileTargetKey = $null
+$profileRuntimeLoaderVersion = $null
 $profilePathEvidenceMarkers = @()
 if ($profileIdProvided) {
     $legacyProfileArguments = @('AdditionalModPaths', 'ExpectedLogMarkers', 'ForbiddenLogMarkers')
@@ -1225,6 +1232,7 @@ if ($profileIdProvided) {
         -Context "Compatibility profile '$ProfileId' featureOverrides"
     $profileRelease = [string] $selectedProfile.minecraftVersion
     $profileLoader = [string] $selectedProfile.loader
+    $profileRuntimeLoaderVersion = Get-PropertyValue -Object $selectedProfile -Name 'runtimeLoaderVersion'
     $profileTargetKey = [string] $selectedProfile.packForgeArtifact.targetKey
     $profileReleaseCells = @($registry.releaseCells | Where-Object {
         [string] $_.id -eq $profileRelease -and
@@ -1243,7 +1251,7 @@ if ($profileIdProvided) {
     $availability = [string] $selectedProfile.availability
     $declaredResult = if ($availability -eq 'UNAVAILABLE') { 'UNAVAILABLE' } else { 'UNTESTED' }
     $reason = [string] (Get-PropertyValue -Object $selectedProfile -Name 'reason')
-    Write-Output "PROFILE id=$ProfileId cell=$profileCell availability=$availability result=$declaredResult catalogSha256=$catalogSha256 reason=$reason"
+    Write-Output "PROFILE id=$ProfileId cell=$profileCell availability=$availability result=$declaredResult runtimeLoaderVersion=$profileRuntimeLoaderVersion catalogSha256=$catalogSha256 reason=$reason"
 
     if ($availability -in @('PENDING_METADATA', 'UNAVAILABLE')) {
         if ($PlanOnly.IsPresent) { return }
@@ -1264,6 +1272,7 @@ if ($profileIdProvided) {
             release = $profileRelease
             loader = $profileLoader
             target = $profileTargetKey
+            runtimeLoaderVersion = $profileRuntimeLoaderVersion
             catalogSha256 = $catalogSha256
             availability = $availability
             result = $declaredResult
@@ -1276,6 +1285,7 @@ if ($profileIdProvided) {
             profileId = $ProfileId
             cell = $profileCell
             catalogSha256 = $catalogSha256
+            runtimeLoaderVersion = $profileRuntimeLoaderVersion
             availability = $availability
             result = $declaredResult
             reason = $reason
@@ -1394,6 +1404,7 @@ $profileIdentity = [ordered]@{
     schema = if ($null -ne $selectedProfile) { 2 } else { 1 }
     profileId = if ($null -ne $selectedProfile) { [string] $selectedProfile.id } else { $null }
     catalogSha256 = if ($null -ne $selectedProfile) { $catalogSha256 } else { $null }
+    runtimeLoaderVersion = if ($null -ne $selectedProfile) { $profileRuntimeLoaderVersion } else { $null }
     additionalMods = if ($null -ne $selectedProfile) {
         @($materializedCatalogMods | Sort-Object artifact | ForEach-Object {
             [ordered]@{ id = $_.id; artifact = $_.artifact; sha256 = $_.sha256 }
@@ -1431,7 +1442,17 @@ foreach ($releaseGroup in $rows | Group-Object Release) {
     }
     $supportTarget = $targets[[string] $releaseCell[0].targetKey]
     $fabricCoordinate = Get-ExactLoaderCoordinate -Target $supportTarget -Release $releaseGroup.Name -Loader 'fabric'
-    $fabricProfiles[$releaseGroup.Name] = Ensure-FabricProfile -Release $releaseGroup.Name -Coordinate $fabricCoordinate
+    $profileLoaderOverride = if ($null -ne $selectedProfile -and
+        [string]::Equals($profileLoader, 'fabric', [StringComparison]::OrdinalIgnoreCase) -and
+        [string]::Equals($profileRelease, $releaseGroup.Name, [StringComparison]::OrdinalIgnoreCase)) {
+        [string] $profileRuntimeLoaderVersion
+    } else {
+        $null
+    }
+    $fabricProfiles[$releaseGroup.Name] = Ensure-FabricProfile `
+        -Release $releaseGroup.Name `
+        -Coordinate $fabricCoordinate `
+        -LoaderVersionOverride $profileLoaderOverride
     foreach ($row in $releaseGroup.Group | Where-Object Loader -ne 'fabric') {
         $loaderProfiles[$row.Cell] = Ensure-InstallerProfile `
             -Loader $row.Loader `
@@ -1689,6 +1710,7 @@ foreach ($row in $rows) {
         cell = $row.Cell
         release = $row.Release
         loader = $row.Loader
+        runtimeLoaderVersion = if ($null -ne $selectedProfile -and $row.Loader -eq 'fabric') { $profileRuntimeLoaderVersion } else { $null }
         target = $row.Target
         coordinate = $row.Coordinate
         versionName = [string] $profile.VersionName
@@ -1738,6 +1760,7 @@ foreach ($row in $rows) {
             schema = if ($null -ne $schema2ProfileInput) { 2 } else { 1 }
             profileId = if ($null -ne $selectedProfile) { [string] $selectedProfile.id } else { $null }
             catalogSha256 = if ($null -ne $selectedProfile) { $catalogSha256 } else { $null }
+            runtimeLoaderVersion = if ($null -ne $selectedProfile) { $profileRuntimeLoaderVersion } else { $null }
             additionalMods = if ($null -ne $schema2ProfileInput) {
                 @($schema2ProfileInput.RuntimeMods | ForEach-Object {
                     [ordered]@{ id = $_.id; artifact = $_.artifact; sha256 = $_.sha256 }

@@ -8,19 +8,22 @@ import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.teenkung.packforge.config.PackForgeCapability.ATLAS_MIP_PARALLEL;
 import static com.teenkung.packforge.config.PackForgeCapability.FONT_PROVIDER_PRESELECTION;
 import static com.teenkung.packforge.config.PackForgeCapability.LOADING_FADE_CONTROL;
-import static com.teenkung.packforge.config.PackForgeCapability.LOADING_STATUS_OVERLAY;
 import static com.teenkung.packforge.config.PackForgeCapability.RESOURCE_PACK_INDEX;
-import static com.teenkung.packforge.config.PackForgeCapability.ZIP_READ_POOL;
 
 /** Public-API-only compatibility policy for the optional Quick Pack mod. */
 public final class QuickPackCompatibility {
 	public static final String MOD_ID = "quick-pack";
 
 	private static final AtomicReference<Profile> CACHED = new AtomicReference<>();
+	private static final Pattern VERSION_PATTERN = Pattern.compile(
+		"(?<!\\d)(\\d+)\\.(\\d+)(?:\\.(\\d+))?(?!\\d)"
+	);
 
 	private QuickPackCompatibility() {}
 
@@ -73,18 +76,40 @@ public final class QuickPackCompatibility {
 	}
 
 	private static Profile classify(Optional<String> version) {
-		return Profile.moduleHandoff(version.orElse(""));
+		String rawVersion = version == null ? "" : version.orElse("");
+		return Profile.moduleHandoff(rawVersion, ownershipCapabilities(parseVersion(rawVersion)));
 	}
 
-	private static EnumSet<PackForgeCapability> ownershipCapabilities() {
-		return EnumSet.of(
-			RESOURCE_PACK_INDEX,
-			ZIP_READ_POOL,
-			FONT_PROVIDER_PRESELECTION,
-			ATLAS_MIP_PARALLEL,
-			LOADING_FADE_CONTROL,
-			LOADING_STATUS_OVERLAY
-		);
+	private static Optional<Version> parseVersion(String value) {
+		if (value == null || value.isBlank()) {
+			return Optional.empty();
+		}
+		Matcher matcher = VERSION_PATTERN.matcher(value);
+		if (!matcher.find()) {
+			return Optional.empty();
+		}
+		try {
+			int patch = matcher.group(3) == null ? 0 : Integer.parseInt(matcher.group(3));
+			return Optional.of(new Version(
+				Integer.parseInt(matcher.group(1)),
+				Integer.parseInt(matcher.group(2)),
+				patch
+			));
+		} catch (NumberFormatException exception) {
+			return Optional.empty();
+		}
+	}
+
+	private static EnumSet<PackForgeCapability> ownershipCapabilities(Optional<Version> version) {
+		EnumSet<PackForgeCapability> capabilities = EnumSet.of(RESOURCE_PACK_INDEX);
+		if (version.isPresent() && version.get().atLeast(1, 4)) {
+			capabilities.add(LOADING_FADE_CONTROL);
+		}
+		if (version.isPresent() && version.get().atLeast(1, 5)) {
+			capabilities.add(FONT_PROVIDER_PRESELECTION);
+			capabilities.add(ATLAS_MIP_PARALLEL);
+		}
+		return capabilities;
 	}
 
 	public enum Status {
@@ -109,12 +134,12 @@ public final class QuickPackCompatibility {
 			return new Profile(Status.ABSENT, Optional.empty(), Set.of());
 		}
 
-		static Profile moduleHandoff(String version) {
-			return loaded(Status.MODULE_HANDOFF, version);
+		static Profile moduleHandoff(String version, Set<PackForgeCapability> capabilities) {
+			return loaded(Status.MODULE_HANDOFF, version, capabilities);
 		}
 
 		static Profile detectionFailed() {
-			return loaded(Status.DETECTION_FAILED, "");
+			return loaded(Status.DETECTION_FAILED, "", ownershipCapabilities(Optional.empty()));
 		}
 
 		public boolean loaded() {
@@ -148,8 +173,24 @@ public final class QuickPackCompatibility {
 			return "status=" + status + " " + detectedVersion + " owns=" + ownedCapabilities;
 		}
 
-		private static Profile loaded(Status status, String version) {
-			return new Profile(status, Optional.ofNullable(version), ownershipCapabilities());
+		private static Profile loaded(Status status, String version, Set<PackForgeCapability> capabilities) {
+			return new Profile(status, Optional.ofNullable(version), capabilities);
+		}
+	}
+
+	private record Version(int major, int minor, int patch) implements Comparable<Version> {
+		private boolean atLeast(int requiredMajor, int requiredMinor) {
+			return compareTo(new Version(requiredMajor, requiredMinor, 0)) >= 0;
+		}
+
+		@Override
+		public int compareTo(Version other) {
+			int majorComparison = Integer.compare(major, other.major);
+			if (majorComparison != 0) {
+				return majorComparison;
+			}
+			int minorComparison = Integer.compare(minor, other.minor);
+			return minorComparison != 0 ? minorComparison : Integer.compare(patch, other.patch);
 		}
 	}
 }

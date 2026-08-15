@@ -46,6 +46,12 @@ def compareNumericVersions = { left, right ->
 }
 
 def targets = registry.targets
+def unavailableCapabilityReasons = (registry.unavailableCapabilities ?: [:]).collectEntries { capability, reason ->
+	[(capability.toString()): reason.toString()]
+}
+def effectiveTargetCapabilities = { target ->
+	target.capabilities.findAll { capability -> !unavailableCapabilityReasons.containsKey(capability.toString()) }
+}
 def targetKeys = targets.collect { it.key }
 if (targetKeys.size() != targetKeys.toSet().size()) {
 	throw new GradleException("PackForge target keys must be unique.")
@@ -490,7 +496,7 @@ def verifyArtifact = { target, platform, File artifact ->
 			minecraft: artifactMinecraftFor(target, platform),
 			maturity: loader.maturity.toString(),
 			beta: (loader.maturity == "beta").toString(),
-			capabilities: target.capabilities.join(",")
+			capabilities: effectiveTargetCapabilities(target).join(",")
 		]
 		(target.capabilityMinimumMinecraft ?: [:]).each { capability, minimum ->
 			expectedCapabilityProperties["capabilityFloor.${capability}".toString()] = minimum.toString()
@@ -514,7 +520,7 @@ def verifyArtifact = { target, platform, File artifact ->
 		}
 		def clientMixin = new JsonSlurper().parseText(readZipText(archive, clientMixinConfig))
 		def mainMixin = new JsonSlurper().parseText(readZipText(archive, mainMixinConfig))
-		def expectedMainMixinPlugin = "com.teenkung.packforge.QuickPackMixinPlugin"
+		def expectedMainMixinPlugin = "com.teenkung.packforge.VersionedMixinPlugin"
 		def expectedClientMixinPlugin = target.apiAdapter == "mc26"
 			? "com.teenkung.packforge.client.mixin.compat.GuiCompatMixinPlugin"
 			: expectedMainMixinPlugin
@@ -618,7 +624,7 @@ def verifyArtifact = { target, platform, File artifact ->
 			}
 		}
 		if (target.apiAdapter == "mc26") {
-			if (target.capabilities.contains("STARTUP_STATUS_OVERLAY")
+			if (effectiveTargetCapabilities(target).contains("STARTUP_STATUS_OVERLAY")
 				&& !(clientMixin.client ?: []).contains("ui.LoadingOverlayStartupStatusMixin")) {
 				throw new GradleException("${artifact.name} does not isolate the mc26 startup-status loading hook from Quick Pack-owned status behavior.")
 			}
@@ -632,7 +638,7 @@ def verifyArtifact = { target, platform, File artifact ->
 			}
 		}
 		capabilityContract.each { capability, contract ->
-			if (target.capabilities.contains(capability)) {
+			if (effectiveTargetCapabilities(target).contains(capability)) {
 				(contract.classes ?: []).each { requiredClass ->
 					if (!names.contains(requiredClass)) {
 						throw new GradleException("${artifact.name} declares ${capability} but is missing implementation class ${requiredClass}.")
@@ -1649,8 +1655,23 @@ tasks.register("validateTargetRegistry") {
 		|| registry.registryPolicy?.exactReleaseRowsRequired != true) {
 		throw new GradleException("Registry maturity and exact-release policy is incomplete or unsafe.")
 	}
+	if (!(registry.unavailableCapabilities instanceof Map)) {
+		throw new GradleException("Registry unavailableCapabilities must be a map of capability IDs to non-empty reasons.")
+	}
+	registry.unavailableCapabilities.each { capability, reason ->
+		String identifier = capability.toString()
+		if (!capabilityContract.containsKey(identifier)) {
+			throw new GradleException("Registry unavailable capability '${identifier}' has no artifact contract.")
+		}
+		if (reason == null || reason.toString().isBlank()) {
+			throw new GradleException("Registry unavailable capability '${identifier}' must have a non-empty reason.")
+		}
+		if (targets.any { target -> (target.capabilityMinimumMinecraft ?: [:]).containsKey(identifier) }) {
+			throw new GradleException("Registry unavailable capability '${identifier}' must not declare a capability floor.")
+		}
+	}
 	def undeclaredContracts = targets
-		.collectMany { target -> target.capabilities }
+		.collectMany { target -> effectiveTargetCapabilities(target) }
 		.toSet()
 		.findAll { capability -> !capabilityContract.containsKey(capability) }
 	if (!undeclaredContracts.isEmpty()) {

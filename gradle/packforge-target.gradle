@@ -31,6 +31,12 @@ if (target == null) {
 	def validTargets = registry.targets.collect { it.key }.join(", ")
 	throw new GradleException("Unknown PackForge target '${targetKey}'. Valid targets: ${validTargets}")
 }
+def unavailableCapabilityReasons = (registry.unavailableCapabilities ?: [:]).collectEntries { capability, reason ->
+	[(capability.toString()): reason.toString()]
+}
+def effectiveCapabilities = target.capabilities.findAll { capability ->
+	!unavailableCapabilityReasons.containsKey(capability.toString())
+}
 
 def platformId = project.ext.packforgePlatformId
 def platform = target.platforms[platformId]
@@ -109,7 +115,7 @@ project.ext.packforgeWriteGeneratedResources = { File outputDirectory ->
 	packMetadataFile.setText(packMetadataJson + System.lineSeparator(), "UTF-8")
 
 	def capabilitiesFile = new File(outputDirectory, "packforge-capabilities.properties")
-	def capabilities = target.capabilities.collect { it.toString() }.join(",")
+	def capabilities = effectiveCapabilities.collect { it.toString() }.join(",")
 	def capabilityProperties = [
 		"target=${target.key}",
 		"minecraft=${packforgeArtifactMinecraft}",

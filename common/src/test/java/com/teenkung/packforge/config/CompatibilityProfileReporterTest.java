@@ -96,25 +96,23 @@ class CompatibilityProfileReporterTest {
 		assertEquals(
 			EnumSet.of(
 				PackForgeCapability.RESOURCE_PACK_INDEX,
-				PackForgeCapability.ZIP_READ_POOL,
 				PackForgeCapability.FONT_PROVIDER_PRESELECTION,
 				PackForgeCapability.ATLAS_MIP_PARALLEL,
-				PackForgeCapability.LOADING_FADE_CONTROL,
-				PackForgeCapability.LOADING_STATUS_OVERLAY
+				PackForgeCapability.LOADING_FADE_CONTROL
 			).stream().map(Enum::name).sorted().toList(),
 			snapshot.quickPackOwnedCapabilities()
 		);
 		assertEquals(EnumSet.of(
 			PackForgeCapability.RESOURCE_PACK_INDEX,
-			PackForgeCapability.ZIP_READ_POOL,
 			PackForgeCapability.FONT_PROVIDER_PRESELECTION,
 			PackForgeCapability.ATLAS_MIP_PARALLEL,
-			PackForgeCapability.LOADING_FADE_CONTROL,
-			PackForgeCapability.LOADING_STATUS_OVERLAY
+			PackForgeCapability.LOADING_FADE_CONTROL
 		).stream().map(Enum::name).collect(Collectors.toSet()), snapshot.overlap().keySet());
-		assertEquals(PackForgeCapability.values().length - 6, snapshot.retained().size());
+		assertEquals(PackForgeCapability.values().length - 4, snapshot.retained().size());
 		assertTrue(snapshot.overlap().values().stream().noneMatch(Boolean::booleanValue));
 		assertTrue(snapshot.retained().get("LOADER_TIMINGS"));
+		assertTrue(snapshot.retained().get("ZIP_READ_POOL"));
+		assertTrue(snapshot.retained().get("LOADING_STATUS_OVERLAY"));
 		assertTrue(snapshot.retained().get("FONT_RELOAD_DIAGNOSTICS"));
 		assertTrue(snapshot.retained().get("RELOAD_SUMMARY_TOAST"));
 		assertTrue(snapshot.retained().get("STARTUP_STATUS_OVERLAY"));
@@ -123,9 +121,9 @@ class CompatibilityProfileReporterTest {
 			"id=fabric-quick-pack loader=fabric target=mc1_21_1 "
 				+ "mods=immediatelyfast:false:absent,quick-pack:true:1.5.0+1.21.1 "
 				+ "quickPackStatus=MODULE_HANDOFF "
-				+ "quickPackOwns=ATLAS_MIP_PARALLEL,FONT_PROVIDER_PRESELECTION,LOADING_FADE_CONTROL,LOADING_STATUS_OVERLAY,RESOURCE_PACK_INDEX,ZIP_READ_POOL "
-				+ "overlap=ATLAS_MIP_PARALLEL:false,FONT_PROVIDER_PRESELECTION:false,LOADING_FADE_CONTROL:false,LOADING_STATUS_OVERLAY:false,RESOURCE_PACK_INDEX:false,ZIP_READ_POOL:false "
-				+ "retained=ATLAS_CAP:true,ATLAS_DECODE_BATCHING:true,ATLAS_PHASE_TIMINGS:false,ATLAS_RETRY:true,FONT_BITMAP_CACHE:true,FONT_RELOAD_DIAGNOSTICS:true,IMMEDIATELY_FAST_FONT_ATLAS_COMPAT:true,LOADER_TIMINGS:true,MODEL_ADAPTIVE_BATCHING:false,MODEL_DUPLICATE_CACHE:false,MODEL_PARSE_BATCHING:true,MODEL_PARSE_TIMINGS:false,MODEL_UV_TRANSPARENCY_CLAMP:true,RELOAD_LISTENER_TIMINGS:true,RELOAD_SUMMARY_TOAST:true,SHADER_STALL_DIAGNOSTICS:true,STARTUP_ASYNC_CLASS_SCAN:false,STARTUP_ASYNC_DATA:false,STARTUP_ASYNC_FONT_ATLAS:false,STARTUP_EXECUTOR_TUNING:true,STARTUP_OPTIMIZER:true,STARTUP_STATUS_OVERLAY:true,STARTUP_TIMINGS:true",
+				+ "quickPackOwns=ATLAS_MIP_PARALLEL,FONT_PROVIDER_PRESELECTION,LOADING_FADE_CONTROL,RESOURCE_PACK_INDEX "
+				+ "overlap=ATLAS_MIP_PARALLEL:false,FONT_PROVIDER_PRESELECTION:false,LOADING_FADE_CONTROL:false,RESOURCE_PACK_INDEX:false "
+				+ "retained=ATLAS_CAP:true,ATLAS_DECODE_BATCHING:true,ATLAS_PHASE_TIMINGS:false,ATLAS_RETRY:true,FONT_BITMAP_CACHE:true,FONT_RELOAD_DIAGNOSTICS:true,IMMEDIATELY_FAST_FONT_ATLAS_COMPAT:true,LOADER_TIMINGS:true,LOADING_STATUS_OVERLAY:true,MODEL_ADAPTIVE_BATCHING:false,MODEL_DUPLICATE_CACHE:false,MODEL_PARSE_BATCHING:true,MODEL_PARSE_TIMINGS:false,MODEL_UV_TRANSPARENCY_CLAMP:true,RELOAD_LISTENER_TIMINGS:true,RELOAD_SUMMARY_TOAST:true,SHADER_STALL_DIAGNOSTICS:true,STARTUP_ASYNC_CLASS_SCAN:false,STARTUP_ASYNC_DATA:false,STARTUP_ASYNC_FONT_ATLAS:false,STARTUP_EXECUTOR_TUNING:true,STARTUP_OPTIMIZER:true,STARTUP_STATUS_OVERLAY:true,STARTUP_TIMINGS:true,ZIP_READ_POOL:true",
 			summary
 		);
 	}

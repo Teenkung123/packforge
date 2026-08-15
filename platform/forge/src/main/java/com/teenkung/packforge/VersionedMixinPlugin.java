@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Set;
 
 /** Applies only version-dependent Mixin selection during early bootstrap. */
-public final class QuickPackMixinPlugin implements IMixinConfigPlugin {
+public final class VersionedMixinPlugin implements IMixinConfigPlugin {
 	private static final String RELOAD_OBSERVER_MIXIN = "mixin.observe.ReloadableResourceManagerMixin";
 	private static final String FORGE_LEGACY_RELOAD_OBSERVER_MIXIN =
 		"mixin.observe.ForgeLegacyReloadableResourceManagerMixin";

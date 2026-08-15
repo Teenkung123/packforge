@@ -7,6 +7,15 @@
     "forge": "direct",
     "neoforge": "direct"
   },
+  "unavailableCapabilities": {
+    "ATLAS_MIP_PARALLEL": "No reachable production consumer; keep opt-in until bounded mipmap generation is implemented.",
+    "MODEL_PARSE_TIMINGS": "The timing capability has no verified production consumer.",
+    "MODEL_ADAPTIVE_BATCHING": "The direct adaptive model parser is unreachable from the production path.",
+    "MODEL_DUPLICATE_CACHE": "The direct duplicate model cache is unreachable from the production path.",
+    "STARTUP_ASYNC_DATA": "Startup async data parsing is only a partial alias and is not independently implemented.",
+    "STARTUP_ASYNC_CLASS_SCAN": "Startup class scanning is observed-only telemetry, not an async implementation.",
+    "STARTUP_ASYNC_FONT_ATLAS": "Startup async font/atlas work is only a partial alias and is not independently implemented."
+  },
   "sourcePolicies": {
     "base": {
       "sourcesJarDuplicates": "FAIL"
@@ -1718,10 +1727,7 @@
         "FONT_BITMAP_CACHE": "1.21.11",
         "ATLAS_PHASE_TIMINGS": "1.21.11",
         "ATLAS_DECODE_BATCHING": "1.21.11",
-        "MODEL_PARSE_BATCHING": "1.21.11",
-        "MODEL_PARSE_TIMINGS": "1.21.11",
-        "MODEL_ADAPTIVE_BATCHING": "1.21.11",
-        "MODEL_DUPLICATE_CACHE": "1.21.11"
+        "MODEL_PARSE_BATCHING": "1.21.11"
       },
       "mixinMinimumMinecraft": {
         "client.mixin.atlas.SpriteLoaderMixin": "1.21.11",

@@ -24,11 +24,9 @@ public final class CompatibilityProfileReporter {
 	private static final Pattern SAFE_ID = Pattern.compile("[a-z0-9][a-z0-9._-]{0,127}");
 	private static final Set<PackForgeCapability> QUICK_PACK_OVERLAP = Set.copyOf(EnumSet.of(
 		PackForgeCapability.RESOURCE_PACK_INDEX,
-		PackForgeCapability.ZIP_READ_POOL,
 		PackForgeCapability.FONT_PROVIDER_PRESELECTION,
 		PackForgeCapability.ATLAS_MIP_PARALLEL,
-		PackForgeCapability.LOADING_FADE_CONTROL,
-		PackForgeCapability.LOADING_STATUS_OVERLAY
+		PackForgeCapability.LOADING_FADE_CONTROL
 	));
 
 	public static void reportIfRequested() {

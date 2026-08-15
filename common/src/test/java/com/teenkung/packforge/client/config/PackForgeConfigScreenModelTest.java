@@ -19,11 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PackForgeConfigScreenModelTest {
 	private static final EnumSet<PackForgeCapability> QUICK_PACK_OWNED = EnumSet.of(
 		PackForgeCapability.RESOURCE_PACK_INDEX,
-		PackForgeCapability.ZIP_READ_POOL,
 		PackForgeCapability.FONT_PROVIDER_PRESELECTION,
 		PackForgeCapability.ATLAS_MIP_PARALLEL,
-		PackForgeCapability.LOADING_FADE_CONTROL,
-		PackForgeCapability.LOADING_STATUS_OVERLAY
+		PackForgeCapability.LOADING_FADE_CONTROL
 	);
 	private static final EnumSet<PackForgeCapability> LEGACY = EnumSet.of(
 		PackForgeCapability.RESOURCE_PACK_INDEX,
@@ -194,8 +192,6 @@ class PackForgeConfigScreenModelTest {
 		try {
 			for (String id : List.of(
 				"loader_index",
-				"loader_zip_pool",
-				"loading_status_overlay",
 				"loading_fade_out_disabled",
 				"font_provider_selection",
 				"atlas_mip_parallel",
@@ -213,6 +209,8 @@ class PackForgeConfigScreenModelTest {
 
 			for (String id : List.of(
 				"reload_optimizer",
+				"loader_zip_pool",
+				"loading_status_overlay",
 				"loader_timings",
 				"reload_summary_toast",
 				"font_reload_diagnostics",

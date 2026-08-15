@@ -1,7 +1,7 @@
 {
   "required": true,
   "package": "com.teenkung.packforge.mixin",
-  "plugin": "com.teenkung.packforge.QuickPackMixinPlugin",
+  "plugin": "com.teenkung.packforge.VersionedMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "loader.FilePackResourcesMixin",

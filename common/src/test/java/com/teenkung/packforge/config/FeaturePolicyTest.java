@@ -20,11 +20,9 @@ import org.junit.jupiter.api.Test;
 class FeaturePolicyTest {
 	private static final Set<PackForgeCapability> QUICK_PACK_OWNED = EnumSet.of(
 		RESOURCE_PACK_INDEX,
-		ZIP_READ_POOL,
 		FONT_PROVIDER_PRESELECTION,
 		ATLAS_MIP_PARALLEL,
-		LOADING_FADE_CONTROL,
-		LOADING_STATUS_OVERLAY
+		LOADING_FADE_CONTROL
 	);
 
 	@Test
@@ -41,6 +39,34 @@ class FeaturePolicyTest {
 		assertFalse(policy.loaderZipPoolEnabled());
 		assertTrue(policy.startupOptimizerEnabled());
 		assertFalse(policy.atlasCapEnabled());
+	}
+
+	@Test
+	void unreachableCapabilitiesStayInactiveEvenWhenLegacyConfigEnablesThem() {
+		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
+		config.largeAtlasFixerEnabled = true;
+		config.atlasMipParallelEnabled = true;
+		config.modelParseTimingEnabled = true;
+		config.modelAdaptiveBatchingEnabled = true;
+		config.modelDuplicateParseCacheEnabled = true;
+		config.startupOptimizerEnabled = true;
+		config.startupAsyncDataParsingEnabled = true;
+		config.startupAsyncClassScanEnabled = true;
+		config.startupAsyncFontAtlasEnabled = true;
+		Properties properties = new Properties();
+		properties.setProperty("target", "test");
+		properties.setProperty("capabilities", "RESOURCE_PACK_INDEX,MODEL_PARSE_BATCHING,STARTUP_OPTIMIZER");
+
+		FeaturePolicy policy = FeaturePolicy.forTesting(config, PackForgeCapabilityProfile.fromProperties(properties));
+
+		assertFalse(policy.atlasMipParallelEnabled());
+		assertFalse(policy.modelParseTimingEnabled());
+		assertFalse(policy.modelAdaptiveBatchingEnabled());
+		assertFalse(policy.modelDuplicateParseCacheEnabled());
+		assertFalse(policy.startupAsyncDataParsingEnabled());
+		assertFalse(policy.startupAsyncClassScanEnabled());
+		assertFalse(policy.startupAsyncFontAtlasEnabled());
+		assertTrue(policy.modelParseBatchingEnabled());
 	}
 
 	@Test
@@ -77,8 +103,9 @@ class FeaturePolicyTest {
 	}
 
 	@Test
-	void quickPackOwnsExactlyTheSixOverlapCapabilities() {
+	void quickPackOwnsOnlyItsVersionedOverlapCapabilities() {
 		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
+		config.loaderZipPoolEnabled = true;
 		Properties properties = new Properties();
 		properties.setProperty("target", "test");
 		properties.setProperty("capabilities", "RESOURCE_PACK_INDEX,ZIP_READ_POOL,FONT_PROVIDER_PRESELECTION,ATLAS_MIP_PARALLEL,LOADING_FADE_CONTROL,LOADING_STATUS_OVERLAY,MODEL_PARSE_BATCHING");
@@ -95,11 +122,11 @@ class FeaturePolicyTest {
 			assertEquals(QUICK_PACK_OWNED.contains(capability), policy.quickPackOwns(capability), capability.name());
 		}
 		assertFalse(policy.loaderIndexEnabled());
-		assertFalse(policy.loaderZipPoolEnabled());
+		assertTrue(policy.loaderZipPoolEnabled());
 		assertFalse(policy.fontPrepareProviderSelectionEnabled());
 		assertFalse(policy.atlasMipParallelEnabled());
 		assertFalse(policy.loadingScreenFadeOutDisabled());
-		assertFalse(policy.loadingStatusOverlayEnabled());
+		assertTrue(policy.loadingStatusOverlayEnabled());
 		assertTrue(policy.modelParseBatchingEnabled());
 		assertTrue(policy.quickPackDisabledReason(RESOURCE_PACK_INDEX).contains("overlapping module"));
 	}
@@ -170,26 +197,32 @@ class FeaturePolicyTest {
 	}
 
 	@Test
-	void quickPackVersionMetadataIsInformationalOnly() {
-		for (String version : new String[] {"1.4.0", "1.5.0", "2.0.0", "12.4.1", "not-a-version", null}) {
-			QuickPackCompatibility.Profile profile = QuickPackCompatibility.forTesting(version);
+	void quickPackOwnershipTracksVersionCapabilities() {
+		QuickPackCompatibility.Profile old = QuickPackCompatibility.forTesting("1.3.9");
+		QuickPackCompatibility.Profile fade = QuickPackCompatibility.forTesting("forge-1.4.0+1.21.1");
+		QuickPackCompatibility.Profile current = QuickPackCompatibility.forTesting("1.5.0+1.21.1");
 
-			assertEquals(QuickPackCompatibility.Status.MODULE_HANDOFF, profile.status());
-			assertTrue(profile.owns(RESOURCE_PACK_INDEX));
-			assertTrue(profile.disabledReason(RESOURCE_PACK_INDEX).contains("overlapping module"));
-		}
+		assertEquals(Set.of(RESOURCE_PACK_INDEX), old.ownedCapabilities());
+		assertEquals(Set.of(RESOURCE_PACK_INDEX, LOADING_FADE_CONTROL), fade.ownedCapabilities());
+		assertEquals(QUICK_PACK_OWNED, current.ownedCapabilities());
 	}
 
 	@Test
-	void unreadableQuickPackVersionStillHandsOffEveryOverlapModule() {
+	void unknownQuickPackVersionOnlyUsesConservativeKnownOverlap() {
 		QuickPackCompatibility.Profile profile = QuickPackCompatibility.forTesting("not-a-version");
 
 		assertEquals(QuickPackCompatibility.Status.MODULE_HANDOFF, profile.status());
 		assertTrue(profile.owns(RESOURCE_PACK_INDEX));
-		assertTrue(profile.owns(ZIP_READ_POOL));
-		assertTrue(profile.owns(FONT_PROVIDER_PRESELECTION));
-		assertTrue(profile.owns(ATLAS_MIP_PARALLEL));
-		assertTrue(profile.owns(LOADING_FADE_CONTROL));
-		assertTrue(profile.owns(LOADING_STATUS_OVERLAY));
+		assertEquals(Set.of(RESOURCE_PACK_INDEX), profile.ownedCapabilities());
+		assertFalse(profile.owns(ZIP_READ_POOL));
+		assertFalse(profile.owns(LOADING_STATUS_OVERLAY));
+	}
+
+	@Test
+	void metadataDetectionFailureUsesTheSameConservativeOverlap() {
+		QuickPackCompatibility.Profile profile = QuickPackCompatibility.Profile.detectionFailed();
+
+		assertEquals(QuickPackCompatibility.Status.DETECTION_FAILED, profile.status());
+		assertEquals(Set.of(RESOURCE_PACK_INDEX), profile.ownedCapabilities());
 	}
 }

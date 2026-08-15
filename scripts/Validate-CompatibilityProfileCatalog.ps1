@@ -141,6 +141,20 @@ function Require-Text($Object, [string] $Name, [string] $Context) {
     return $value.Trim()
 }
 
+function Assert-RuntimeLoaderVersion($Profile, [string] $Loader, [string] $Context) {
+    $value = Value $Profile 'runtimeLoaderVersion'
+    if ($null -eq $value) { return $null }
+    if ($Loader -ne 'fabric') { Fail "$Context runtimeLoaderVersion is only supported for Fabric profiles." }
+    if ($value -isnot [string] -or [string]::IsNullOrWhiteSpace([string] $value)) {
+        Fail "$Context runtimeLoaderVersion must be a non-empty Fabric Loader version."
+    }
+    $version = ([string] $value).Trim()
+    if ($version -notmatch '^[0-9]+\.[0-9]+(?:\.[0-9]+)?$') {
+        Fail "$Context runtimeLoaderVersion '$version' is not a valid Fabric Loader version."
+    }
+    return $version
+}
+
 function Assert-UniqueStrings($Values, [string] $Context) {
     $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($value in @(Assert-JsonArray $Values $Context)) {
@@ -327,6 +341,7 @@ function Invoke-CatalogValidation($Catalog, $Registry) {
         $release = Require-Text $profile 'minecraftVersion' "profile '$id'"
         $loader = Require-Text $profile 'loader' "profile '$id'"
         if ($loader -notin @('fabric', 'forge', 'neoforge')) { Fail "profile '$id' has unsupported loader '$loader'." }
+        [void] (Assert-RuntimeLoaderVersion $profile $loader "profile '$id'")
         $artifact = Assert-JsonObject (Value $profile 'packForgeArtifact') "profile '$id' packForgeArtifact"
         $targetKey = Require-Text $artifact 'targetKey' "profile '$id' packForgeArtifact"
         $target = $targetsByKey[$targetKey]
@@ -438,6 +453,8 @@ function Invoke-SelfTests($Catalog, $Registry) {
     Assert-MutationRejected 'feature-overrides-reject-unknown-key' { param($c) ($c.profiles | Where-Object id -eq 'fabric-sodium').featureOverrides = [pscustomobject]@{ atlasMipParallelEnabled = $true } } $Catalog $Registry
     Assert-MutationRejected 'feature-overrides-reject-null' { param($c) ($c.profiles | Where-Object id -eq 'fabric-sodium').featureOverrides = [pscustomobject]@{ atlasRetryEnabled = $null } } $Catalog $Registry
     Assert-MutationRejected 'feature-overrides-reject-wrong-json-type' { param($c) ($c.profiles | Where-Object id -eq 'fabric-sodium').featureOverrides = [pscustomobject]@{ atlasRetryEnabled = 1 } } $Catalog $Registry
+    Assert-MutationRejected 'runtime-loader-version-requires-fabric' { param($c) ($c.profiles | Where-Object id -eq 'forge-quick-pack') | Add-Member -NotePropertyName runtimeLoaderVersion -NotePropertyValue '0.17.3' -Force } $Catalog $Registry
+    Assert-MutationRejected 'runtime-loader-version-must-be-numeric' { param($c) ($c.profiles | Where-Object id -eq 'fabric-quick-pack').runtimeLoaderVersion = 'latest' } $Catalog $Registry
     Assert-MutationRejected 'available-pins-must-be-complete' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.externalMods[0].PSObject.Properties.Remove('sha256') } $Catalog $Registry
     Assert-MutationRejected 'available-requires-reporter-marker' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.expectedLogMarkers = @($p.expectedLogMarkers | Where-Object { $_ -notlike 'PackForge compatibility profile: id=*' }) } $Catalog $Registry
     Assert-MutationRejected 'available-requires-loader-observed-mod' { param($c) $p = $c.profiles | Where-Object id -eq 'fabric-sodium'; $p.expectedLogMarkers = @($p.expectedLogMarkers | Where-Object { $_ -ne 'sodium:true:' }) } $Catalog $Registry
@@ -468,7 +485,7 @@ function Invoke-SelfTests($Catalog, $Registry) {
 	} finally {
 		if (Test-Path -LiteralPath $mutatedConfigPath -PathType Leaf) { Remove-Item -LiteralPath $mutatedConfigPath -Force }
 	}
-	Write-Output 'Compatibility profile catalog self-test PASS: positive AVAILABLE control accepted; 22 catalog mutations plus PackForgeConfig boolean-default drift rejected.'
+	Write-Output 'Compatibility profile catalog self-test PASS: positive AVAILABLE control accepted; 24 catalog mutations plus PackForgeConfig boolean-default drift rejected.'
 }
 
 foreach ($path in @($CatalogPath, $RegistryPath, $PackForgeConfigPath)) {

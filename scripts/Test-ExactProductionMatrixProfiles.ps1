@@ -210,10 +210,15 @@ try {
         Assert-NoNetworkOrSmoke $invalidOverride $invalidOverrideCase.Name
     }
 
+    $genericCatalog = Copy-Catalog $catalog
+    $genericProfile = @($genericCatalog.profiles | Where-Object id -eq 'fabric-immediatelyfast')[0]
+    $genericProfile.expectedLogMarkers = @($genericProfile.expectedLogMarkers | Where-Object { $_ -ne 'PackForge compatibility path: HOOK_PRESERVING_COALESCED_PATH' })
+    $genericCatalogPath = Join-Path $testRoot 'generic-path-contract.json'
+    Write-Catalog $genericCatalog $genericCatalogPath
     $genericIfResults = Join-Path $testRoot 'generic-if-results'
     $genericIf = Invoke-Runner @(
         '-ProfileId', 'fabric-immediatelyfast',
-        '-CompatibilityCatalogPath', $catalogPath,
+        '-CompatibilityCatalogPath', $genericCatalogPath,
         '-CompatibilityCacheRoot', (Join-Path $testRoot 'unused-if-cache'),
         '-CompatibilityFixtureManifestPath', (Join-Path $testRoot 'unused-if-fixtures.json'),
         '-MaterializeProfileOnly',

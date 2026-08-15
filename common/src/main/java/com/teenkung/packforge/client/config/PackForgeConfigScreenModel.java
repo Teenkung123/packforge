@@ -265,12 +265,10 @@ public final class PackForgeConfigScreenModel {
 	private static final PackForgeConfig.Cfg DEFAULTS = new PackForgeConfig.Cfg();
 	private static final Set<String> QUICK_PACK_OWNED_OPTION_IDS = Set.of(
 		"loader_index",
-		"loader_zip_pool",
 		"font_provider_selection",
 		"atlas_mip_parallel",
 		"atlas_mip_batch_size",
-		"loading_fade_out_disabled",
-		"loading_status_overlay"
+		"loading_fade_out_disabled"
 	);
 	private static final List<OptionSpec> OPTIONS = buildOptions();
 
