@@ -176,29 +176,8 @@ def capabilityContract = [
 	FONT_BITMAP_CACHE: [classes: ["com/teenkung/packforge/client/font/FontBitmapProviderCache.class"], clientMixins: ["font.BitmapProviderDefinitionMixin"]],
 	MODEL_PARSE_BATCHING: [
 		classes: [
-			"com/teenkung/packforge/client/model/ModelBatchPlan.class",
-			"com/teenkung/packforge/client/model/ModelParseOptimizer.class"
-		],
-		clientMixins: ["model.ModelManagerMixin"]
-	],
-	MODEL_PARSE_TIMINGS: [
-		classes: [
-			"com/teenkung/packforge/client/model/ModelParseTimings.class",
-			"com/teenkung/packforge/client/model/ModelParseOptimizer.class"
-		],
-		clientMixins: ["model.ModelManagerMixin"]
-	],
-	MODEL_ADAPTIVE_BATCHING: [
-		classes: [
-			"com/teenkung/packforge/client/model/ModelBatchPlan.class",
-			"com/teenkung/packforge/client/model/ModelParseOptimizer.class"
-		],
-		clientMixins: ["model.ModelManagerMixin"]
-	],
-	MODEL_DUPLICATE_CACHE: [
-		classes: [
-			"com/teenkung/packforge/client/model/ModelBatchPlan.class",
-			"com/teenkung/packforge/client/model/ModelParseOptimizer.class"
+			"com/teenkung/packforge/concurrent/ModelSchedulingPlan.class",
+			"com/teenkung/packforge/concurrent/CoalescingExecutor.class"
 		],
 		clientMixins: ["model.ModelManagerMixin"]
 	],
@@ -212,16 +191,12 @@ def capabilityContract = [
 		clientMixins: ["atlas.SpriteLoaderMixin", "atlas.TextureAtlasMixin"]
 	],
 	ATLAS_RETRY: [classes: ["com/teenkung/packforge/client/atlas/AtlasRetry.class"], clientMixins: ["atlas.SpriteLoaderMixin"]],
-	ATLAS_MIP_PARALLEL: [classes: ["com/teenkung/packforge/client/atlas/AtlasTimings.class"], clientMixins: ["atlas.SpriteLoaderMixin"]],
 	MODEL_UV_TRANSPARENCY_CLAMP: [classes: ["com/teenkung/packforge/client/atlas/SpriteCap.class"], clientMixins: ["model.FaceBakeryMixin"]],
 	STARTUP_OPTIMIZER: [
 		classes: ["com/teenkung/packforge/startup/StartupEarlyConfig.class"],
 		mainMixins: ["startup.UtilExecutorMixin"],
 		clientMixins: ["startup.MainStartupMixin", "startup.MinecraftStartupMixin"]
 	],
-	STARTUP_ASYNC_CLASS_SCAN: [classes: ["com/teenkung/packforge/startup/StartupAsyncFeatures.class"], clientMixins: ["startup.MainStartupMixin"]],
-	STARTUP_ASYNC_DATA: [classes: ["com/teenkung/packforge/startup/StartupAsyncFeatures.class"], clientMixins: ["startup.MinecraftStartupMixin"]],
-	STARTUP_ASYNC_FONT_ATLAS: [classes: ["com/teenkung/packforge/startup/StartupAsyncFeatures.class"], clientMixins: ["startup.MinecraftStartupMixin"]],
 	STARTUP_EXECUTOR_TUNING: [classes: ["com/teenkung/packforge/startup/StartupExecutorTuner.class"], mainMixins: ["startup.UtilExecutorMixin"]],
 	STARTUP_STATUS_OVERLAY: [classes: ["com/teenkung/packforge/startup/StartupStatus.class"], clientMixins: ["startup.GuiStartupMixin"]],
 	STARTUP_TIMINGS: [classes: ["com/teenkung/packforge/startup/StartupTimings.class"], clientMixins: ["startup.MainStartupMixin", "startup.MinecraftStartupMixin"]]
@@ -1660,8 +1635,8 @@ tasks.register("validateTargetRegistry") {
 	}
 	registry.unavailableCapabilities.each { capability, reason ->
 		String identifier = capability.toString()
-		if (!capabilityContract.containsKey(identifier)) {
-			throw new GradleException("Registry unavailable capability '${identifier}' has no artifact contract.")
+		if (capabilityContract.containsKey(identifier)) {
+			throw new GradleException("Registry unavailable capability '${identifier}' must not retain an artifact contract.")
 		}
 		if (reason == null || reason.toString().isBlank()) {
 			throw new GradleException("Registry unavailable capability '${identifier}' must have a non-empty reason.")

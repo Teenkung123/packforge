@@ -147,13 +147,12 @@
       "configuredDefault": false,
       "effectiveDefault": false,
       "defaultGuard": "",
-      "implementationState": "PARTIAL",
-      "disposition": "FAILED_WITH_REASON",
-      "reason": "Adaptive batch planning exists, but CodeGraph finds no production caller of ModelParseOptimizer.load/loadBlockModels; client initialization only resets its state, so delivered runtime reachability is unproved.",
+      "implementationState": "UNAVAILABLE",
+      "disposition": "UNAVAILABLE",
+      "reason": "The direct model optimizer was removed because no production caller exists; adaptive model parsing remains unavailable until a reachable hook is implemented.",
       "sourcePaths": [
         "common/src/main/java/com/teenkung/packforge/concurrent/ModelSchedulingPlan.java",
-        "versions/shared/common/src/client/java/com/teenkung/packforge/client/model/ModelParseOptimizer.java",
-        "versions/mc26/common/src/client/java/com/teenkung/packforge/client/model/ModelParseOptimizer.java"
+        "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java"
       ],
       "missingEvidence": [
         "production Minecraft model-loading call path",
@@ -177,12 +176,12 @@
       "configuredDefault": false,
       "effectiveDefault": false,
       "defaultGuard": "",
-      "implementationState": "PARTIAL",
-      "disposition": "FAILED_WITH_REASON",
-      "reason": "Content-key caches exist inside ModelParseOptimizer, but the optimizer load methods have no production caller and contextual or custom-loader bypass is not established.",
+      "implementationState": "UNAVAILABLE",
+      "disposition": "UNAVAILABLE",
+      "reason": "The direct duplicate-model cache was removed with the uncalled optimizer; duplicate parsing remains unavailable until a reachable, context-safe hook is implemented.",
       "sourcePaths": [
-        "versions/shared/common/src/client/java/com/teenkung/packforge/client/model/ModelParseOptimizer.java",
-        "versions/mc26/common/src/client/java/com/teenkung/packforge/client/model/ModelParseOptimizer.java"
+        "common/src/main/java/com/teenkung/packforge/concurrent/ModelSchedulingPlan.java",
+        "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java"
       ],
       "missingEvidence": [
         "production Minecraft model-loading call path",
@@ -236,11 +235,11 @@
       "configuredDefault": false,
       "effectiveDefault": false,
       "defaultGuard": "startupOptimizerEnabled=false",
-      "implementationState": "PARTIAL",
-      "disposition": "FAILED_WITH_REASON",
-      "reason": "The flag logs a message and enables reload-side model feature flags; no independent startup data-parsing task or initialization-order implementation exists.",
+      "implementationState": "UNAVAILABLE",
+      "disposition": "UNAVAILABLE",
+      "reason": "Observed-only startup async scaffolding was removed; this serialized flag remains compatibility data and has no functional startup parser.",
       "sourcePaths": [
-        "common/src/main/java/com/teenkung/packforge/startup/StartupAsyncFeatures.java",
+        "common/src/main/java/com/teenkung/packforge/config/PackForgeConfig.java",
         "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java"
       ],
       "missingEvidence": [
@@ -265,11 +264,12 @@
       "configuredDefault": false,
       "effectiveDefault": false,
       "defaultGuard": "startupOptimizerEnabled=false",
-      "implementationState": "PARTIAL",
-      "disposition": "FAILED_WITH_REASON",
-      "reason": "Current async task only counts class entries and logs mode=observed-only; it does not participate in loader discovery and therefore cannot satisfy the stated optimization.",
+      "implementationState": "UNAVAILABLE",
+      "disposition": "UNAVAILABLE",
+      "reason": "Observed-only startup class-scan scaffolding was removed; this serialized flag remains compatibility data and has no loader-discovery implementation.",
       "sourcePaths": [
-        "common/src/main/java/com/teenkung/packforge/startup/StartupAsyncFeatures.java"
+        "common/src/main/java/com/teenkung/packforge/config/PackForgeConfig.java",
+        "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java"
       ],
       "missingEvidence": [
         "loader-discovery integration",
@@ -293,11 +293,11 @@
       "configuredDefault": false,
       "effectiveDefault": false,
       "defaultGuard": "startupOptimizerEnabled=false",
-      "implementationState": "PARTIAL",
-      "disposition": "FAILED_WITH_REASON",
-      "reason": "The flag logs a message and aliases reload-side font-selection, sprite-decode, and mip policy; no independent startup task or render-thread publication path exists, and mip parallelization has no production consumer.",
+      "implementationState": "UNAVAILABLE",
+      "disposition": "UNAVAILABLE",
+      "reason": "Observed-only startup font/atlas scaffolding was removed; this serialized flag remains compatibility data and has no independent startup publication path.",
       "sourcePaths": [
-        "common/src/main/java/com/teenkung/packforge/startup/StartupAsyncFeatures.java",
+        "common/src/main/java/com/teenkung/packforge/config/PackForgeConfig.java",
         "common/src/main/java/com/teenkung/packforge/config/FeaturePolicy.java"
       ],
       "missingEvidence": [

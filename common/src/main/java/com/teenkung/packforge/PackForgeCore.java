@@ -7,7 +7,6 @@ import com.teenkung.packforge.config.PackForgeCapabilities;
 import com.teenkung.packforge.config.PackForgeConfig;
 import com.teenkung.packforge.config.QuickPackCompatibility;
 import com.teenkung.packforge.platform.PackForgeServices;
-import com.teenkung.packforge.startup.StartupAsyncFeatures;
 import com.teenkung.packforge.startup.StartupExecutorTuner;
 import com.teenkung.packforge.startup.StartupStatus;
 import com.teenkung.packforge.startup.StartupTimings;
@@ -49,7 +48,6 @@ public final class PackForgeCore {
 		if (FeatureFlags.startupExecutorTuningEnabled()) {
 			PackForge.LOGGER.info("PackForge startup: executor tuning is applied during early client bootstrap; changes require a restart to affect the next run");
 		}
-		StartupAsyncFeatures.startConfiguredWork();
 		StartupTimings.mark("core_init");
 		StartupStatus.update("Waiting for", "Minecraft bootstrap");
 	}
