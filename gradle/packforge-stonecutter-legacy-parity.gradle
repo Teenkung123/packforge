@@ -1,0 +1,86 @@
+// Opt-in rollback/parity build. This file is applied only by the direct
+// parity helper when -Ppackforge_enable_stonecutter_parity=true is present.
+// It is deliberately outside stonecutter-build.gradle so the authoritative
+// direct graph never resolves or invokes a nested Gradle wrapper.
+def directParity = project.extensions.extraProperties.has('packforgeStonecutterDirectParity')
+	? project.extensions.extraProperties.get('packforgeStonecutterDirectParity')
+	: null
+if (!(directParity instanceof Map)) {
+	throw new GradleException("${project.path} must configure packforgeStonecutterDirectParity before applying the legacy parity helper.")
+}
+
+def requiredParityKeys = ['loaderId', 'expectedArtifactName', 'delegatedArtifact']
+def missingParityKeys = requiredParityKeys.findAll { !directParity.containsKey(it) || directParity[it] == null }
+if (!missingParityKeys.isEmpty()) {
+	throw new GradleException("${project.path} legacy parity configuration is missing ${missingParityKeys}.")
+}
+
+def parityLoaderId = directParity.loaderId.toString()
+def expectedArtifactName = directParity.expectedArtifactName.toString()
+def delegatedArtifact = directParity.delegatedArtifact as File
+def context = project.extensions.extraProperties.has('packforgeStonecutterContext')
+	? project.extensions.extraProperties.get('packforgeStonecutterContext')
+	: null
+if (!(context instanceof Map)) {
+	throw new GradleException("${project.path} is missing the validated Stonecutter node context required by the legacy parity helper.")
+}
+
+def packforgeRoot = context.repositoryRoot as File
+def currentPlatformPath = context.platformPath.toString()
+def currentTargetKey = context.targetKey.toString()
+def isWindows = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')
+def currentPlatformDirectory = new File(packforgeRoot, currentPlatformPath).canonicalFile
+def localWrapper = new File(currentPlatformDirectory, isWindows ? 'gradlew.bat' : 'gradlew')
+def delegatedWrapper = (localWrapper.isFile()
+	? localWrapper
+	: new File(packforgeRoot, isWindows ? 'gradlew.bat' : 'gradlew')).canonicalFile
+
+def delegatedBuildTask = tasks.register('buildStonecutterDelegatedNode', Exec) {
+	group = 'build'
+	description = "Builds the delegated ${parityLoaderId} artifact for Stonecutter target ${currentTargetKey}."
+	workingDir(packforgeRoot)
+	doFirst {
+		project.delete(delegatedArtifact)
+	}
+	def arguments = [delegatedWrapper.absolutePath, '-p', currentPlatformPath,
+		"-Ppackforge_target=${currentTargetKey}", 'build', '--no-daemon', '--stacktrace']
+	if (isWindows) {
+		commandLine(['cmd', '/c'] + arguments)
+	} else {
+		commandLine(['sh'] + arguments)
+	}
+}
+
+def outputDirectory = layout.buildDirectory.dir("stonecutter/${currentTargetKey}/${context.loaderId}/libs")
+
+tasks.register('buildStonecutterCurrentTarget') {
+	group = 'build'
+	description = "Builds the delegated ${parityLoaderId} distribution selected by Stonecutter (${currentTargetKey})."
+	dependsOn(delegatedBuildTask)
+}
+
+tasks.register('verifyStonecutterCurrentTarget') {
+	group = 'verification'
+	description = "Builds and verifies the delegated registry target selected by Stonecutter (${currentTargetKey})."
+	dependsOn(':validateTargetRegistry')
+	dependsOn('buildStonecutterCurrentTarget')
+	doLast {
+		def output = outputDirectory.get().asFile
+		project.delete(output)
+		output.mkdirs()
+		if (!delegatedArtifact.isFile()) {
+			throw new GradleException("Stonecutter node ${project.path} did not produce ${delegatedArtifact}.")
+		}
+		copy {
+			from(delegatedArtifact)
+			into(output)
+		}
+		def actual = output.listFiles()?.findAll { it.name.endsWith('.jar') }*.name?.sort() ?: []
+		if (actual != [expectedArtifactName]) {
+			throw new GradleException("Stonecutter node ${project.path} artifact set mismatch: expected=${[expectedArtifactName]}, actual=${actual}.")
+		}
+		logger.lifecycle("Stonecutter delegated node artifact verified: ${actual.join(', ')}")
+	}
+}
+
+project.ext.packforgeStonecutterDelegatedBuildTask = delegatedBuildTask

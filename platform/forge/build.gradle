@@ -339,5 +339,6 @@ if (stonecutterDirectNode) {
 			}
 		}
 	]
+	apply from: new File(packforgeRepositoryRoot, "gradle/packforge-stonecutter-direct.gradle")
 	apply from: new File(packforgeRepositoryRoot, "gradle/packforge-stonecutter-direct-parity.gradle")
 }

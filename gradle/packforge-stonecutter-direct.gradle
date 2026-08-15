@@ -1,0 +1,36 @@
+// Always-on direct Stonecutter leaf task. Loader build scripts provide the
+// final artifact provider and task dependencies after their loader plugin has
+// configured remapping/JarJar.
+def directConfig = project.extensions.extraProperties.has('packforgeStonecutterDirectParity')
+	? project.extensions.extraProperties.get('packforgeStonecutterDirectParity')
+	: null
+if (!(directConfig instanceof Map)) {
+	throw new GradleException("${project.path} must configure packforgeStonecutterDirectParity before applying the direct-node helper.")
+}
+
+def requiredDirectKeys = [
+	'loaderId', 'artifactProvider', 'expectedArtifactName', 'directBuildDependencies'
+]
+def missingDirectKeys = requiredDirectKeys.findAll { !directConfig.containsKey(it) || directConfig[it] == null }
+if (!missingDirectKeys.isEmpty()) {
+	throw new GradleException("${project.path} direct-node configuration is missing ${missingDirectKeys}.")
+}
+
+def directLoaderId = directConfig.loaderId.toString()
+def directArtifact = directConfig.artifactProvider
+def expectedDirectArtifactName = directConfig.expectedArtifactName.toString()
+
+def directBuild = tasks.register('buildStonecutterDirectNode') {
+	group = 'build'
+	description = "Builds ${project.path} directly in the root Stonecutter graph."
+	dependsOn directConfig.directBuildDependencies
+	doLast {
+		def artifact = directArtifact.get().asFile
+		if (artifact.name != expectedDirectArtifactName || !artifact.isFile()) {
+			throw new GradleException("Direct ${directLoaderId} node artifact mismatch: expected=${expectedDirectArtifactName}, actual=${artifact}.")
+		}
+	}
+}
+
+// Keep the direct task independent from optional comparison wiring.
+project.ext.packforgeStonecutterDirectBuildTask = directBuild

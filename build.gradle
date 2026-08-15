@@ -773,9 +773,24 @@ def sourceMetricsBuildJson = layout.buildDirectory.file("reports/source-metrics/
 def sourceMetricsBuildMarkdown = layout.buildDirectory.file("reports/source-metrics/source-metrics.md")
 def sourceMetricsCheckpointJson = file("docs/stonecutter-refactor/source-metrics-current.json")
 def sourceMetricsCheckpointMarkdown = file("docs/stonecutter-refactor/source-metrics-current.md")
+def phaseFSourceReductionLedger = [
+	baselineCommit: "609270f533666e7636d11f7d16590be925ec836f",
+	baselineProductionFiles: 212,
+	baselineProductionLoc: 16837,
+	baselineNormalizedGroups: 20,
+	baselineNormalizedSurplusLoc: 2375,
+	mandatoryAddedLoc: 2347,
+	mandatoryAddedLocByRoot: [common: 1051, fabric: 146, platform: 256, versions: 894],
+	addedLocBasis: "Nonblank production-Java additions from the committed baseline tree, with exact-content renames/copies excluded; tests, generated sources, build output, documentation, and resources are excluded.",
+	platformBranchBaseline: 4,
+	requiredReductionPercent: 20
+]
+if (phaseFSourceReductionLedger.mandatoryAddedLocByRoot.values().sum() != phaseFSourceReductionLedger.mandatoryAddedLoc) {
+	throw new GradleException("Phase F added-LOC ledger root totals do not match its declared total.")
+}
 def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 	group = "verification"
-	description = "Reports deterministic handwritten-source, ownership, build-branch, renderer, and publication metrics."
+	description = "Reports deterministic handwritten-source, Phase F reduction-ledger, ownership, build-branch, renderer, and publication metrics."
 	inputs.file(registryFile)
 	outputs.files(sourceMetricsBuildJson, sourceMetricsBuildMarkdown)
 	outputs.upToDateWhen { false }
@@ -891,6 +906,7 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 		int targetKeyLiteralReferences = 0
 		int targetBranchLines = 0
 		int platformTargetKeyReferences = 0
+		int platformTargetConditionalLines = 0
 		def targetLiteralPattern = ~/\bmc(?:1_[0-9_]+|26(?:_[0-9_]+)?)\b/
 		buildScriptFiles.each { script ->
 			boolean platformScript = project.relativePath(script).replace('\\', '/').startsWith("platform/")
@@ -907,6 +923,9 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 				if ((lineTargetKeyReferences > 0 || lineTargetVersionReferences > 0 || lineTargetKeyLiteralReferences > 0)
 					&& line ==~ /.*(?:\bif\b|\bswitch\b|\bcase\b|\?.*:).*/) {
 					targetBranchLines++
+					if (platformScript) {
+						platformTargetConditionalLines++
+					}
 				}
 			}
 		}
@@ -988,9 +1007,43 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 			}
 		}
 
+		int baselineProductionLoc = phaseFSourceReductionLedger.baselineProductionLoc as int
+		int baselineNormalizedGroups = phaseFSourceReductionLedger.baselineNormalizedGroups as int
+		int baselineNormalizedSurplusLoc = phaseFSourceReductionLedger.baselineNormalizedSurplusLoc as int
+		int mandatoryAddedLoc = phaseFSourceReductionLedger.mandatoryAddedLoc as int
+		int requiredReductionPercent = phaseFSourceReductionLedger.requiredReductionPercent as int
+		int rawReductionLoc = baselineProductionLoc - productionLoc
+		int requiredReductionLoc = Math.ceil(baselineProductionLoc * (requiredReductionPercent / 100.0d)) as int
+		int ledgerAdjustedReductionLoc = rawReductionLoc + mandatoryAddedLoc
+		int remainingShortfallLoc = Math.max(0, requiredReductionLoc - ledgerAdjustedReductionLoc)
+		def phaseFPercent = { int numerator, int denominator ->
+			denominator == 0
+				? new BigDecimal("100.00")
+				: (numerator * 100 / denominator).setScale(2, BigDecimal.ROUND_HALF_UP)
+		}
+		def rawReductionPercent = phaseFPercent(rawReductionLoc, baselineProductionLoc)
+		def ledgerAdjustedReductionPercent = phaseFPercent(ledgerAdjustedReductionLoc, baselineProductionLoc)
+		def duplicateReductionGate = duplicateGroups.size() * 100 <= baselineNormalizedGroups * 40
+		def noByteIdenticalTriplesGate = exactDuplicateGroups.isEmpty()
+		def versionLocalBelowSharedGate = sourceLayers["versionCommon"].loc < sourceLayers["neutralCommon"].loc
+		def platformBranchReductionPercent = phaseFPercent(
+			(phaseFSourceReductionLedger.platformBranchBaseline as int) - platformTargetConditionalLines,
+			phaseFSourceReductionLedger.platformBranchBaseline as int
+		)
+		def platformBranchGate = platformTargetConditionalLines * 100 <= (phaseFSourceReductionLedger.platformBranchBaseline as int) * 20
+		def adjustedShrinkGate = ledgerAdjustedReductionLoc >= requiredReductionLoc
+		def phaseFMetricGate = [
+			duplicateReductionGate,
+			noByteIdenticalTriplesGate,
+			versionLocalBelowSharedGate,
+			platformBranchGate,
+			adjustedShrinkGate
+		].every { it }
+		def phaseFStatus = "IMPLEMENTED_UNVERIFIED"
+
 		def duplicateReductionPercent = duplicateGroups.isEmpty()
 			? new BigDecimal("100.00")
-			: ((20 - duplicateGroups.size()) * 100 / 20).setScale(2, BigDecimal.ROUND_HALF_UP)
+			: ((baselineNormalizedGroups - duplicateGroups.size()) * 100 / baselineNormalizedGroups).setScale(2, BigDecimal.ROUND_HALF_UP)
 		def metrics = [
 			schemaVersion: 1,
 			generatedBy: "reportSourceMetrics",
@@ -1014,13 +1067,42 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 				aggregateBridgePolicy: "Bridge totals include loader-owned bridge/compat files plus non-loader exact-version bridges.",
 				layers: sourceLayers
 			],
+			sourceReduction: [
+				baselineCommit: phaseFSourceReductionLedger.baselineCommit,
+				baselineProductionFiles: phaseFSourceReductionLedger.baselineProductionFiles,
+				baselineProductionLoc: baselineProductionLoc,
+				baselineNormalizedGroups: baselineNormalizedGroups,
+				baselineNormalizedSurplusLoc: baselineNormalizedSurplusLoc,
+				mandatoryAddedLoc: mandatoryAddedLoc,
+				mandatoryAddedLocByRoot: phaseFSourceReductionLedger.mandatoryAddedLocByRoot,
+				addedLocBasis: phaseFSourceReductionLedger.addedLocBasis,
+				rawReductionLoc: rawReductionLoc,
+				rawReductionPercent: rawReductionPercent,
+				requiredReductionPercent: requiredReductionPercent,
+				requiredReductionLoc: requiredReductionLoc,
+				ledgerAdjustedReductionLoc: ledgerAdjustedReductionLoc,
+				ledgerAdjustedReductionPercent: ledgerAdjustedReductionPercent,
+				remainingShortfallLoc: remainingShortfallLoc,
+				platformBranchBaseline: phaseFSourceReductionLedger.platformBranchBaseline,
+				platformTargetConditionalLines: platformTargetConditionalLines,
+				platformBranchReductionPercent: platformBranchReductionPercent,
+				gates: [
+					normalizedDuplicateReduction: duplicateReductionGate ? "PASS" : "FAIL",
+					noByteIdenticalTriples: noByteIdenticalTriplesGate ? "PASS" : "FAIL",
+					versionLocalBelowShared: versionLocalBelowSharedGate ? "PASS" : "FAIL",
+					platformBranchReduction: platformBranchGate ? "PASS" : "FAIL",
+					adjustedShrink: adjustedShrinkGate ? "PASS" : "FAIL",
+					allMetrics: phaseFMetricGate ? "PASS" : "FAIL"
+				],
+				status: phaseFStatus
+			],
 			duplicates: [
 				exactGroups: exactDuplicateGroups.collect { group -> group.collect { row -> row.path } },
 				normalizedVersionGroups: duplicateGroups.collect { group -> group.collect { row -> row.path } },
 				normalizedFiles: duplicateFiles,
 				normalizedSurplusLoc: duplicateSurplusLoc,
-				baselineNormalizedGroups: 20,
-				baselineNormalizedSurplusLoc: 2375,
+				baselineNormalizedGroups: baselineNormalizedGroups,
+				baselineNormalizedSurplusLoc: baselineNormalizedSurplusLoc,
 				normalizedGroupReductionPercent: duplicateReductionPercent
 			],
 			buildBranches: [
@@ -1028,7 +1110,8 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 				platformTargetKeyReferences: platformTargetKeyReferences,
 				targetVersionReferences: targetVersionReferences,
 				targetKeyLiteralReferences: targetKeyLiteralReferences,
-				targetConditionalLines: targetBranchLines
+				targetConditionalLines: targetBranchLines,
+				platformTargetConditionalLines: platformTargetConditionalLines
 			],
 			configuration: [
 				rendererBodyCount: configScreenRendererBodies.size(),
@@ -1063,6 +1146,7 @@ def reportSourceMetrics = tasks.register("reportSourceMetrics") {
 			.join("\n")
 		metricsJson.setText(metricsJsonText + "\n", "UTF-8")
 		def layerRows = sourceLayers.collect { layer, counts -> "| `${layer}` | ${counts.files} | ${counts.loc} |" }.join("\n")
+		def phaseFRootRows = phaseFSourceReductionLedger.mandatoryAddedLocByRoot.collect { root, loc -> "| ${root} | ${loc} |" }.join("\n")
 		def capabilityRows = capabilityOwnership.collect { capability, ownership ->
 			def classes = ownership.implementationClasses.isEmpty() ? "None" : ownership.implementationClasses.collect { "`${it}`" }.join("<br>")
 			def mixins = ownership.mixinHooks.isEmpty() ? "None" : ownership.mixinHooks.collect { "`${it}`" }.join("<br>")
@@ -1090,6 +1174,14 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 | Normalized version duplicate groups | ${duplicateGroups.size()} |
 | Platform `target.key` references | ${platformTargetKeyReferences} |
 | Target-key/version conditional lines | ${targetBranchLines} |
+| Platform target conditional lines | ${platformTargetConditionalLines} |
+| Phase F raw reduction | ${rawReductionLoc} LOC (${rawReductionPercent}%) |
+| Phase F mandatory added LOC ledger | ${mandatoryAddedLoc} |
+| Phase F ledger-adjusted reduction | ${ledgerAdjustedReductionLoc} LOC (${ledgerAdjustedReductionPercent}%) |
+| Phase F required reduction | ${requiredReductionLoc} LOC (${requiredReductionPercent}%) |
+| Phase F remaining shortfall | ${remainingShortfallLoc} LOC |
+| Phase F metric gate | ${phaseFMetricGate ? "PASS" : "FAIL"} |
+| Phase F status | ${phaseFStatus} |
 | Configuration renderer bodies | ${configScreenRendererBodies.size()} |
 | Configuration renderer adapters | ${configScreenAdapters.size()} |
 | Exact release cells | ${supportedExactTargets} |
@@ -1097,6 +1189,30 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 | Registered build targets | ${targets.size()} |
 | Publication artifacts | ${expectedArtifactNames.size()} |
 | Quick Pack implementation references | ${quickPackInternalReferencePaths.size()} |
+
+## Phase F source-reduction ledger
+
+| Ledger field | Value |
+|---|---:|
+| Baseline commit | ${phaseFSourceReductionLedger.baselineCommit} |
+| Baseline production files | ${phaseFSourceReductionLedger.baselineProductionFiles} |
+| Baseline production nonblank LOC | ${baselineProductionLoc} |
+| Baseline normalized duplicate groups | ${baselineNormalizedGroups} |
+| Baseline normalized surplus LOC | ${baselineNormalizedSurplusLoc} |
+| Mandatory added LOC | ${mandatoryAddedLoc} |
+| Required reduction | ${requiredReductionLoc} LOC (${requiredReductionPercent}%) |
+| Ledger-adjusted reduction | ${ledgerAdjustedReductionLoc} LOC (${ledgerAdjustedReductionPercent}%) |
+| Remaining shortfall | ${remainingShortfallLoc} LOC |
+| Platform branch baseline | ${phaseFSourceReductionLedger.platformBranchBaseline} conditional lines |
+| Platform branch reduction | ${platformTargetConditionalLines} remaining (${platformBranchReductionPercent}%) |
+| Gate result | ${phaseFMetricGate ? "PASS" : "FAIL"} |
+| Phase F status | ${phaseFStatus} |
+
+Added-LOC basis: ${phaseFSourceReductionLedger.addedLocBasis}
+
+| Production root | Mandatory added LOC |
+|---|---:|
+${phaseFRootRows}
 
 ## Source layers
 
@@ -1154,6 +1270,14 @@ ${capabilityRows}
 		println("platformTargetKeyReferences=${platformTargetKeyReferences}")
 		println("targetVersionReferences=${targetVersionReferences}")
 		println("targetConditionalLines=${targetBranchLines}")
+		println("platformTargetConditionalLines=${platformTargetConditionalLines}")
+		println("phaseFBaselineProductionLoc=${baselineProductionLoc}")
+		println("phaseFMandatoryAddedLoc=${mandatoryAddedLoc}")
+		println("phaseFRequiredReductionLoc=${requiredReductionLoc}")
+		println("phaseFLedgerAdjustedReductionLoc=${ledgerAdjustedReductionLoc}")
+		println("phaseFRemainingShortfallLoc=${remainingShortfallLoc}")
+		println("phaseFMetricGate=${phaseFMetricGate ? "PASS" : "FAIL"}")
+		println("phaseFStatus=${phaseFStatus}")
 		println("configScreenRendererBodies=${configScreenRendererBodies.size()}")
 		println("configScreenRendererAdapters=${configScreenAdapters.size()}")
 		println("quickPackInternalReferences=${quickPackInternalReferencePaths.size()}")
@@ -1179,6 +1303,28 @@ ${capabilityRows}
 		}
 		if (!oversizedConditionalBlocks.isEmpty()) {
 			throw new GradleException("Stonecutter conditional blocks exceed 40 lines: ${oversizedConditionalBlocks.join(', ')}")
+		}
+	}
+}
+
+def validatePhaseFSourceReduction = tasks.register("validatePhaseFSourceReduction") {
+	group = "verification"
+	description = "Validates the measurable Phase F source-reduction ledger and reports cleanup gates."
+	dependsOn reportSourceMetrics
+	inputs.file(sourceMetricsBuildJson)
+	doLast {
+		def report = new JsonSlurper().parse(sourceMetricsBuildJson.get().asFile)
+		def reduction = report.sourceReduction
+		if (reduction == null || reduction.gates == null) {
+			throw new GradleException("Phase F source-reduction ledger or gate fields are missing.")
+		}
+		println("phaseFSourceReductionGate=${reduction.gates.allMetrics}")
+		println("phaseFSourceReductionStatus=${reduction.status}")
+		if (reduction.status != "IMPLEMENTED_UNVERIFIED") {
+			throw new GradleException("Phase F source-reduction status must remain IMPLEMENTED_UNVERIFIED until every cleanup gate passes; found ${reduction.status}.")
+		}
+		if (reduction.gates.allMetrics != "PASS") {
+			logger.lifecycle("Phase F cleanup gates remain ${reduction.gates.allMetrics}; remainingShortfallLoc=${reduction.remainingShortfallLoc}. This is an expected unverified implementation result, not a release gate pass.")
 		}
 	}
 }
@@ -1300,6 +1446,8 @@ def validateStonecutterDirectContract = tasks.register("validateStonecutterDirec
 		file("settings.gradle"),
 		file("build.gradle"),
 		file("stonecutter-build.gradle"),
+		file("gradle/packforge-stonecutter-direct.gradle"),
+		file("gradle/packforge-stonecutter-legacy-parity.gradle"),
 		file("gradle/packforge-stonecutter-direct-parity.gradle"),
 		file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesArchiveMixin.java"),
 		file("fabric/src/main/java/com/teenkung/packforge/mixin/loader/SharedZipFileAccessMixin.java"),
@@ -1345,6 +1493,7 @@ tasks.register("validateTargetRegistry") {
 	dependsOn validateImplementationContracts
 	dependsOn validateStonecutterDirectContract
 	dependsOn reportSourceMetrics
+	dependsOn validatePhaseFSourceReduction
 	inputs.file registryFile
 	inputs.files(fileTree("versions") {
 		include "**/*Mixin.java"

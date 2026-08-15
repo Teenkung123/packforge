@@ -24,68 +24,16 @@ if (currentTarget.platforms[currentLoader] == null
 	|| !new File(currentPlatformDirectory, 'build.gradle').isFile()) {
 	throw new GradleException("Stonecutter node '${project.path}' does not map to an available PackForge loader cell: target=${currentTargetKey}, loader=${currentLoader}, available=${currentTarget.platforms.keySet()}.")
 }
-def isWindows = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')
-def localWrapper = new File(currentPlatformDirectory, isWindows ? 'gradlew.bat' : 'gradlew')
-def delegatedWrapper = (localWrapper.isFile()
-	? localWrapper
-	: new File(packforgeRoot, isWindows ? 'gradlew.bat' : 'gradlew')).canonicalFile
 
-def versionProperties = new Properties()
-new File(packforgeRoot, 'gradle.properties').withInputStream { versionProperties.load(it) }
-def modVersion = versionProperties.getProperty('mod_version')
-if (modVersion == null || modVersion.isBlank()) {
-	throw new GradleException("PackForge gradle.properties must define mod_version for Stonecutter artifact checks.")
-}
-
-def loader = currentTarget.platforms[currentLoader]
-def artifactMinecraft = (loader.artifactMinecraft ?: currentTarget.artifactMinecraft).toString()
-def artifactName = "packforge-${currentLoader}-${modVersion}${loader.versionSuffix}-mc${artifactMinecraft}.jar"
-def delegatedArtifact = new File(packforgeRoot, "${currentPlatformPath}/build/${currentTarget.key}/libs/${artifactName}")
-
-def delegatedBuildTask = tasks.register('buildStonecutterDelegatedNode', Exec) {
-	group = 'build'
-	description = "Builds the delegated ${currentLoader} artifact for Stonecutter target ${currentTarget.key}."
-	workingDir(packforgeRoot)
-	doFirst {
-		project.delete(delegatedArtifact)
-	}
-	def arguments = [delegatedWrapper.absolutePath, '-p', currentPlatformPath,
-		"-Ppackforge_target=${currentTarget.key}", 'build', '--no-daemon', '--stacktrace']
-	if (isWindows) {
-		commandLine(['cmd', '/c'] + arguments)
-	} else {
-		commandLine(['sh'] + arguments)
-	}
-}
-
-def outputDirectory = layout.buildDirectory.dir("stonecutter/${currentTarget.key}/${currentLoader}/libs")
-
-tasks.register('buildStonecutterCurrentTarget') {
-	group = 'build'
-	description = "Builds the ${currentLoader} distribution selected by Stonecutter (${currentTarget.key}) without re-entering the root aggregator."
-	dependsOn(delegatedBuildTask)
-}
-
-tasks.register('verifyStonecutterCurrentTarget') {
-	group = 'verification'
-	description = "Builds and verifies the registry target selected by Stonecutter (${currentTarget.key})."
-	dependsOn(':validateTargetRegistry')
-	dependsOn('buildStonecutterCurrentTarget')
-	doLast {
-		def output = outputDirectory.get().asFile
-		project.delete(output)
-		output.mkdirs()
-		if (!delegatedArtifact.isFile()) {
-			throw new GradleException("Stonecutter node ${project.path} did not produce ${delegatedArtifact}.")
-		}
-		copy {
-			from(delegatedArtifact)
-			into(output)
-		}
-		def actual = output.listFiles()?.findAll { it.name.endsWith('.jar') }*.name?.sort() ?: []
-		if (actual != [artifactName]) {
-			throw new GradleException("Stonecutter node ${project.path} artifact set mismatch: expected=${[artifactName]}, actual=${actual}.")
-		}
-		logger.lifecycle("Stonecutter node artifact verified: ${actual.join(', ')}")
-	}
-}
+// This central script is evaluated by every generated loader/target leaf.
+// Keep it limited to registry and node-context validation. Direct task
+// registration lives in the always-on helper applied after each loader has
+// declared its final-artifact provider; the nested wrapper rollback path is
+// isolated in the explicit parity helper.
+project.ext.packforgeStonecutterContext = [
+	repositoryRoot: packforgeRoot,
+	platformPath: currentPlatformPath,
+	loaderId: currentLoader,
+	targetKey: currentTargetKey,
+	minecraftVersion: currentMinecraft
+].asImmutable()

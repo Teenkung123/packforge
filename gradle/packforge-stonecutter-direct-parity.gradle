@@ -1,27 +1,50 @@
-// Shared direct-node parity harness. Loader build scripts provide the final
-// artifact, expected name, and any loader-specific archive assertions through
-// ext.packforgeStonecutterDirectParity before applying this file.
+// Optional standalone-versus-direct parity oracle. The direct leaf task is
+// registered by packforge-stonecutter-direct.gradle regardless of parity.
+def parityPropertyName = 'packforge_enable_stonecutter_parity'
+def parityPropertyValue = providers.gradleProperty(parityPropertyName).getOrNull()
+def parityEnabled = false
+if (parityPropertyValue != null) {
+	if (!(parityPropertyValue.equalsIgnoreCase('true') || parityPropertyValue.equalsIgnoreCase('false'))) {
+		throw new GradleException("Gradle property -P${parityPropertyName} must be true or false; found '${parityPropertyValue}'.")
+	}
+	parityEnabled = parityPropertyValue.toBoolean()
+}
+
 def directParity = project.extensions.extraProperties.has('packforgeStonecutterDirectParity')
 	? project.extensions.extraProperties.get('packforgeStonecutterDirectParity')
 	: null
 if (!(directParity instanceof Map)) {
-	throw new GradleException("${project.path} must configure packforgeStonecutterDirectParity before applying the direct-node parity helper.")
+	throw new GradleException("${project.path} must configure packforgeStonecutterDirectParity before applying the parity helper.")
 }
 
-def requiredParityKeys = [
-	'loaderId', 'artifactProvider', 'expectedArtifactName', 'delegatedArtifact',
-	'directBuildDependencies', 'finalArtifactTask', 'delegatedBuildTaskName'
+def requiredDirectKeys = [
+	'loaderId', 'artifactProvider', 'expectedArtifactName', 'directBuildDependencies', 'finalArtifactTask'
 ]
+def missingDirectKeys = requiredDirectKeys.findAll { !directParity.containsKey(it) || directParity[it] == null }
+if (!missingDirectKeys.isEmpty()) {
+	throw new GradleException("${project.path} direct/parity configuration is missing ${missingDirectKeys}.")
+}
+
+// The legacy wrapper is intentionally applied only for explicit parity. A
+// normal direct graph therefore has no delegated task during configuration.
+if (parityEnabled) {
+	apply from: new File(rootProject.projectDir, 'gradle/packforge-stonecutter-legacy-parity.gradle')
+}
+
+def requiredParityKeys = ['delegatedArtifact', 'delegatedBuildTaskName']
 def missingParityKeys = requiredParityKeys.findAll { !directParity.containsKey(it) || directParity[it] == null }
-if (!missingParityKeys.isEmpty()) {
-	throw new GradleException("${project.path} direct-node parity configuration is missing ${missingParityKeys}.")
+if (parityEnabled && !missingParityKeys.isEmpty()) {
+	throw new GradleException("${project.path} parity configuration is missing ${missingParityKeys}.")
 }
 
 def parityLoaderId = directParity.loaderId.toString()
 def directArtifact = directParity.artifactProvider
 def expectedDirectArtifactName = directParity.expectedArtifactName.toString()
-def delegatedArtifactForParity = directParity.delegatedArtifact as File
-def delegatedBuildTask = tasks.named(directParity.delegatedBuildTaskName.toString())
+def delegatedArtifactForParity = parityEnabled ? directParity.delegatedArtifact as File : null
+def delegatedBuildTask = parityEnabled
+	? tasks.named(directParity.delegatedBuildTaskName.toString())
+	: null
+def directBuild = tasks.named('buildStonecutterDirectNode')
 def finalArtifactTask = directParity.finalArtifactTask
 def loaderSpecificChecks = directParity.loaderSpecificChecks
 
@@ -86,30 +109,27 @@ def inspectArtifact = { File artifact, boolean directManifest ->
 	entryHashes.asImmutable()
 }
 
-def directBuild = tasks.register('buildStonecutterDirectNode') {
-	group = 'build'
-	description = "Builds ${project.path} directly in the root Stonecutter graph."
-	dependsOn directParity.directBuildDependencies
-	doLast {
-		def artifact = directArtifact.get().asFile
-		if (artifact.name != expectedDirectArtifactName || !artifact.isFile()) {
-			throw new GradleException("Direct ${parityLoaderId} node artifact mismatch: expected=${expectedDirectArtifactName}, actual=${artifact}.")
-		}
-	}
-}
-
 finalArtifactTask.configure {
-	mustRunAfter(delegatedBuildTask)
+	if (parityEnabled) {
+		mustRunAfter(delegatedBuildTask)
+	}
 }
 
 tasks.register('verifyStonecutterDirectNode') {
 	group = 'verification'
-	description = "Compares the direct final ${parityLoaderId} JAR with the standalone artifact by complete ZIP content."
+	description = parityEnabled
+		? "Compares the direct final ${parityLoaderId} JAR with the standalone artifact by complete ZIP content."
+		: "Requires explicit parity opt-in before comparing the direct ${parityLoaderId} JAR with the standalone artifact."
 	dependsOn(':validateTargetRegistry')
-	// The nested build remains an explicit parity oracle only. Direct aggregate
-	// build tasks depend solely on buildStonecutterDirectNode.
-	dependsOn(delegatedBuildTask)
-	dependsOn(directBuild)
+	if (parityEnabled) {
+		dependsOn(delegatedBuildTask)
+		dependsOn(directBuild)
+	}
+	doFirst {
+		if (!parityEnabled) {
+			throw new GradleException("Stonecutter parity is disabled. Re-run with -P${parityPropertyName}=true to invoke the legacy wrapper parity oracle.")
+		}
+	}
 	doLast {
 		def directFile = directArtifact.get().asFile
 		def directEntries = inspectArtifact(directFile, true)

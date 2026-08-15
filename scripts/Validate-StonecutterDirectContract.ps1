@@ -648,26 +648,44 @@ function Invoke-DirectContractValidation($Registry, [hashtable] $Sources) {
     }
 
     $rollback = $Sources.Rollback
-    Assert-ContainsOnce $rollback "tasks.register('buildStonecutterDelegatedNode', Exec)" 'rollback nested task'
-    Assert-ContainsOnce $rollback "tasks.register('buildStonecutterCurrentTarget')" 'rollback current-target task'
-    Assert-ContainsOnce $rollback "tasks.register('verifyStonecutterCurrentTarget')" 'rollback verification task'
-    Assert-ContainsOnce $rollback "-Ppackforge_target=`${currentTarget.key}" 'rollback target argument'
-    Assert-ContainsOnce $rollback "'build', '--no-daemon', '--stacktrace'" 'rollback nested build arguments'
+    Assert-ContainsOnce $rollback 'project.ext.packforgeStonecutterContext = [' 'direct Stonecutter context'
+    if ($rollback -match '\bExec\b|gradlew(?:\.bat)?|buildStonecutterDelegatedNode|buildStonecutterCurrentTarget|verifyStonecutterCurrentTarget') {
+        Fail 'central Stonecutter build script must contain validation/context only; nested execution is opt-in.'
+    }
+
+    $directHelper = $Sources.Direct
+    $directNodeSection = Get-Section $directHelper "def directBuild = tasks.register('buildStonecutterDirectNode')" 'project.ext.packforgeStonecutterDirectBuildTask' 'direct node task'
+    Assert-ContainsOnce $directNodeSection 'dependsOn directConfig.directBuildDependencies' 'direct node dependencies'
+    if ($directNodeSection -match 'delegated|parity|legacy|\bExec\b|gradlew') {
+        Fail 'authoritative direct node task must not contain optional comparison or nested execution wiring.'
+    }
+
+    $legacyParity = $Sources.LegacyParity
+    Assert-ContainsOnce $legacyParity "tasks.register('buildStonecutterDelegatedNode', Exec)" 'opt-in parity nested task'
+    Assert-ContainsOnce $legacyParity "project.extensions.extraProperties.has('packforgeStonecutterContext')" 'opt-in parity context'
+    Assert-ContainsOnce $legacyParity '-Ppackforge_target=' 'opt-in parity target argument'
+    Assert-ContainsOnce $legacyParity "'build', '--no-daemon', '--stacktrace'" 'opt-in parity nested build arguments'
 
     $parity = $Sources.Parity
-    $directParityBuild = Get-Section $parity "def directBuild = tasks.register('buildStonecutterDirectNode')" "tasks.register('verifyStonecutterDirectNode')" 'direct node task'
-    if ($directParityBuild.Contains('dependsOn(delegatedBuildTask)')) {
-        Fail 'authoritative direct node task must not depend on the delegated rollback task.'
+    if ($parity.Contains("tasks.register('buildStonecutterDirectNode'")) {
+        Fail 'parity helper must consume the always-on direct task rather than register a duplicate.'
     }
-    $verifyParity = $parity.Substring($parity.IndexOf("tasks.register('verifyStonecutterDirectNode')", [StringComparison]::Ordinal))
-    Assert-ContainsOnce $verifyParity 'dependsOn(delegatedBuildTask)' 'explicit parity oracle'
+    Assert-ContainsOnce $parity "def parityPropertyName = 'packforge_enable_stonecutter_parity'" 'parity opt-in property'
+    Assert-ContainsOnce $parity "tasks.register('verifyStonecutterDirectNode')" 'parity verification task'
+    Assert-ContainsOnce $parity 'dependsOn(delegatedBuildTask)' 'explicit parity oracle'
+    Assert-ContainsOnce $parity 'Stonecutter parity is disabled. Re-run with -P${parityPropertyName}=true' 'parity disabled failure'
 
     foreach ($loaderId in @('fabric', 'forge', 'neoforge')) {
         $loaderSource = $Sources["Loader:$loaderId"]
         $directNodeSection = $loaderSource.Substring($loaderSource.LastIndexOf('if (stonecutterDirectNode) {', [StringComparison]::Ordinal))
         Assert-ContainsOnce $directNodeSection 'stonecutter-build.gradle' "$loaderId rollback apply"
+        Assert-ContainsOnce $directNodeSection 'packforge-stonecutter-direct.gradle' "$loaderId direct helper apply"
         Assert-ContainsOnce $directNodeSection 'delegatedBuildTaskName:' "$loaderId parity task binding"
         Assert-ContainsOnce $directNodeSection 'packforge-stonecutter-direct-parity.gradle' "$loaderId parity helper apply"
+        if ($directNodeSection.IndexOf('packforge-stonecutter-direct.gradle', [StringComparison]::Ordinal) -gt
+            $directNodeSection.IndexOf('packforge-stonecutter-direct-parity.gradle', [StringComparison]::Ordinal)) {
+            Fail "$loaderId must apply the always-on direct helper before the parity helper."
+        }
     }
 
     $nativeArchive = $Sources.FabricNativeArchive
@@ -1099,7 +1117,7 @@ function Invoke-SelfTests($Registry, [hashtable] $Sources) {
     Assert-MutationRejected 'public-build-exec' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('return tasks.register(taskName) {', 'return tasks.register(taskName, Exec) {') } $Registry $Sources
     Assert-MutationRejected 'public-nested-build' { param($r, $s) $s.RootBuild += "`nnestedCommand(platform, target, 'build')" } $Registry $Sources
     Assert-MutationRejected 'aggregate-delegated-task' { param($r, $s) $s.RootBuild = $s.RootBuild.Replace('dependsOn publishedTargets.collect { buildTasksByTarget[it.key] }', "dependsOn publishedTargets.collect { buildTasksByTarget[it.key] }`n`tdependsOn 'buildStonecutterDelegatedNode'") } $Registry $Sources
-    Assert-MutationRejected 'direct-task-delegates' { param($r, $s) $s.Parity = $s.Parity.Replace('dependsOn directParity.directBuildDependencies', "dependsOn directParity.directBuildDependencies`n`tdependsOn(delegatedBuildTask)") } $Registry $Sources
+    Assert-MutationRejected 'direct-task-delegates' { param($r, $s) $s.Direct = $s.Direct.Replace('dependsOn directConfig.directBuildDependencies', "dependsOn directConfig.directBuildDependencies`n`tdependsOn(delegatedBuildTask)") } $Registry $Sources
     Assert-MutationRejected 'forge-hard-coded-jopt' { param($r, $s) $s['Loader:forge'] = $s['Loader:forge'].Replace('${joptSimpleRuntimeVersion}', '5.0.4') } $Registry $Sources
     Assert-MutationRejected 'native-archive-range-drift' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('<=1.21.10', '<=1.21.11') } $Registry $Sources
     Assert-MutationRejected 'native-archive-constructor-seam-drift' { param($r, $s) $s.FabricNativeArchive = $s.FabricNativeArchive.Replace('>=1.20.5', '>=1.20.6') } $Registry $Sources
@@ -1232,6 +1250,8 @@ $requiredPaths = @($RegistryPath, $SettingsPath, $RootBuildPath, $ForgeBuildPath
     (Join-Path $RepositoryRoot 'versions\mc1_20_1\common\src\client\java\com\teenkung\packforge\client\mixin\ui\LoadingOverlayToastMixin.java'),
     (Join-Path $RepositoryRoot 'versions\mc26\common\src\client\java\com\teenkung\packforge\client\mixin\ui\LoadingOverlayToastMixin.java'),
     (Join-Path $RepositoryRoot 'stonecutter-build.gradle'),
+    (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct.gradle'),
+    (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-legacy-parity.gradle'),
     (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct-parity.gradle')) + @(
         $CanonicalFabricSharedZipDescriptorPaths | ForEach-Object { Join-Path $RepositoryRoot $_ }
     ) + @(
@@ -1292,6 +1312,8 @@ $sources = @{
     Settings = Get-Content -LiteralPath $SettingsPath -Raw
     RootBuild = Get-Content -LiteralPath $RootBuildPath -Raw
     Rollback = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'stonecutter-build.gradle') -Raw
+    Direct = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct.gradle') -Raw
+    LegacyParity = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-legacy-parity.gradle') -Raw
     Parity = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'gradle\packforge-stonecutter-direct-parity.gradle') -Raw
     FabricNativeArchive = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\FilePackResourcesArchiveMixin.java') -Raw
     FabricNativeSharedZip = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'fabric\src\main\java\com\teenkung\packforge\mixin\loader\SharedZipFileAccessMixin.java') -Raw
