@@ -750,3 +750,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: PowerShell parse checks, runtime-resource-hash self-test, exact-matrix resume self-test with 21 invalid mutations, three-loader profile transport self-test, and aggregate `validateImplementationContracts` passed.
 - Limits: no production Java, Minecraft launch, dependency download, final-artifact runtime, 62-cell matrix, cancellation, profile, or release verification was run; the gate enforces the planned count but does not prove reload stability.
 - Rollback: revert later documentation dependants first, then `git revert 55b5ac4`; prior matrix logic remains available with the earlier two-reload default.
+
+## A/E/F/I/K/L — implemented-unverified structural continuation
+
+- Date: 2026-08-15
+- Implementation commits: `abdf2fe` (direct Stonecutter/parity split and Phase F ledger), `f5a76d7` (Phase I dispositions and Phase K fixture/scenario/release-manifest evidence binding), `b53cd5f` (current-status documentation reconciliation).
+- Parent chain: `0b95eb6` → `abdf2fe` → `f5a76d7` → `b53cd5f`.
+- Status: A, E, F, I, K, and L are `IMPLEMENTED_UNVERIFIED`; overall branch remains `PARTIAL_NOT_RELEASE_READY`.
+- Verification: consolidated PowerShell parse/self-tests, direct-contract self-test (53 cells, 106 mutations), compatibility catalog self-test (36 profiles), runtime-resource-hash self-test, exact-matrix resume self-test (22 mutations), profile transport self-test, deterministic fixture/release-manifest tests, `git diff --check`, and offline Gradle `validateTargetRegistry validateImplementationContracts validateStonecutterDirectContract reportSourceMetrics validatePhaseFSourceReduction` passed. Phase F reports `FAIL` for its known cleanup gates with status `IMPLEMENTED_UNVERIFIED` and a 759-LOC shortfall.
+- Limits: no clean/full build, all-53 package parity, current 20-JAR manifest, final-JAR runtime, 62-cell matrix, compatibility launch, benchmark, cancellation execution, or release publication was run. Existing artifacts remain stale/incomplete.
+- Rollback: revert later documentation dependants first, then `git revert b53cd5f`; revert `f5a76d7` and `abdf2fe` in reverse order if removing the implementation units.
