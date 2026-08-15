@@ -2,7 +2,7 @@
 
 Date: 2026-08-15
 
-Audited every phase and completion gate in `PackForge_Missing_Implementation_Plan.md` against branch `1.4` at working-tree integration parent `f5a76d7`. The implementation and documentation changes in this audit are not yet checkpointed. Overall state: **PARTIAL** and **NOT RELEASE READY**.
+Audited every phase and completion gate in `PackForge_Missing_Implementation_Plan.md` against branch `1.4` at implementation checkpoints `abdf2fe` and `f5a76d7`, with documentation rollback checkpoint `40275dd`. Overall state: **PARTIAL** and **NOT RELEASE READY**.
 
 ## Audit boundary
 
