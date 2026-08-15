@@ -111,6 +111,32 @@ class PackForgeConfigPreservationTest {
 		assertEquals(liveBeforeFailure.loaderIndexEnabled, PackForgeConfig.get().loaderIndexEnabled);
 	}
 
+	@Test
+	void failedReplacementPreservesLiveConfigAndExistingPath() throws Exception {
+		PackForgeServices.init(new TestPlatform(temporaryDirectory));
+		PackForgeConfig.load();
+		PackForgeConfig.Cfg liveBeforeFailure = PackForgeConfig.get();
+		PackForgeConfig.Cfg draft = PackForgeConfig.copyOf(liveBeforeFailure);
+		draft.loaderIndexEnabled = !liveBeforeFailure.loaderIndexEnabled;
+
+		Path replacementDirectory = temporaryDirectory.resolve("replacement-failure");
+		Files.createDirectories(replacementDirectory);
+		Path blockedConfigPath = replacementDirectory.resolve("packforge.json");
+		Files.createDirectories(blockedConfigPath);
+		Path sentinel = blockedConfigPath.resolve("keep.txt");
+		Files.writeString(sentinel, "preserve existing target");
+
+		PackForgeServices.init(new TestPlatform(replacementDirectory));
+		PackForgeConfig.SaveResult result = PackForgeConfig.applyAndSave(draft);
+
+		assertFalse(result.successful());
+		assertEquals(liveBeforeFailure.loaderIndexEnabled, PackForgeConfig.get().loaderIndexEnabled);
+		assertEquals("preserve existing target", Files.readString(sentinel));
+		try (var paths = Files.list(replacementDirectory)) {
+			assertEquals(1L, paths.count(), "failed replacement should clean its temporary file");
+		}
+	}
+
 	private record TestPlatform(Path configDirectory) implements PackForgePlatform {
 		@Override public String loaderName() { return "test"; }
 		@Override public boolean isModLoaded(String modId) { return false; }
