@@ -59,7 +59,7 @@ Quick Pack policy assigns exactly six capabilities to `EXTERNALLY_OWNED_PATH` wh
 - Schema-2 profile materialization supports hash-addressed caching, safe decoded names, collision protection, SHA-256 verification, dependency staging, fixture metadata, expected markers, and evidence-path transport across all three loader wrappers.
 - Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy resources.
 - ImmediatelyFast-only path evidence and nonempty configuration overrides fail closed until dedicated instrumentation exists.
-- No network download, Minecraft launch, repeated reload, cancellation, semantic hash, or clean-exit profile evidence has been recorded for current bytes.
+- No network download, Minecraft launch, repeated reload, cancellation, semantic hash, or clean-exit profile evidence has been recorded for current bytes. The controller contract now requires a positive deterministic resolved-resource hash and binds its uppercase SHA-256 token into matrix resume records; this is structural evidence only.
 
 ## Build and publication state
 

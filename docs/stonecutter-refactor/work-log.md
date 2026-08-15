@@ -465,3 +465,13 @@
 - Verification: offline Fabric 1.21.1 `PackForgeConfigPreservationTest` reached BUILD SUCCESSFUL in 54 seconds across ten executed tasks; independent 5.6-sol-wm review passed.
 - Limits: no production source, clean build, live client/UI route, renderer-family run, shader/atlas profile, matrix, or release verification was run.
 - Rollback: revert later documentation dependants first, then `git revert c696253`.
+
+## Phase K — resolved-resource hash binding
+
+- Date: 2026-08-15
+- Commit SHA: `6ac88581dbd4b1fd938a84396bb17e96a964d4c3`; parent `86dfcd77a5b571e49f796e49039984a206d1eacd`
+- Status: `PHASE_K_PARTIAL`.
+- Scope: close the cross-loader semantic-hash contract gap. Controlled Fabric/Forge/NeoForge smokes parse exact lowercase producer markers, require positive entries and one stable digest across startup/reloads, emit uppercase PASS tokens, and the exact matrix stores and resume-validates that token. Base Fabric controller rows now stage an immutable deterministic fixture and the helper is part of the harness fingerprint.
+- Verification: helper self-test, exact matrix resume self-test with 21 invalid mutations, profile transport self-test, all affected PowerShell parses, focused Gradle contract, aggregate implementation-contract gate, and independent Luna review passed.
+- Limits: no production Java, Minecraft launch, dependency download, final-artifact runtime, 62-cell matrix, cancellation, or release verification was run.
+- Rollback: revert later documentation dependants first, then `git revert 6ac8858`.

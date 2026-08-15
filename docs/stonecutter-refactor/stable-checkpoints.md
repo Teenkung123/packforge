@@ -720,3 +720,13 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: offline Fabric 1.21.1 `PackForgeConfigPreservationTest` reached BUILD SUCCESSFUL in 54 seconds across ten executed tasks. Independent 5.6-sol-wm review passed the exact diff with no required fixes.
 - Limits: no production source changed. No clean build, live UI route, renderer-family client run, shader/atlas profile, full matrix, or release verification belongs to this checkpoint. Phase G remains `IMPLEMENTED_UNVERIFIED`.
 - Rollback: revert later documentation dependants first, then `git revert c696253` to remove only the replacement-stage test.
+
+## Phase K — resolved-resource hash binding
+
+- Date: 2026-08-15
+- Commit SHA: `6ac88581dbd4b1fd938a84396bb17e96a964d4c3`; parent `86dfcd77a5b571e49f796e49039984a206d1eacd`
+- Status: `PHASE_K_PARTIAL`.
+- Scope: require positive deterministic resolved-resource hashes in controlled Fabric/Forge/NeoForge production smokes; stage immutable deterministic fixtures for base Fabric cells; bind the normalized hash into exact-matrix PASS lines, records, resume validation, and harness fingerprints; add the focused Gradle implementation-contract gate.
+- Verification: helper, matrix resume, profile transport, PowerShell parse, focused `validateRuntimeResourceHashEvidence`, and aggregate `validateImplementationContracts` checks passed. No Minecraft launch, dependency download, final-JAR runtime, 62-cell matrix, or release verification was run.
+- Limits: this proves the acceptance contract and fixture transport only. Current artifacts remain invalid/stale and no semantic hash has been observed from current final JARs; Phase K remains `PARTIAL`.
+- Rollback: revert later documentation dependants first, then `git revert 6ac8858`; the prior matrix remains structurally usable but without the resolved-resource hash contract.
