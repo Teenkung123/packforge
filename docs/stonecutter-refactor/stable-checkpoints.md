@@ -700,3 +700,23 @@ These bounded implementation commits preceded the integrated exact-matrix checkp
 - Verification: all 12 phase rows and the required five-column schema passed focused structural checks; independent review failed the first calibration, then passed after C/G/H status repair, contradiction links, and artifact-count target correction. Current artifact inventory is 20 expected / 17 present / five matching / 15 missing / 12 stale; `verifyExistingArtifacts` failed on missing version-selection mixin plugins and no manifest exists.
 - Limits: no source behavior changed. No clean build, all-53 compilation/package run, Minecraft runtime, profile, benchmark, or release publication belongs to this checkpoint.
 - Rollback: revert later documentation dependants first, then `git revert 1d03c6d` to restore the preceding Phase E-focused audit.
+
+## Whole-plan report reconciliation
+
+- Date: 2026-08-15
+- Commit SHA: `90ed4eababa35aecb151d2b5eeca33705c7abfeb`; parent `1d03c6dcd4bd010bde9ccd9d2d326e8f95ef7a97`
+- Status: `PARTIAL_NOT_RELEASE_READY`.
+- Scope: reconcile `compatibility-matrix.md`, `implementation-report.md`, `quick-pack-compatibility.md`, `rollback.md`, `stable-checkpoints.md`, and `work-log.md` with the canonical A-L audit. Correct the six Quick Pack profile count, current native-preprocessing coverage, live artifact conflict, and historical/current checkpoint wording.
+- Verification: focused documentation review passed after clarifying that `71f29b` is the initial historical continuation baseline rather than a current verified checkpoint.
+- Limits: documentation only. No build, package, runtime cell, compatibility profile, benchmark, or publication belongs to this checkpoint.
+- Rollback: revert later documentation dependants first, then `git revert 90ed4ea`; revert `1d03c6d` afterward only if also removing the canonical whole-plan audit.
+
+## Phase G — replacement-stage configuration safety
+
+- Date: 2026-08-15
+- Commit SHA: `c696253832a005ffbbccf838e52a639ba1658954`; parent `90ed4eababa35aecb151d2b5eeca33705c7abfeb`
+- Status: `PHASE_G_IMPLEMENTED_UNVERIFIED`.
+- Scope: add a focused failure-path test that reaches configuration replacement after the temporary file is written, using an existing nonempty directory as the blocked `packforge.json` target. The test requires the installed live snapshot and target sentinel to survive and the temporary file to be removed.
+- Verification: offline Fabric 1.21.1 `PackForgeConfigPreservationTest` reached BUILD SUCCESSFUL in 54 seconds across ten executed tasks. Independent 5.6-sol-wm review passed the exact diff with no required fixes.
+- Limits: no production source changed. No clean build, live UI route, renderer-family client run, shader/atlas profile, full matrix, or release verification belongs to this checkpoint. Phase G remains `IMPLEMENTED_UNVERIFIED`.
+- Rollback: revert later documentation dependants first, then `git revert c696253` to remove only the replacement-stage test.

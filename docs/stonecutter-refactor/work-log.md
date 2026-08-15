@@ -445,3 +445,23 @@
 - Verification: 12/12 phase rows and schema/status checks passed. Independent review passed after one repair cycle. Artifact inventory is 20 expected / 17 present / five matching / 15 missing / 12 stale; existing-artifact verification failed and the release manifest is absent.
 - Limits: no production source, clean build, all-53 build, runtime cell, third-party profile, benchmark, or publication was run.
 - Rollback: revert later documentation dependants first, then `git revert 1d03c6d`.
+
+## Whole-plan report reconciliation
+
+- Date: 2026-08-15
+- Commit SHA: `90ed4eababa35aecb151d2b5eeca33705c7abfeb`; parent `1d03c6dcd4bd010bde9ccd9d2d326e8f95ef7a97`
+- Status: `PARTIAL_NOT_RELEASE_READY`.
+- Scope: align the six current-status and ledger documents with the canonical A-L audit, including six Quick Pack profiles, full current preprocessing coverage, the 15-missing/12-stale artifact conflict, and unambiguous historical/current checkpoint wording.
+- Verification: independent documentation review passed after the `71f29b` baseline wording was corrected.
+- Limits: documentation only; no build, package, runtime, profile, benchmark, or publication was run.
+- Rollback: revert later documentation dependants first, then `git revert 90ed4ea`; revert `1d03c6d` afterward only if removing the canonical audit.
+
+## Phase G — replacement-stage configuration safety
+
+- Date: 2026-08-15
+- Commit SHA: `c696253832a005ffbbccf838e52a639ba1658954`; parent `90ed4eababa35aecb151d2b5eeca33705c7abfeb`
+- Status: `PHASE_G_IMPLEMENTED_UNVERIFIED`.
+- Scope: exercise `applyAndSave` after temporary-file creation when replacement of an existing nonempty `packforge.json` target fails. Require the installed configuration and target sentinel to remain unchanged and require temporary-file cleanup.
+- Verification: offline Fabric 1.21.1 `PackForgeConfigPreservationTest` reached BUILD SUCCESSFUL in 54 seconds across ten executed tasks; independent 5.6-sol-wm review passed.
+- Limits: no production source, clean build, live client/UI route, renderer-family run, shader/atlas profile, matrix, or release verification was run.
+- Rollback: revert later documentation dependants first, then `git revert c696253`.
