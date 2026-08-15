@@ -8,13 +8,13 @@ The preceding source checkpoint was `8aa6844` on branch `1.4`; this 2026-08-16 c
 
 The artifact verifier now enforces one exact loader-specific MixinExtras `0.5.4:slim` outer artifact, rejects alternate top-level copies, recursively validates Forge's `MixinExtras-0.5.4.jar` metadata/classes, and enforces the 128x128, <=32KiB icon. The requested clean `buildAllSupported` pass produced exactly 20 current artifacts; aggregate structural, existing-artifact, size, and generated-manifest verification all pass.
 
-The direct Fabric PackIndex microbenchmark now passes for target `mc1_21_1`: 20,014 entries, 18.4206 ms index build, 80.299 ms baseline median, 0.2406 ms indexed median, 99.70% query improvement, and equal semantic hash `bf864f1dbb4a77bc7e15193856a33c392ee3a8f7114d8d764a9aa0c11face66d`. Comparative Minecraft reload, Quick Pack profile, same-binary range, ten-reload, cancellation, and 62-cell runtime evidence remain unexecuted.
+The direct Fabric PackIndex microbenchmark now passes for target `mc1_21_1`: 20,014 entries, 18.4206 ms index build, 80.299 ms baseline median, 0.2406 ms indexed median, 99.70% query improvement, and equal semantic hash `bf864f1dbb4a77bc7e15193856a33c392ee3a8f7114d8d764a9aa0c11face66d`. The current final-JAR matrix has since passed 62/62 exact cells with ten reloads, a positive stable resolved-resource hash, and clean exit; Quick Pack/third-party profiles and heavy cancellation fixtures remain unexecuted.
 
 ## Outcome
 
-Current continuation state is **PARTIAL** and **NOT RELEASE READY**. The current version is `1.4`; all-loader MixinExtras packaging uses the resolved `0.5.4:slim` classifier.
+Current continuation state is **PARTIAL** and **NOT RELEASE READY**. The current version is `1.4`; all-loader MixinExtras packaging uses the resolved `0.5.4:slim` classifier. The exact base matrix is verified; compatibility profiles, heavy/cancellation fixtures, live renderer checks, and final rollback/documentation reconciliation remain open.
 
-Current source, current build wiring, and artifacts produced from current bytes are authoritative. The 62-cell runtime result, Quick Pack 1.5.0 run, 20-artifact manifest, and hashes recorded at checkpoints `051aaaca42bdc980a3260d1a6c6fcd4404f228b7` and `a3402866b217ac159d6a3cec70d3585028f79732` remain useful historical regression evidence. They are not current release proof because later direct-build, configuration, reporter, and harness changes changed the code and artifact path without a replacement full runtime matrix.
+Current source, current build wiring, and artifacts produced from current bytes are authoritative. The Quick Pack 1.5.0 run and hashes recorded at checkpoints `051aaaca42bdc980a3260d1a6c6fcd4404f228b7` and `a3402866b217ac159d6a3cec70d3585028f79732` remain useful historical regression evidence. The current 20-artifact manifest and the new 62-cell result are bound to the current artifact hashes; historical hashes are not substituted for them.
 
 ## Current verified implementation evidence
 
@@ -27,9 +27,10 @@ Current source, current build wiring, and artifacts produced from current bytes 
 | Quick Pack ownership | Policy hands off exactly six overlap capabilities and retains the other 23 capabilities. Environment-gated reporting emits loader-observed profile and ownership state. | Current final-JAR Quick Pack runs have not been executed. Version-policy tests do not prove old, current, or future Quick Pack runtime compatibility. |
 | Compatibility catalog | 36 recipes validate structurally: 21 are metadata-`AVAILABLE` but `UNTESTED`, 11 are `UNAVAILABLE` with dated public-source evidence, and four remain `PENDING_METADATA`/`UNTESTED`. | `AVAILABLE` means pinned inputs can be materialized, not that a profile passed; `UNAVAILABLE` is a disposition, not a runtime PASS. |
 | Profile transport | Schema-2 materialization carries catalog identity, hashes, pinned mod paths, fixture metadata, markers, and evidence paths through all three loader wrappers. Hash-addressed caching and fail-closed validation are implemented. Controlled Fabric/Forge/NeoForge smokes now emit and matrix records bind one deterministic resolved-resource SHA-256; the exact matrix requires ten reloads per cell. | No third-party compatibility-profile download or profile execution was performed. The separate focused slim-MixinExtras smokes did launch one current final JAR per loader and passed one reload. ImmediatelyFast-only path proof remains unavailable. Exactly five safe boolean overrides are accepted; unsupported keys and values fail closed. |
-| Fixtures | Nine deterministic 1.21.1 resource-pack fixtures and manifest contracts are generated reproducibly; each fixture includes the deterministic `example`-namespace marker required for positive resolved-resource evidence. | No fixture has been run through current final JARs. Reload repetition and cancellation are execution scenarios, not materialized fixture claims. |
+| Fixtures | Nine deterministic 1.21.1 compatibility fixtures and seven target-specific 20,004-entry production fixtures are generated reproducibly; each carries the deterministic marker required for positive resolved-resource evidence. | The production fixture was run through all 62 base cells. The nine heavy compatibility fixtures and explicit cancellation/failure scenarios remain separate unexecuted gates. |
 | Default-off candidates | Frozen catalog has five `SAFE_KEEP_DEFAULT_OFF` and six `FAILED_WITH_REASON` dispositions. No candidate was promoted. | All runtime, lifecycle, compatibility, fixture, and performance gates remain `NOT_RUN`. |
 | Release verification | Existing-manifest verification, exact fixture contract checks, execution-scenario identity, release-manifest preflight, and mutation self-tests are implemented. | Current `buildAllSupported` produced exactly 20 version-1.4 JARs; `verifyAllArtifacts` and `verifyReleaseManifest` both PASS. |
+| Exact final-JAR matrix | Registry-derived controller ran every declared 22-release/62-loader cell using the current 20 final JARs and target-specific deterministic production fixtures. | `build/production-matrix/full-62-20260816-batched/summary.json` records cumulative `62/62`, `cumulativeFailed=0`; all records have `reloads=10`, a positive stable resolved-resource SHA-256, `cleanExit=true`, and current artifact/fixture/provenance hashes. |
 
 ## Focused 1.4 slim-MixinExtras evidence
 
@@ -47,7 +48,7 @@ The no-rebuild `inspectArtifactSizes` task (with optional `-Ppackforge_artifact_
 
 ## Focused validation reused
 
-The 2026-08-16 verification checkpoint ran the requested clean/full build and the all-53 opt-in parity oracle; no broad runtime matrix was run. Relevant results are:
+The 2026-08-16 verification checkpoint ran the requested clean/full build, all-53 opt-in parity oracle, and complete bounded 62-cell final-JAR matrix. Relevant results are:
 
 - Source metrics: PASS; 209 files, 15,814 LOC, 110 bridge files / 5,553 LOC (35.11%), zero duplicate groups, six target/version conditional lines, zero platform target-key conditional lines, ten Stonecutter conditional blocks (maximum 40 lines), three renderer bodies, two adapters.
 - Direct graph contract: task PASS across 53 direct cells with four native SimpleReload cells. `buildStonecutterAll` and `verifyStonecutterAll` pass; opt-in `verifyStonecutterParityAll` completed all 53 direct/legacy comparisons successfully in 28m35s. The direct/parity split self-test passed with 53 direct cells and 106 rejected mutations.
@@ -59,19 +60,17 @@ The 2026-08-16 verification checkpoint ran the requested clean/full build and th
 - Compatibility reporter and atlas policy: focused unit tests PASS.
 - Existing-manifest verifier: generator/self-test PASS; fixture manifest/scenario and release preflight contract self-tests PASS; current 20-entry version-1.4 manifest verification PASS.
 - Focused slim-MixinExtras validation: Fabric, Forge, and NeoForge direct/parity builds PASS; all 20 final JARs pass nested slim-artifact and duplicate-entry inspection, and the three representative one-reload production smokes PASS with MixinExtras initialization, deterministic resolved-resource hash, and clean exit.
-- Resolved-resource hash contract: focused helper, matrix resume, profile transport, ten-reload enforcement, and aggregate implementation-contract self-tests PASS; no final-JAR semantic hash or 62-cell runtime result exists.
+- Resolved-resource hash contract: focused helper, matrix resume, profile transport, ten-reload enforcement, and aggregate implementation-contract self-tests PASS; every current matrix record contains a positive stable final-JAR semantic hash.
+- Full matrix: 16 bounded four-cell waves completed with cumulative `62/62` PASS, zero cumulative failures, ten reloads per cell, clean exit, and unchanged artifact hashes after the post-matrix incremental build/parity checks.
 
 ## Current acceptance gaps
 
 Release readiness requires new evidence from current bytes:
 
-1. Prove all 53 authoritative direct build cells, including Java 17/21/25, remap/refmap, JarJar, metadata, and structural parity.
-2. Extend the proven Fabric archive-capture preprocessing pilot into the intended authoritative source transport, or document and accept direct-source composition for the remaining sources; then remove the explicit legacy parity oracle after direct parity is proven.
-3. Run all 62 exact final-distribution-JAR cells with startup, required fixtures, deterministic reload/repetition, semantic/resource evidence, and exact clean-exit evidence.
-4. Reprove each publication range with the same current JAR across every exact release it claims.
-5. Run required Quick Pack and other available compatibility profiles on Fabric, Forge, and NeoForge. Keep every unexecuted profile `UNTESTED`.
-7. Complete live configuration-renderer parity and any required shader/atlas retry runtime checks.
-8. Record a new final checkpoint and rollback point only after those gates pass.
+1. Run representative heavy fixture families plus explicit cancellation/failure lifecycle scenarios against current final JARs.
+2. Run required Quick Pack and other available compatibility profiles on Fabric, Forge, and NeoForge. Keep every unexecuted profile `UNTESTED`.
+3. Complete live configuration-renderer parity and any required shader/atlas retry runtime checks.
+4. Record a new final checkpoint and rollback point only after those gates pass.
 
 ## Historical evidence, not current proof
 
@@ -84,4 +83,4 @@ Release readiness requires new evidence from current bytes:
 
 ## Stopping state
 
-No release publishing occurred. The current 20-artifact structural build/manifest and three focused loader smokes are verified; the exact matrix, third-party runtime profiles, benchmark, and live UI run remain unclaimed. Unrelated `.github/ISSUE_TEMPLATE/bug-report.yml`, `.codegraph/`, and `docs/PackForge_Missing_Implementation_Plan.md` work remains outside this refactor.
+No release publishing occurred. The current 20-artifact structural build/manifest, same-binary ranges, and complete 62-cell base matrix are verified; third-party runtime profiles, heavy/cancellation fixture scenarios, and live UI runs remain unclaimed. Unrelated `.github/ISSUE_TEMPLATE/bug-report.yml`, `.codegraph/`, and the untracked plan/README files remain outside this refactor.

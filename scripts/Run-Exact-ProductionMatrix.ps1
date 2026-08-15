@@ -66,6 +66,8 @@ $javaPaths = @{
     '21' = 'C:\Program Files\Java\jdk-21\bin\java.exe'
     '25' = 'C:\Program Files\Java\jdk-25\bin\java.exe'
 }
+$productionFixtureGeneratorPath = Join-Path $PSScriptRoot 'Generate-ProductionFixture.py'
+$productionFixtureCache = @{}
 
 function Get-PropertyValue {
     param($Object, [string] $Name)
@@ -558,15 +560,28 @@ function Ensure-FabricProfile {
 }
 
 function Resolve-ResourcePackFixture {
-    param([string] $Target, [string] $PreferredLoader)
+    param([string] $Target)
 
-    foreach ($loader in @($PreferredLoader, 'fabric', 'forge', 'neoforge') | Select-Object -Unique) {
-        $candidate = Join-Path $repositoryRoot "platform\$loader\run\$Target\resourcepacks\deterministic-large-pack.zip"
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-            return [IO.Path]::GetFullPath($candidate)
-        }
+    if (-not (Test-Path -LiteralPath $productionFixtureGeneratorPath -PathType Leaf)) {
+        throw "Production fixture generator is missing: $productionFixtureGeneratorPath"
     }
-    throw "No deterministic production resource-pack fixture exists for target $Target."
+    if ($productionFixtureCache.ContainsKey($Target)) {
+        return [string] $productionFixtureCache[$Target]
+    }
+
+    $fixturePath = Join-Path (Join-Path $repositoryRoot 'build\production-fixtures') "$Target\deterministic-large-pack.zip"
+    $fixtureDirectory = Split-Path -Parent $fixturePath
+    New-Item -ItemType Directory -Path $fixtureDirectory -Force | Out-Null
+    & python $productionFixtureGeneratorPath `
+        --registry $registryPath `
+        --target $Target `
+        --output $fixturePath | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Production fixture generator exited with code $LASTEXITCODE for target $Target."
+    }
+    $resolvedFixture = Resolve-RequiredFile -Path $fixturePath -Description "Deterministic production fixture for target $Target"
+    $productionFixtureCache[$Target] = $resolvedFixture
+    return $resolvedFixture
 }
 
 function Copy-ImmutableEvidenceInput {
@@ -714,11 +729,22 @@ function Test-ProfileProvenance {
     if ([string] $provenance.loader -ne [string] $Row.Loader -or [string] $provenance.target -ne [string] $Row.Target) {
         return 'Compatibility profile provenance has a different loader or target.'
     }
-    $actualAdditionalMods = @($provenance.additionalMods)
-    if ($actualAdditionalMods.Count -ne $ExpectedAdditionalMods.Count) {
+    $actualAdditionalMods = [Collections.Generic.List[object]]::new()
+    if ($null -ne $provenance.additionalMods) {
+        foreach ($mod in @($provenance.additionalMods)) {
+            if ($null -ne $mod) { [void] $actualAdditionalMods.Add($mod) }
+        }
+    }
+    $expectedAdditionalModList = [Collections.Generic.List[object]]::new()
+    if ($null -ne $ExpectedAdditionalMods) {
+        foreach ($expectedMod in @($ExpectedAdditionalMods)) {
+            if ($null -ne $expectedMod) { [void] $expectedAdditionalModList.Add($expectedMod) }
+        }
+    }
+    if ($actualAdditionalMods.Count -ne $expectedAdditionalModList.Count) {
         return 'Compatibility profile provenance has a different additional-mod count.'
     }
-    foreach ($expected in $ExpectedAdditionalMods) {
+    foreach ($expected in $expectedAdditionalModList) {
         $matches = @($actualAdditionalMods | Where-Object {
             [string] $_.artifact -eq [string] $expected.artifact -and
             [string] $_.sha256 -eq [string] $expected.sha256 -and
@@ -1354,7 +1380,7 @@ foreach ($cell in $registry.releaseCells) {
         $fixture = if ($isCatalogProfileCell) {
             [string] $resolvedCatalogFixture.path
         } else {
-            Resolve-ResourcePackFixture -Target ([string] $target.key) -PreferredLoader $loader
+            Resolve-ResourcePackFixture -Target ([string] $target.key)
         }
         [void] $rows.Add([pscustomobject]@{
             Cell = $cellId

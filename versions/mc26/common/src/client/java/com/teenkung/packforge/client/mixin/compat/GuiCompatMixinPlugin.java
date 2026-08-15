@@ -18,7 +18,7 @@ public final class GuiCompatMixinPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		if (mixinClassName.equals(MINECRAFT_MIXIN)
-			&& hasMethod(targetClassName, "setScreen", SET_SCREEN_DESCRIPTOR)) {
+			&& !hasMethod(targetClassName, "setScreen", SET_SCREEN_DESCRIPTOR)) {
 			return false;
 		}
 		if (mixinClassName.equals(GUI_MIXIN)

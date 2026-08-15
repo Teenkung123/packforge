@@ -1,6 +1,18 @@
 # Stonecutter refactor work log
 
-## Current 1.4 artifact-hardening checkpoint
+## Current 1.4 full final-JAR matrix verification
+
+- Date: 2026-08-16
+- Branch: `1.4`
+- Status: `BASE_MATRIX_VERIFIED`; compatibility profiles, heavy/cancellation fixtures, and live UI checks remain separate gates.
+- Scope: run every registry-declared final distribution cell after the target-specific production-fixture and mc26 GUI-mixin repairs, using bounded four-cell waves rather than 62 concurrent clients.
+- Commands: `python scripts/Generate-ProductionFixture.py --self-test`; `Run-Exact-ProductionMatrix.ps1 -PrepareOnly`; sixteen four-cell waves using `-OnlyCell`, `-ReloadCount 10`, and isolated shard roots; final `Run-Exact-ProductionMatrix.ps1 -Resume -ResultsRoot build/production-matrix/full-62-20260816-batched`.
+- Result: all 62 exact release/loader cells PASS cumulatively. Every record has ten deterministic reloads, one positive stable resolved-resource SHA-256, `cleanExit=true`, current artifact/fixture/provenance hashes, and no failed-mixin/crash marker. The aggregate summary records `cumulativeUniqueCells=62`, `cumulativePassed=62`, `cumulativeFailed=0`.
+- Build follow-up: incremental `buildAllSupported`, `buildStonecutterAll`, `verifyStonecutterAll`, `verifyAllArtifacts`, `verifyExistingArtifacts`, `inspectArtifactSizes`, and `verifyReleaseManifest` all PASS; all 20 final artifact SHA-256 values match the matrix records.
+- Limits: no third-party compatibility profile, heavy fixture family, cancellation/failure scenario, live renderer/shader check, release publication, or final rollback/docs checkpoint is claimed.
+- Evidence root: `build/production-matrix/full-62-20260816-batched`; rollback remains the pre-matrix branch tip until the evidence/docs commit is created.
+
+## Prior 1.4 artifact-hardening checkpoint
 
 - Date: 2026-08-16
 - Branch/HEAD: `1.4` / `8aa6844` (parent `6591e79`)
@@ -9,7 +21,7 @@
 - Boundary: `verifyExistingArtifacts` correctly rejects the mixed root directory's 17 stale files; no all-20 current artifact set, manifest, runtime matrix, Quick Pack profile, or comparative Minecraft reload benchmark PASS is claimed. The direct Fabric PackIndex microbenchmark passed with 20,014 entries, 18.4206 ms index build, 80.299 ms baseline median, 0.2406 ms indexed median, 99.70% improvement, and equal hash `bf864f1dbb4a77bc7e15193856a33c392ee3a8f7114d8d764a9aa0c11face66d`.
 - Rollback: revert `6591e79` to remove only this verifier/report hardening; retain `014f71a` and earlier implementation checkpoints.
 
-## Current 1.4 slim-MixinExtras validation (working tree)
+## Prior 1.4 slim-MixinExtras validation (working tree)
 
 - Date: 2026-08-15
 - Branch: `1.4`

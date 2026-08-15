@@ -135,7 +135,7 @@ Assert-SourceContract -Path $matrixPath -Patterns @(
     'RuntimeResourceHashEvidence\.ps1',
     '\[ValidateRange\(10,\s*10\)\]',
     '\[int\]\s+\$ReloadCount\s*=\s*10',
-    'Resolve-ResourcePackFixture.*PreferredLoader.*\$loader',
+    'Resolve-ResourcePackFixture\s+-Target',
     'runtimeResourceHashHelperPath',
     'Get-PackForgePassResolvedResourceSha256',
     'resolvedResourceSha256\s*=\s*\$resolvedResourceSha256',

@@ -72,40 +72,25 @@ project.ext.packforgeSharedClientJavaSources = selectedSharedJavaSources
 
 project.ext.packforgeBuildPackMetadata = { boolean fixture ->
 	def packSection = [description: "PackForge resources"]
-	def overlayFormats = null
 	if (target.packMetadata.schema == "single") {
 		packSection.pack_format = target.packMetadata.packFormat
-		if ((target.packMetadata.packFormat as int) >= 18) {
-			overlayFormats = [
-				min_inclusive: target.packMetadata.packFormat,
-				max_inclusive: target.packMetadata.packFormat
-			]
-		}
 	} else if (target.packMetadata.schema == "supported-range") {
 		packSection.pack_format = target.packMetadata.packFormat
 		packSection.supported_formats = [
 			target.packMetadata.minFormat,
 			target.packMetadata.maxFormat
 		]
-		overlayFormats = [
-			min_inclusive: target.packMetadata.minFormat,
-			max_inclusive: target.packMetadata.maxFormat
-		]
 	} else if (target.packMetadata.schema == "range") {
 		packSection.min_format = target.packMetadata.minFormat
 		packSection.max_format = target.packMetadata.maxFormat
-		overlayFormats = [
-			min_inclusive: target.packMetadata.minFormat,
-			max_inclusive: target.packMetadata.maxFormat
-		]
 	} else {
 		throw new GradleException("Unsupported pack metadata schema '${target.packMetadata.schema}' for '${target.key}'.")
 	}
-	def metadata = [pack: packSection]
-	if (fixture && overlayFormats != null && !(target.sourceFamily in ["mc26", "mc1_21_9_11"])) {
-		metadata.overlays = [entries: [[formats: overlayFormats, directory: "overlay"]]]
-	}
-	return metadata
+	// Runtime fixtures must be accepted by every loader implementation in the
+	// target range. Overlay metadata is covered by the separate compatibility-
+	// fixture catalog; embedding it in the large benchmark made otherwise valid
+	// exact cells loader/version dependent.
+	return [pack: packSection]
 }
 
 project.ext.packforgeWriteGeneratedResources = { File outputDirectory ->
