@@ -21,7 +21,7 @@ This is a direct registry-derived build graph. Native Stonecutter preprocessing 
 - `OrderedAsync`, `CoalescingExecutor`, and `ModelSchedulingPlan` own bounded ordered work.
 - `PackForgeConfig`, `PackForgeConfigScreenModel`, `PackForgeConfigDraft`, `PackForgeCapabilityProfile`, `FeaturePolicy`, `FeatureFlags`, and `ReloadFeatureSnapshot` own config/capability decisions.
 - `ReloadExecutionContext`, `ReloadLifecycle`, `ReloadHooks`, and `ReloadSessionTracker` own reload identity and lifecycle.
-- `QuickPackCompatibility` owns six-capability handoff policy; `CompatibilityProfileReporter` owns opt-in runtime profile evidence.
+- `QuickPackCompatibility` owns four-capability handoff policy, including the conservative unknown-metadata path; `CompatibilityProfileReporter` owns opt-in runtime profile evidence.
 - Root validation enforces source ownership, direct-node contracts, metadata, class floors, artifact declarations, renderer structure, and duplicate limits.
 
 ## Current deterministic metrics

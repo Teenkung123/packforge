@@ -213,7 +213,7 @@ class FeaturePolicyTest {
 
 		assertEquals(QuickPackCompatibility.Status.MODULE_HANDOFF, profile.status());
 		assertTrue(profile.owns(RESOURCE_PACK_INDEX));
-		assertEquals(Set.of(RESOURCE_PACK_INDEX), profile.ownedCapabilities());
+		assertEquals(QUICK_PACK_OWNED, profile.ownedCapabilities());
 		assertFalse(profile.owns(ZIP_READ_POOL));
 		assertFalse(profile.owns(LOADING_STATUS_OVERLAY));
 	}
@@ -223,6 +223,13 @@ class FeaturePolicyTest {
 		QuickPackCompatibility.Profile profile = QuickPackCompatibility.Profile.detectionFailed();
 
 		assertEquals(QuickPackCompatibility.Status.DETECTION_FAILED, profile.status());
-		assertEquals(Set.of(RESOURCE_PACK_INDEX), profile.ownedCapabilities());
+		assertEquals(QUICK_PACK_OWNED, profile.ownedCapabilities());
+	}
+
+	@Test
+	void blankAndFutureQuickPackVersionsUseAllKnownOverlapCapabilities() {
+		assertEquals(QUICK_PACK_OWNED, QuickPackCompatibility.forTesting(null).ownedCapabilities());
+		assertEquals(QUICK_PACK_OWNED, QuickPackCompatibility.forTesting("   ").ownedCapabilities());
+		assertEquals(QUICK_PACK_OWNED, QuickPackCompatibility.forTesting("2.0.0").ownedCapabilities());
 	}
 }

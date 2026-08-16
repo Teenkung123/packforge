@@ -4,7 +4,7 @@ Date: 2026-08-16
 
 ## Superseding 1.4 checkpoint (2026-08-16)
 
-The current 1.4 source/artifact checkpoint includes the full direct/parity build graph, target-specific production fixtures, and the bounded final-JAR matrix recorded at `build/production-matrix/full-62-20260816-batched`. The six-capability Quick Pack statement in the older body is historical and is superseded by the version-aware policy: `<1.4` owns resource indexing; `1.4.x` adds loading fade; `1.5+` adds font-provider preselection and atlas-mipmap generation. ZIP pooling, the PackForge loading-status overlay, diagnostics, toast, atlas protection, sprite decode, and model scheduling remain PackForge-owned.
+The current 1.4 source/artifact checkpoint includes the full direct/parity build graph, target-specific production fixtures, and the bounded final-JAR matrix recorded at `build/production-matrix/full-62-20260816-batched`. The older Quick Pack ownership statement is historical and is superseded by the version-aware policy: `<1.4` owns resource indexing; `1.4.x` adds loading fade; `1.5+` adds font-provider preselection and atlas-mipmap generation; unknown or failed metadata uses all four known overlaps. ZIP pooling, the PackForge loading-status overlay, diagnostics, toast, atlas protection, sprite decode, and model scheduling remain PackForge-owned.
 
 The current source metrics are 209 production files / 15,814 LOC with a zero-shortfall Phase F metric gate. A clean/incremental build produces exactly 20 current 1.4 artifacts; artifact, nested-JAR, duplicate-entry, and release-manifest verification pass. The full exact runtime matrix also passes 62/62 cells with ten reloads, a positive stable resolved-resource hash, and clean exit. PackIndex/comparative reload benchmarking remains a separate microbenchmark gate; the bounded benchmark attempt timed out before samples.
 
@@ -57,11 +57,11 @@ Forge 1.21.2, Forge/NeoForge 1.20.5, and NeoForge 1.20.1 are absent because the 
 
 Twenty unique new artifact pins were independently verified against SHA-256 and embedded loader metadata; exact loader floors, dependencies, and runtime mod IDs are catalogued. Eight formerly pending exact-loader records now carry dated public-source evidence and are explicitly `UNAVAILABLE`; the remaining four stay `PENDING_METADATA` because their exact loader-floor/feature-set disposition is unresolved. Fabric Quick Pack remains pending because its public 1.21.1 artifacts require Fabric Loader `>=0.17.3`, while the exact PackForge 1.21.1 smoke cell uses `0.15.11`. Verification downloads were not retained.
 
-Quick Pack policy assigns exactly six capabilities to `EXTERNALLY_OWNED_PATH` when detected: resource-pack index, ZIP read pool, font-provider preselection, atlas-mip parallelism, loading-fade control, and loading-status overlay. The other 23 capabilities stay under PackForge policy. This assignment is structurally/unit tested; current final-JAR runtime remains `UNTESTED`.
+Quick Pack policy assigns exactly four known capabilities to `EXTERNALLY_OWNED_PATH` when detected or when metadata is unknown: resource-pack index, font-provider preselection, atlas-mip parallelism, and loading-fade control. ZIP read pooling and loading-status overlay remain PackForge-owned, as do the other 25 capabilities. This assignment is structurally/unit tested; current final-JAR runtime remains `UNTESTED`.
 
 ## Harness and fixture state
 
-- Environment-gated profile reporting emits profile identity, loader/target, loader-observed mods, Quick Pack status, six overlap capabilities, and 23 retained capabilities.
+- Environment-gated profile reporting emits profile identity, loader/target, loader-observed mods, Quick Pack status, four overlap capabilities, and 25 retained capabilities.
 - Schema-2 profile materialization supports hash-addressed caching, safe decoded names, collision protection, SHA-256 verification, dependency staging, fixture metadata, expected markers, and evidence-path transport across all three loader wrappers.
 - Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy resources; the generator adds one stable `example`-namespace texture marker to every family so controlled hashing cannot silently pass with zero entries.
 - ImmediatelyFast-only path evidence and nonempty configuration overrides fail closed until dedicated instrumentation exists.

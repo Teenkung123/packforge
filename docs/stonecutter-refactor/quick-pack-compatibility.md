@@ -6,7 +6,7 @@ Date: 2026-08-15
 
 The ownership list in the older body is superseded by the current version-aware implementation at HEAD `8aa6844`:
 
-- unknown, unparsable, or detection-failure metadata: resource indexing only;
+- unknown, unparsable, or detection-failure metadata: all four known overlap capabilities;
 - Quick Pack `<1.4`: resource indexing;
 - Quick Pack `>=1.4,<1.5`: resource indexing plus loading-fade control;
 - Quick Pack `>=1.5`: the preceding modules plus font-provider preselection and atlas-mipmap generation.
@@ -21,16 +21,14 @@ PackForge is MIT-licensed and Quick Pack is GPLv3. PackForge may detect public m
 
 `QuickPackCompatibility` reads only loader-provided public metadata for mod ID `quick-pack`. It reports `ABSENT`, `MODULE_HANDOFF`, or `DETECTION_FAILED`. Version text is diagnostic only; missing, malformed, old, current, and future strings do not select different code paths. Metadata-read failure conservatively hands off the same overlap set.
 
-Quick Pack owns exactly six overlapping capabilities when present:
+Quick Pack owns exactly four overlapping capabilities when present or when metadata is unknown:
 
 - `RESOURCE_PACK_INDEX`
-- `ZIP_READ_POOL`
 - `FONT_PROVIDER_PRESELECTION`
 - `ATLAS_MIP_PARALLEL`
 - `LOADING_FADE_CONTROL`
-- `LOADING_STATUS_OVERLAY`
 
-The other 23 PackForge capabilities remain governed by normal capability/config policy. Loader mixin selection and runtime guards preserve non-overlap diagnostics and behavior. Configuration UI shows configured value, effective value, owner, and reason without overwriting saved choices.
+The other 25 PackForge capabilities remain governed by normal capability/config policy, including `ZIP_READ_POOL` and `LOADING_STATUS_OVERLAY`. Loader mixin selection and runtime guards preserve non-overlap diagnostics and behavior. Configuration UI shows configured value, effective value, owner, and reason without overwriting saved choices.
 
 This policy deliberately avoids Quick Pack internal classes and configuration keys. PackForge hands off an overlap capability whenever Quick Pack is loaded, even if that Quick Pack capability is locally disabled. Correct coexistence is preferred over retaining duplicate optimization work.
 
@@ -38,7 +36,7 @@ This policy deliberately avoids Quick Pack internal classes and configuration ke
 
 - Unit tests cover absent, present, old, current, future, malformed, missing-version, and detection-failure policy states.
 - Packaging/structural checks cover ownership boundaries.
-- `CompatibilityProfileReporter` can emit profile ID, loader/target, loader-observed mod presence, Quick Pack state, six handed-off capabilities, and 23 retained capabilities.
+- `CompatibilityProfileReporter` can emit profile ID, loader/target, loader-observed mod presence, Quick Pack state, four handed-off capabilities, and 25 retained capabilities.
 - Catalog declares six Quick Pack-containing recipes. The isolated Forge and NeoForge recipes are pinned `AVAILABLE`; the isolated Fabric recipe and three Fabric high-risk combinations remain `PENDING_METADATA`.
 - Schema-2 materialization can hash-verify and stage profile dependencies through all three loader wrappers.
 

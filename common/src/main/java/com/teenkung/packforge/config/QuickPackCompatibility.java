@@ -21,6 +21,12 @@ public final class QuickPackCompatibility {
 	public static final String MOD_ID = "quick-pack";
 
 	private static final AtomicReference<Profile> CACHED = new AtomicReference<>();
+	private static final Set<PackForgeCapability> KNOWN_OVERLAPS = Set.of(
+		RESOURCE_PACK_INDEX,
+		LOADING_FADE_CONTROL,
+		FONT_PROVIDER_PRESELECTION,
+		ATLAS_MIP_PARALLEL
+	);
 	private static final Pattern VERSION_PATTERN = Pattern.compile(
 		"(?<!\\d)(\\d+)\\.(\\d+)(?:\\.(\\d+))?(?!\\d)"
 	);
@@ -101,15 +107,26 @@ public final class QuickPackCompatibility {
 	}
 
 	private static EnumSet<PackForgeCapability> ownershipCapabilities(Optional<Version> version) {
+		if (version.isEmpty()) {
+			return knownOverlaps();
+		}
+		Version parsed = version.get();
+		if (parsed.major() > 1) {
+			return knownOverlaps();
+		}
 		EnumSet<PackForgeCapability> capabilities = EnumSet.of(RESOURCE_PACK_INDEX);
-		if (version.isPresent() && version.get().atLeast(1, 4)) {
+		if (parsed.atLeast(1, 4)) {
 			capabilities.add(LOADING_FADE_CONTROL);
 		}
-		if (version.isPresent() && version.get().atLeast(1, 5)) {
+		if (parsed.atLeast(1, 5)) {
 			capabilities.add(FONT_PROVIDER_PRESELECTION);
 			capabilities.add(ATLAS_MIP_PARALLEL);
 		}
 		return capabilities;
+	}
+
+	private static EnumSet<PackForgeCapability> knownOverlaps() {
+		return EnumSet.copyOf(KNOWN_OVERLAPS);
 	}
 
 	public enum Status {
@@ -139,7 +156,7 @@ public final class QuickPackCompatibility {
 		}
 
 		static Profile detectionFailed() {
-			return loaded(Status.DETECTION_FAILED, "", ownershipCapabilities(Optional.empty()));
+			return loaded(Status.DETECTION_FAILED, "", knownOverlaps());
 		}
 
 		public boolean loaded() {
