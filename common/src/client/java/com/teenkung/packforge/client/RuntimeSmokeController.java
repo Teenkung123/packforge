@@ -40,6 +40,9 @@ public final class RuntimeSmokeController {
 		if (!INITIALIZED.compareAndSet(false, true)) {
 			return;
 		}
+		if (RuntimeSmokeScenarioController.tryInitialize()) {
+			return;
+		}
 
 		String property;
 		try {

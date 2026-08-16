@@ -30,7 +30,7 @@ public abstract class ReloadableResourceManagerMixin {
 		try {
 			ReloadInstance instance;
 			try (ReloadExecutionContext.Scope ignored = ReloadExecutionContext.bind(context)) {
-				instance = original.call(preparationExecutor, reloadExecutor, initialStage, packs);
+					instance = original.call(preparationExecutor, reloadExecutor, initialStage, packs);
 			}
 			instance.done().whenComplete((result, error) -> {
 				if (error == null && ReloadExecutionContext.isCurrent(context)) {

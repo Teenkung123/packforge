@@ -42,6 +42,9 @@ param(
     [ValidateRange(0, 10)]
     [int] $ReloadCount = 10,
 
+    [ValidateSet('repeat', 'cancel-in-flight', 'forced-resource-failure', 'retry-success', 'retry-exhaustion')]
+    [string] $RuntimeSmokeScenario = 'repeat',
+
     [switch] $AllowControlledTermination
 )
 
@@ -58,6 +61,7 @@ $arguments = @{
     JavaPath = $JavaPath
     TimeoutSeconds = $TimeoutSeconds
     ReloadCount = $ReloadCount
+    RuntimeSmokeScenario = $RuntimeSmokeScenario
 }
 if (-not [string]::IsNullOrWhiteSpace($ResourcePackPath)) {
     $arguments.ResourcePackPath = $ResourcePackPath

@@ -16,6 +16,12 @@ Current continuation state is **PARTIAL** and **NOT RELEASE READY**. The current
 
 Current source, current build wiring, and artifacts produced from current bytes are authoritative. The Quick Pack 1.5.0 run and hashes recorded at checkpoints `051aaaca42bdc980a3260d1a6c6fcd4404f228b7` and `a3402866b217ac159d6a3cec70d3585028f79732` remain useful historical regression evidence. The current 20-artifact manifest and the new 62-cell result are bound to the current artifact hashes; historical hashes are not substituted for them.
 
+## Phase 4 scenario evidence (current bytes, 2026-08-16)
+
+The controlled runtime selector now executes deterministic cancellation/failure/retry paths while remaining inert for ordinary launches. Fabric `mc1_21_1` passed `cancel-in-flight`, `forced-resource-failure`, `retry-success`, and `retry-exhaustion`. Forge `mc1_20_2`, NeoForge `mc1_20_2`, and Forge `26.2` each passed `retry-success`; the 26.x run used the version-specific GUI ownership bridge and Java 25. All runs emitted `scenarioEvidence=true`, `cleanExit=true`, and the stable resolved-resource SHA-256 `80B4CD91224732DD5864132F5D5F39988AE0BBAC78F79CE753232342281AC632`. PASS markers now require recovered reload state, cleared `ReloadExecutionContext`, settled futures, and stale-overlay cleanup; the controller waits one stabilization interval before final PASS to retain asynchronous recovery-hash evidence.
+
+These are representative scenario results, not proof for all 62 cells or all nine heavy compatibility fixtures. Per-resource ZIP/font/native-image closure counters and third-party profile execution remain unverified acceptance gates.
+
 ## Current verified implementation evidence
 
 | Area | Current result | Boundary |
@@ -30,7 +36,7 @@ Current source, current build wiring, and artifacts produced from current bytes 
 | Fixtures | Nine deterministic 1.21.1 compatibility fixtures and seven target-specific 20,004-entry production fixtures are generated reproducibly; each carries the deterministic marker required for positive resolved-resource evidence. | The production fixture was run through all 62 base cells. The nine heavy compatibility fixtures and explicit cancellation/failure scenarios remain separate unexecuted gates. |
 | Default-off candidates | Frozen catalog has five `SAFE_KEEP_DEFAULT_OFF` and six `FAILED_WITH_REASON` dispositions. No candidate was promoted. | All runtime, lifecycle, compatibility, fixture, and performance gates remain `NOT_RUN`. |
 | Release verification | Existing-manifest verification, exact fixture contract checks, execution-scenario identity, release-manifest preflight, and mutation self-tests are implemented. | Current `buildAllSupported` produced exactly 20 version-1.4 JARs; `verifyAllArtifacts` and `verifyReleaseManifest` both PASS. |
-| Exact final-JAR matrix | Registry-derived controller ran every declared 22-release/62-loader cell using the current 20 final JARs and target-specific deterministic production fixtures. | `build/production-matrix/full-62-20260816-batched/summary.json` records cumulative `62/62`, `cumulativeFailed=0`; all records have `reloads=10`, a positive stable resolved-resource SHA-256, `cleanExit=true`, and current artifact/fixture/provenance hashes. |
+| Exact final-JAR matrix | Registry-derived controller ran every declared 22-release/62-loader cell using the current 20 final JARs and target-specific deterministic production fixtures. Representative Phase 4 scenario smokes additionally pass on Fabric 1.21.1, Forge/NeoForge 1.20.2, and Forge 26.2. | `build/production-matrix/full-62-20260816-batched/summary.json` records cumulative `62/62`, `cumulativeFailed=0`; all records have `reloads=10`, a positive stable resolved-resource SHA-256, `cleanExit=true`, and current artifact/fixture/provenance hashes. Scenario logs retain cancellation/failure/retry PASS markers and clean exits. |
 
 ## Focused 1.4 slim-MixinExtras evidence
 
@@ -67,7 +73,7 @@ The 2026-08-16 verification checkpoint ran the requested clean/full build, all-5
 
 Release readiness requires new evidence from current bytes:
 
-1. Run representative heavy fixture families plus explicit cancellation/failure lifecycle scenarios against current final JARs.
+1. Run representative heavy fixture families against current final JARs; cancellation/failure/retry lifecycle evidence is now retained for the representative families above.
 2. Run required Quick Pack and other available compatibility profiles on Fabric, Forge, and NeoForge. Keep every unexecuted profile `UNTESTED`.
 3. Complete live configuration-renderer parity and any required shader/atlas retry runtime checks.
 4. Record a new final checkpoint and rollback point only after those gates pass.

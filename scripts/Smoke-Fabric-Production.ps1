@@ -47,6 +47,9 @@ param(
     [ValidateRange(0, 100)]
     [int] $ReloadCount = 10,
 
+    [ValidateSet('repeat', 'cancel-in-flight', 'forced-resource-failure', 'retry-success', 'retry-exhaustion')]
+    [string] $RuntimeSmokeScenario = 'repeat',
+
     [switch] $AllowControlledTermination
 )
 
@@ -70,6 +73,12 @@ if (-not (Test-Path -LiteralPath $heavyFixtureEvidenceHelperPath -PathType Leaf)
     throw "Heavy fixture evidence helper is missing: $heavyFixtureEvidenceHelperPath"
 }
 . $heavyFixtureEvidenceHelperPath
+
+$runtimeSmokeScenarioEvidenceHelperPath = Join-Path $PSScriptRoot 'RuntimeSmokeScenarioEvidence.ps1'
+if (-not (Test-Path -LiteralPath $runtimeSmokeScenarioEvidenceHelperPath -PathType Leaf)) {
+    throw "Runtime smoke scenario evidence helper is missing: $runtimeSmokeScenarioEvidenceHelperPath"
+}
+. $runtimeSmokeScenarioEvidenceHelperPath
 
 if (-not ('PackForgeFabricProductionSmokeNative' -as [type])) {
     Add-Type -TypeDefinition @'
@@ -384,6 +393,11 @@ if ($ValidateCompatibilityProfileOnly.IsPresent) {
     }
     Write-Output ("PROFILE_TRANSPORT " + ($transport | ConvertTo-Json -Compress -Depth 6))
     return
+}
+
+$scenarioMode = $RuntimeSmokeScenario -ne 'repeat'
+if ($scenarioMode -and -not $AllowControlledTermination.IsPresent) {
+    throw 'Non-repeat runtime smoke scenarios require -AllowControlledTermination.'
 }
 
 $heavyFixtureId = if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
@@ -1191,8 +1205,10 @@ $javaArguments = [Collections.Generic.List[string]]::new()
 [void] $javaArguments.Add("-Duser.home=$homeRoot")
 $controllerMode = $AllowControlledTermination.IsPresent
 $requiresHeavyFixtureEvidence = $controllerMode -and $heavyFixtureProfile
+$requiresRuntimeScenarioEvidence = $controllerMode -and $scenarioMode
 if ($controllerMode) {
     [void] $javaArguments.Add("-Dpackforge.runtimeSmokeReloadCount=$ReloadCount")
+    [void] $javaArguments.Add("-Dpackforge.runtimeSmokeScenario=$RuntimeSmokeScenario")
 }
 
 $metadataJvmArguments = @(Expand-LauncherArguments `
@@ -1297,20 +1313,22 @@ try {
         $hasCapabilities = $logText -match $capabilityPattern
         $hasReload = $logText.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasArtifact = $logText -match $artifactSourcePattern
+        $hasRuntimeReady = (-not $controllerMode) -or
+            $logText.IndexOf('PackForge runtime smoke ready:', [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasResourceHash = (-not $controllerMode) -or @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count -ge 1
         $hasHeavyFixtureEvidence = (-not $requiresHeavyFixtureEvidence) -or @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $logText).Count -ge 1
         if ($process.HasExited) {
             $process.Refresh()
             throw "Fabric production client exited before readiness with code $($process.ExitCode)."
         }
-        if ($hasCapabilities -and $hasReload -and $hasArtifact -and $hasResourceHash -and $hasHeavyFixtureEvidence -and ($ReloadCount -eq 0 -or $minecraftWindow -ne [IntPtr]::Zero)) {
+        if ($hasCapabilities -and $hasReload -and $hasArtifact -and $hasRuntimeReady -and $hasResourceHash -and $hasHeavyFixtureEvidence -and ($ReloadCount -eq 0 -or $minecraftWindow -ne [IntPtr]::Zero)) {
             $ready = $true
             break
         }
         Start-Sleep -Seconds 2
     }
     if (-not $ready) {
-        throw "Fabric production client did not reach capability, reload, exact-artifact, resolved-resource hash, and heavy-fixture markers before timeout: resourceHash=$hasResourceHash heavyFixture=$hasHeavyFixtureEvidence."
+        throw "Fabric production client did not reach capability, reload, runtime-ready, exact-artifact, resolved-resource hash, and heavy-fixture markers before timeout: runtimeReady=$hasRuntimeReady resourceHash=$hasResourceHash heavyFixture=$hasHeavyFixtureEvidence."
     }
     if ($ReloadCount -gt 0 -and $minecraftWindow -eq [IntPtr]::Zero) {
         throw 'A visible Minecraft window is required for the requested F3+T reload validation.'
@@ -1330,6 +1348,12 @@ try {
         while ([datetime]::UtcNow -lt $reloadDeadline) {
             $reloadText = Get-LogText -Path $latestLog
             Assert-NoFatalLog -Text $reloadText -Context 'Fabric controlled reloads'
+            if ($requiresRuntimeScenarioEvidence) {
+                if (@(Get-PackForgeRuntimeSmokeScenarioPassRecords -Text $reloadText).Count -ge 1) { break }
+                if ($process.HasExited) { break }
+                Start-Sleep -Seconds 2
+                continue
+            }
             $currentReloadCount = Get-LogMarkerCount -Text $reloadText -Marker $reloadMarker
             $currentResourceHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $reloadText).Count
             $currentHeavyFixtureEvidenceCount = @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $reloadText).Count
@@ -1344,8 +1368,20 @@ try {
         $finalReloadCount = Get-LogMarkerCount -Text $finalReloadText -Marker $reloadMarker
         $finalResourceHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $finalReloadText).Count
         $finalHeavyFixtureEvidenceCount = @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $finalReloadText).Count
-        if ($finalReloadCount -lt $expectedReloadCount -or $finalResourceHashCount -lt $expectedResourceHashCount -or $finalHeavyFixtureEvidenceCount -lt $expectedHeavyFixtureEvidenceCount) {
+        if (-not $requiresRuntimeScenarioEvidence -and ($finalReloadCount -lt $expectedReloadCount -or $finalResourceHashCount -lt $expectedResourceHashCount -or $finalHeavyFixtureEvidenceCount -lt $expectedHeavyFixtureEvidenceCount)) {
             throw "Fabric controlled reloads did not emit the required completion/hash/heavy-fixture markers before timeout: reloads=$finalReloadCount/$expectedReloadCount hashes=$finalResourceHashCount/$expectedResourceHashCount heavyFixture=$finalHeavyFixtureEvidenceCount/$expectedHeavyFixtureEvidenceCount."
+        }
+        if ($requiresRuntimeScenarioEvidence) {
+            Resolve-PackForgeRuntimeSmokeScenarioEvidence `
+                -Text $finalReloadText `
+                -ExpectedScenario $RuntimeSmokeScenario `
+                -Context 'Fabric runtime smoke scenario' | Out-Null
+            if ($finalResourceHashCount -lt 2) {
+                throw "Fabric runtime smoke scenario did not retain startup and recovery resource hashes: actual=$finalResourceHashCount required=2."
+            }
+            if ($requiresHeavyFixtureEvidence -and $finalHeavyFixtureEvidenceCount -lt 2) {
+                throw "Fabric runtime smoke scenario did not retain startup and recovery heavy-fixture evidence: actual=$finalHeavyFixtureEvidenceCount required=2."
+            }
         }
     } else {
         for ($reload = 1; $reload -le $ReloadCount; $reload++) {
@@ -1473,7 +1509,7 @@ if ($finalLog -notmatch $artifactSourcePattern) { throw 'Final Fabric log is mis
 $resolvedResourceSha256 = if ($controllerMode) {
     Resolve-PackForgeResolvedResourceSha256 `
         -Text $finalLog `
-        -MinimumCount ($ReloadCount + 1) `
+        -MinimumCount $(if ($scenarioMode) { 2 } else { $ReloadCount + 1 }) `
         -Context 'Fabric production smoke'
 } else {
     $null
@@ -1482,7 +1518,7 @@ $heavyFixtureEvidenceRecords = if ($requiresHeavyFixtureEvidence) {
     @(Resolve-PackForgeHeavyFixtureEvidence `
         -Text $finalLog `
         -FixtureId $heavyFixtureId `
-        -MinimumCount ($ReloadCount + 1) `
+        -MinimumCount $(if ($scenarioMode) { 2 } else { $ReloadCount + 1 }) `
         -Context 'Fabric production smoke')
 } else {
     @()
@@ -1500,4 +1536,5 @@ if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 
 
 $resolvedResourceToken = if ($null -eq $resolvedResourceSha256) { '' } else { " resolvedResourceSha256=$resolvedResourceSha256" }
 $heavyFixtureToken = if ($requiresHeavyFixtureEvidence) { " heavyFixtureEvidence=$($heavyFixtureEvidenceRecords.Count)" } else { '' }
-Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash$resolvedResourceToken$heavyFixtureToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"
+$scenarioToken = if ($scenarioMode) { " scenario=$RuntimeSmokeScenario scenarioEvidence=true" } else { ' scenario=repeat' }
+Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash$resolvedResourceToken$heavyFixtureToken$scenarioToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"

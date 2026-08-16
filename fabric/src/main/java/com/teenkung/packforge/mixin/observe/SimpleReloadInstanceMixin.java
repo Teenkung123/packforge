@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import com.teenkung.packforge.loader.ReloadListenerTelemetry;
+import com.teenkung.packforge.loader.RuntimeSmokeScenario;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
@@ -25,10 +26,11 @@ public abstract class SimpleReloadInstanceMixin {
 		}
 		String name = ReloadListenerTelemetry.canonicalName(listener.getName());
 		long startedNs = context.features().reloadListenerTimingsEnabled() ? System.nanoTime() : 0L;
-		Executor trackedPrepare = ReloadListenerTelemetry.prepareExecutor(context, name, prepare);
-		Executor trackedApply = ReloadListenerTelemetry.applyExecutor(context, name, apply);
-		CompletableFuture<?> result = original.call(factory, barrier, manager, listener, trackedPrepare, trackedApply);
-		return ReloadListenerTelemetry.observeListenerFuture(context, name, result, startedNs);
+			Executor trackedPrepare = ReloadListenerTelemetry.prepareExecutor(context, name, prepare);
+			Executor trackedApply = ReloadListenerTelemetry.applyExecutor(context, name, apply);
+			CompletableFuture<?> result = original.call(factory, barrier, manager, listener, trackedPrepare, trackedApply);
+			result = RuntimeSmokeScenario.injectFailureAfter(result);
+			return ReloadListenerTelemetry.observeListenerFuture(context, name, result, startedNs);
 	}
 }
 //?}

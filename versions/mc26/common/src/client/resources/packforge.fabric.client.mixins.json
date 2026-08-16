@@ -19,6 +19,7 @@
 		"model.FaceBakeryMixin",
 		"model.ModelManagerMixin",
 		"options.OptionsMixin",
+		"observe.MinecraftRuntimeSmoke26Mixin",
 		"startup.GuiStartupMixin",
 		"startup.MainStartupMixin",
 		"startup.MinecraftStartupMixin",

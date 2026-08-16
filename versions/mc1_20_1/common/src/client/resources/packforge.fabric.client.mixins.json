@@ -13,6 +13,7 @@
 		"font.FontSetMixin",
 		"model.ModelManagerMixin",
 		"options.OptionsMixin",
+		"observe.MinecraftRuntimeSmokeMixin",
 		"ui.LoadingOverlayMixin",
 		"ui.LoadingOverlayToastMixin"
 	],

@@ -45,6 +45,9 @@ param(
     [ValidateRange(0, 10)]
     [int] $ReloadCount = 10,
 
+    [ValidateSet('repeat', 'cancel-in-flight', 'forced-resource-failure', 'retry-success', 'retry-exhaustion')]
+    [string] $RuntimeSmokeScenario = 'repeat',
+
     [switch] $AllowControlledTermination
 )
 
@@ -68,6 +71,12 @@ if (-not (Test-Path -LiteralPath $heavyFixtureEvidenceHelperPath -PathType Leaf)
     throw "Heavy fixture evidence helper is missing: $heavyFixtureEvidenceHelperPath"
 }
 . $heavyFixtureEvidenceHelperPath
+
+$runtimeSmokeScenarioEvidenceHelperPath = Join-Path $PSScriptRoot 'RuntimeSmokeScenarioEvidence.ps1'
+if (-not (Test-Path -LiteralPath $runtimeSmokeScenarioEvidenceHelperPath -PathType Leaf)) {
+    throw "Runtime smoke scenario evidence helper is missing: $runtimeSmokeScenarioEvidenceHelperPath"
+}
+. $runtimeSmokeScenarioEvidenceHelperPath
 
 if (-not ('PackForgeProductionSmokeNative' -as [type])) {
     Add-Type -TypeDefinition @'
@@ -307,6 +316,11 @@ if ($ValidateCompatibilityProfileOnly.IsPresent) {
     }
     Write-Output ("PROFILE_TRANSPORT " + ($transport | ConvertTo-Json -Compress -Depth 6))
     return
+}
+
+$scenarioMode = $RuntimeSmokeScenario -ne 'repeat'
+if ($scenarioMode -and -not $AllowControlledTermination.IsPresent) {
+    throw 'Non-repeat runtime smoke scenarios require -AllowControlledTermination.'
 }
 
 $heavyFixtureId = if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
@@ -756,6 +770,10 @@ $javaArguments.Add('-Xms512m')
 $javaArguments.Add('-Xmx2048m')
 $javaArguments.Add("-Djava.library.path=$natives")
 $javaArguments.Add("-DlibraryDirectory=$libraries")
+if ($AllowControlledTermination.IsPresent) {
+    $javaArguments.Add("-Dpackforge.runtimeSmokeReloadCount=$ReloadCount")
+    $javaArguments.Add("-Dpackforge.runtimeSmokeScenario=$RuntimeSmokeScenario")
+}
 foreach ($argument in (Expand-Arguments -Arguments $allJvmArguments)) {
     $expandedArgument = Expand-Token -Value $argument
     if ($expandedArgument.StartsWith('-DignoreList=', [StringComparison]::Ordinal) -and
@@ -791,13 +809,15 @@ $startInfo.RedirectStandardError = $true
 $startInfo.Arguments = [string]::Join(' ', @($javaArguments | ForEach-Object { ConvertTo-WindowsCommandLineArgument -Value $_ }))
 if ($AllowControlledTermination.IsPresent) {
     $runtimeSmokeOption = "-Dpackforge.runtimeSmokeReloadCount=$ReloadCount"
+    $runtimeSmokeScenarioOption = "-Dpackforge.runtimeSmokeScenario=$RuntimeSmokeScenario"
     $existingJavaToolOptions = [Environment]::GetEnvironmentVariable('JAVA_TOOL_OPTIONS', 'Process')
     $startInfo.Environment['JAVA_TOOL_OPTIONS'] = if ([string]::IsNullOrWhiteSpace($existingJavaToolOptions)) {
-        $runtimeSmokeOption
+        "$runtimeSmokeOption $runtimeSmokeScenarioOption"
     } else {
-        "$existingJavaToolOptions $runtimeSmokeOption"
+        "$existingJavaToolOptions $runtimeSmokeOption $runtimeSmokeScenarioOption"
     }
     $startInfo.Environment['PACKFORGE_RUNTIME_RESOURCE_HASH'] = 'true'
+    $startInfo.Environment['PACKFORGE_RUNTIME_SMOKE_SCENARIO'] = $RuntimeSmokeScenario
     if ($requiresHeavyFixtureEvidence) {
         $startInfo.Environment['PACKFORGE_RUNTIME_HEAVY_EVIDENCE'] = 'true'
     }
@@ -863,6 +883,12 @@ try {
         while ([datetime]::UtcNow -lt $controllerDeadline) {
             [string] $logText = Get-LogText -Path $latestLog
             Assert-NoFatalLog -Text $logText -Context 'controller reload'
+            if ($scenarioMode) {
+                if (@(Get-PackForgeRuntimeSmokeScenarioPassRecords -Text $logText).Count -ge 1) { break }
+                if ($process.HasExited) { break }
+                Start-Sleep -Seconds 2
+                continue
+            }
             $controllerReloadCount = Get-MarkerCount -Text $logText -Marker 'PackForge reload session:'
             $controllerHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count
             $controllerComplete = $logText.IndexOf('PackForge runtime smoke complete:', [StringComparison]::OrdinalIgnoreCase) -ge 0
@@ -878,11 +904,27 @@ try {
         $controllerHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count
         $controllerHeavyFixtureEvidenceCount = @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $logText).Count
         $controllerComplete = $logText.IndexOf('PackForge runtime smoke complete:', [StringComparison]::OrdinalIgnoreCase) -ge 0
-        if ($controllerReloadCount -lt $expectedReloadCount -or
+        if (-not $scenarioMode -and ($controllerReloadCount -lt $expectedReloadCount -or
             $controllerHashCount -lt $expectedReloadCount -or
             $controllerHeavyFixtureEvidenceCount -lt $expectedHeavyFixtureEvidenceCount -or
-            -not $controllerComplete) {
+            -not $controllerComplete)) {
             throw "Runtime smoke controller did not complete: reloads=$controllerReloadCount/$expectedReloadCount hashes=$controllerHashCount/$expectedReloadCount heavyFixture=$controllerHeavyFixtureEvidenceCount/$expectedHeavyFixtureEvidenceCount complete=$controllerComplete."
+        }
+
+        if ($scenarioMode) {
+            Resolve-PackForgeRuntimeSmokeScenarioEvidence `
+                -Text $logText `
+                -ExpectedScenario $RuntimeSmokeScenario `
+                -Context "$loaderDisplay runtime smoke scenario" | Out-Null
+            if (-not $controllerComplete) {
+                throw "$loaderDisplay runtime smoke scenario did not emit the normal completion marker."
+            }
+            if ($controllerHashCount -lt 2) {
+                throw "$loaderDisplay runtime smoke scenario did not retain startup and recovery resource hashes: actual=$controllerHashCount required=2."
+            }
+            if ($requiresHeavyFixtureEvidence -and $controllerHeavyFixtureEvidenceCount -lt 2) {
+                throw "$loaderDisplay runtime smoke scenario did not retain startup and recovery heavy-fixture evidence: actual=$controllerHeavyFixtureEvidenceCount required=2."
+            }
         }
 
         if (-not $process.WaitForExit(90000)) { throw 'Production Forge did not exit after the runtime smoke controller completed.' }
@@ -941,7 +983,7 @@ Assert-ProfileLogMarkers -Text $finalText -Context 'production shutdown' -Expect
 $resolvedResourceSha256 = if ($AllowControlledTermination.IsPresent) {
     Resolve-PackForgeResolvedResourceSha256 `
         -Text (Get-LogText -Path $latestLog) `
-        -MinimumCount ($ReloadCount + 1) `
+        -MinimumCount $(if ($scenarioMode) { 2 } else { $ReloadCount + 1 }) `
         -Context "$loaderDisplay production smoke"
 } else {
     $null
@@ -950,7 +992,7 @@ $heavyFixtureEvidenceRecords = if ($requiresHeavyFixtureEvidence) {
     @(Resolve-PackForgeHeavyFixtureEvidence `
         -Text (Get-LogText -Path $latestLog) `
         -FixtureId $heavyFixtureId `
-        -MinimumCount ($ReloadCount + 1) `
+        -MinimumCount $(if ($scenarioMode) { 2 } else { $ReloadCount + 1 }) `
         -Context "$loaderDisplay production smoke")
 } else {
     @()
@@ -966,4 +1008,5 @@ if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 
 }
 $resolvedResourceToken = if ($null -eq $resolvedResourceSha256) { '' } else { " resolvedResourceSha256=$resolvedResourceSha256" }
 $heavyFixtureToken = if ($requiresHeavyFixtureEvidence) { " heavyFixtureEvidence=$($heavyFixtureEvidenceRecords.Count)" } else { '' }
-Write-Output "PASS $loaderDisplay production smoke: version=$VersionName artifact=$artifactName sha256=$sourceHash$resolvedResourceToken$heavyFixtureToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot provenance=$provenancePath"
+$scenarioToken = if ($scenarioMode) { " scenario=$RuntimeSmokeScenario scenarioEvidence=true" } else { ' scenario=repeat' }
+Write-Output "PASS $loaderDisplay production smoke: version=$VersionName artifact=$artifactName sha256=$sourceHash$resolvedResourceToken$heavyFixtureToken$scenarioToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot provenance=$provenancePath"

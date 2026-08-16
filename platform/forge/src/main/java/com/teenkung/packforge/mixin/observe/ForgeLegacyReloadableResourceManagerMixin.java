@@ -31,7 +31,8 @@ public abstract class ForgeLegacyReloadableResourceManagerMixin {
 		List<PackResources> packs,
 		CallbackInfoReturnable<ReloadInstance> callbackInfo
 	) {
-		PACKFORGE_CONTEXT.set(ReloadLifecycle.startReload());
+		ReloadExecutionContext context = ReloadLifecycle.startReload();
+		PACKFORGE_CONTEXT.set(context);
 	}
 
 	@Inject(method = "createReload", at = @At("RETURN"))

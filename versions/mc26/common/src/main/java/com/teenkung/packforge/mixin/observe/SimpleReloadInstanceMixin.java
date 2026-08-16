@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import com.teenkung.packforge.loader.ReloadListenerTelemetry;
+import com.teenkung.packforge.loader.RuntimeSmokeScenario;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import org.spongepowered.asm.mixin.Mixin;
@@ -39,14 +40,15 @@ public abstract class SimpleReloadInstanceMixin {
 		long startedNs = context.features().reloadListenerTimingsEnabled() ? System.nanoTime() : 0L;
 		Executor trackedTaskExecutor = ReloadListenerTelemetry.prepareExecutor(context, name, taskExecutor);
 		Executor trackedReloadExecutor = ReloadListenerTelemetry.applyExecutor(context, name, reloadExecutor);
-		CompletableFuture<?> future = original.call(
+			CompletableFuture<?> future = original.call(
 			stateFactory,
 			sharedState,
 			barrier,
 			listener,
 			trackedTaskExecutor,
-			trackedReloadExecutor
-		);
+				trackedReloadExecutor
+			);
+			future = RuntimeSmokeScenario.injectFailureAfter(future);
 		return ReloadListenerTelemetry.observeListenerFuture(context, name, future, startedNs);
 	}
 }
