@@ -63,6 +63,12 @@ if (-not (Test-Path -LiteralPath $runtimeResourceHashHelperPath -PathType Leaf))
 }
 . $runtimeResourceHashHelperPath
 
+$heavyFixtureEvidenceHelperPath = Join-Path $PSScriptRoot 'HeavyFixtureEvidence.ps1'
+if (-not (Test-Path -LiteralPath $heavyFixtureEvidenceHelperPath -PathType Leaf)) {
+    throw "Heavy fixture evidence helper is missing: $heavyFixtureEvidenceHelperPath"
+}
+. $heavyFixtureEvidenceHelperPath
+
 if (-not ('PackForgeProductionSmokeNative' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -302,6 +308,14 @@ if ($ValidateCompatibilityProfileOnly.IsPresent) {
     Write-Output ("PROFILE_TRANSPORT " + ($transport | ConvertTo-Json -Compress -Depth 6))
     return
 }
+
+$heavyFixtureId = if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
+    [string] $compatibilityProfile.fixture.id
+} else {
+    $null
+}
+$heavyFixtureProfile = Test-PackForgeHeavyFixtureId -FixtureId $heavyFixtureId
+$requiresHeavyFixtureEvidence = $AllowControlledTermination.IsPresent -and $heavyFixtureProfile
 
 function Test-RuleSet {
     param($Rules)
@@ -784,6 +798,9 @@ if ($AllowControlledTermination.IsPresent) {
         "$existingJavaToolOptions $runtimeSmokeOption"
     }
     $startInfo.Environment['PACKFORGE_RUNTIME_RESOURCE_HASH'] = 'true'
+    if ($requiresHeavyFixtureEvidence) {
+        $startInfo.Environment['PACKFORGE_RUNTIME_HEAVY_EVIDENCE'] = 'true'
+    }
 }
 if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
     $startInfo.Environment['PACKFORGE_COMPAT_PROFILE_ID'] = [string] $compatibilityProfile.profileId
@@ -825,18 +842,21 @@ try {
             $logText.IndexOf('PackForge runtime smoke ready:', [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasResourceHash = (-not $AllowControlledTermination.IsPresent) -or
             @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count -ge 1
+        $hasHeavyFixtureEvidence = (-not $requiresHeavyFixtureEvidence) -or
+            @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $logText).Count -ge 1
         if ($process.HasExited) { throw "Production Forge exited before readiness with code $($process.ExitCode)." }
-        if ($hasArtifact -and $hasCapabilities -and $hasReload -and $hasRuntimeReady -and $hasResourceHash `
+        if ($hasArtifact -and $hasCapabilities -and $hasReload -and $hasRuntimeReady -and $hasResourceHash -and $hasHeavyFixtureEvidence `
             -and ($AllowControlledTermination.IsPresent -or $ReloadCount -eq 0 -or $window -ne [IntPtr]::Zero)) {
             $ready = $true
             break
         }
         Start-Sleep -Seconds 2
     }
-    if (-not $ready) { throw 'Production Forge did not reach its exact-artifact capability and final-atlas markers before timeout.' }
+    if (-not $ready) { throw "Production Forge did not reach its exact-artifact capability, final-atlas, and heavy-fixture markers before timeout: heavyFixture=$hasHeavyFixtureEvidence." }
 
     if ($AllowControlledTermination.IsPresent) {
         $expectedReloadCount = $ReloadCount + 1
+        $expectedHeavyFixtureEvidenceCount = if ($requiresHeavyFixtureEvidence) { $expectedReloadCount } else { 0 }
         $controllerDeadline = [datetime]::UtcNow.AddSeconds(240)
         if ($controllerDeadline -gt $deadline) { $controllerDeadline = $deadline }
         $controllerComplete = $false
@@ -856,10 +876,13 @@ try {
         [string] $logText = Get-LogText -Path $latestLog
         $controllerReloadCount = Get-MarkerCount -Text $logText -Marker 'PackForge reload session:'
         $controllerHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count
+        $controllerHeavyFixtureEvidenceCount = @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $logText).Count
         $controllerComplete = $logText.IndexOf('PackForge runtime smoke complete:', [StringComparison]::OrdinalIgnoreCase) -ge 0
         if ($controllerReloadCount -lt $expectedReloadCount -or
-            $controllerHashCount -lt $expectedReloadCount -or -not $controllerComplete) {
-            throw "Runtime smoke controller did not complete: reloads=$controllerReloadCount/$expectedReloadCount hashes=$controllerHashCount/$expectedReloadCount complete=$controllerComplete."
+            $controllerHashCount -lt $expectedReloadCount -or
+            $controllerHeavyFixtureEvidenceCount -lt $expectedHeavyFixtureEvidenceCount -or
+            -not $controllerComplete) {
+            throw "Runtime smoke controller did not complete: reloads=$controllerReloadCount/$expectedReloadCount hashes=$controllerHashCount/$expectedReloadCount heavyFixture=$controllerHeavyFixtureEvidenceCount/$expectedHeavyFixtureEvidenceCount complete=$controllerComplete."
         }
 
         if (-not $process.WaitForExit(90000)) { throw 'Production Forge did not exit after the runtime smoke controller completed.' }
@@ -923,6 +946,15 @@ $resolvedResourceSha256 = if ($AllowControlledTermination.IsPresent) {
 } else {
     $null
 }
+$heavyFixtureEvidenceRecords = if ($requiresHeavyFixtureEvidence) {
+    @(Resolve-PackForgeHeavyFixtureEvidence `
+        -Text (Get-LogText -Path $latestLog) `
+        -FixtureId $heavyFixtureId `
+        -MinimumCount ($ReloadCount + 1) `
+        -Context "$loaderDisplay production smoke")
+} else {
+    @()
+}
 if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
     $runtimeEvidencePath = Join-Path $gameRoot 'compatibility-runtime-evidence.log'
     Write-Utf8NoBom -Path $runtimeEvidencePath -Contents $finalText
@@ -933,4 +965,5 @@ if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 
     Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 8)
 }
 $resolvedResourceToken = if ($null -eq $resolvedResourceSha256) { '' } else { " resolvedResourceSha256=$resolvedResourceSha256" }
-Write-Output "PASS $loaderDisplay production smoke: version=$VersionName artifact=$artifactName sha256=$sourceHash$resolvedResourceToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot provenance=$provenancePath"
+$heavyFixtureToken = if ($requiresHeavyFixtureEvidence) { " heavyFixtureEvidence=$($heavyFixtureEvidenceRecords.Count)" } else { '' }
+Write-Output "PASS $loaderDisplay production smoke: version=$VersionName artifact=$artifactName sha256=$sourceHash$resolvedResourceToken$heavyFixtureToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$gameRoot provenance=$provenancePath"

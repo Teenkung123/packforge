@@ -65,6 +65,12 @@ if (-not (Test-Path -LiteralPath $runtimeResourceHashHelperPath -PathType Leaf))
 }
 . $runtimeResourceHashHelperPath
 
+$heavyFixtureEvidenceHelperPath = Join-Path $PSScriptRoot 'HeavyFixtureEvidence.ps1'
+if (-not (Test-Path -LiteralPath $heavyFixtureEvidenceHelperPath -PathType Leaf)) {
+    throw "Heavy fixture evidence helper is missing: $heavyFixtureEvidenceHelperPath"
+}
+. $heavyFixtureEvidenceHelperPath
+
 if (-not ('PackForgeFabricProductionSmokeNative' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -379,6 +385,13 @@ if ($ValidateCompatibilityProfileOnly.IsPresent) {
     Write-Output ("PROFILE_TRANSPORT " + ($transport | ConvertTo-Json -Compress -Depth 6))
     return
 }
+
+$heavyFixtureId = if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
+    [string] $compatibilityProfile.fixture.id
+} else {
+    $null
+}
+$heavyFixtureProfile = Test-PackForgeHeavyFixtureId -FixtureId $heavyFixtureId
 
 function Resolve-SafeRelativePath {
     param(
@@ -1177,6 +1190,7 @@ $javaArguments = [Collections.Generic.List[string]]::new()
 [void] $javaArguments.Add("-Djava.io.tmpdir=$tempRoot")
 [void] $javaArguments.Add("-Duser.home=$homeRoot")
 $controllerMode = $AllowControlledTermination.IsPresent
+$requiresHeavyFixtureEvidence = $controllerMode -and $heavyFixtureProfile
 if ($controllerMode) {
     [void] $javaArguments.Add("-Dpackforge.runtimeSmokeReloadCount=$ReloadCount")
 }
@@ -1246,6 +1260,9 @@ foreach ($environmentOption in @('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA
 }
 if ($controllerMode) {
     $startInfo.EnvironmentVariables['PACKFORGE_RUNTIME_RESOURCE_HASH'] = 'true'
+    if ($requiresHeavyFixtureEvidence) {
+        $startInfo.EnvironmentVariables['PACKFORGE_RUNTIME_HEAVY_EVIDENCE'] = 'true'
+    }
 }
 if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
     $startInfo.EnvironmentVariables['PACKFORGE_COMPAT_PROFILE_ID'] = [string] $compatibilityProfile.profileId
@@ -1281,18 +1298,19 @@ try {
         $hasReload = $logText.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasArtifact = $logText -match $artifactSourcePattern
         $hasResourceHash = (-not $controllerMode) -or @(Get-PackForgeResolvedResourceHashRecords -Text $logText).Count -ge 1
+        $hasHeavyFixtureEvidence = (-not $requiresHeavyFixtureEvidence) -or @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $logText).Count -ge 1
         if ($process.HasExited) {
             $process.Refresh()
             throw "Fabric production client exited before readiness with code $($process.ExitCode)."
         }
-        if ($hasCapabilities -and $hasReload -and $hasArtifact -and $hasResourceHash -and ($ReloadCount -eq 0 -or $minecraftWindow -ne [IntPtr]::Zero)) {
+        if ($hasCapabilities -and $hasReload -and $hasArtifact -and $hasResourceHash -and $hasHeavyFixtureEvidence -and ($ReloadCount -eq 0 -or $minecraftWindow -ne [IntPtr]::Zero)) {
             $ready = $true
             break
         }
         Start-Sleep -Seconds 2
     }
     if (-not $ready) {
-        throw "Fabric production client did not reach capability, reload, exact-artifact, and resolved-resource hash markers before timeout: resourceHash=$hasResourceHash."
+        throw "Fabric production client did not reach capability, reload, exact-artifact, resolved-resource hash, and heavy-fixture markers before timeout: resourceHash=$hasResourceHash heavyFixture=$hasHeavyFixtureEvidence."
     }
     if ($ReloadCount -gt 0 -and $minecraftWindow -eq [IntPtr]::Zero) {
         throw 'A visible Minecraft window is required for the requested F3+T reload validation.'
@@ -1302,6 +1320,11 @@ try {
         $beforeText = Get-LogText -Path $latestLog
         $expectedReloadCount = (Get-LogMarkerCount -Text $beforeText -Marker $reloadMarker) + $ReloadCount
         $expectedResourceHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $beforeText).Count + $ReloadCount
+        $expectedHeavyFixtureEvidenceCount = if ($requiresHeavyFixtureEvidence) {
+            @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $beforeText).Count + $ReloadCount
+        } else {
+            0
+        }
         $reloadDeadline = [datetime]::UtcNow.AddSeconds(300)
         if ($reloadDeadline -gt $deadline) { $reloadDeadline = $deadline }
         while ([datetime]::UtcNow -lt $reloadDeadline) {
@@ -1309,7 +1332,8 @@ try {
             Assert-NoFatalLog -Text $reloadText -Context 'Fabric controlled reloads'
             $currentReloadCount = Get-LogMarkerCount -Text $reloadText -Marker $reloadMarker
             $currentResourceHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $reloadText).Count
-            if ($currentReloadCount -ge $expectedReloadCount -and $currentResourceHashCount -ge $expectedResourceHashCount) { break }
+            $currentHeavyFixtureEvidenceCount = @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $reloadText).Count
+            if ($currentReloadCount -ge $expectedReloadCount -and $currentResourceHashCount -ge $expectedResourceHashCount -and $currentHeavyFixtureEvidenceCount -ge $expectedHeavyFixtureEvidenceCount) { break }
             if ($process.HasExited) {
                 $process.Refresh()
                 throw "Fabric production client exited during controlled reloads with code $($process.ExitCode)."
@@ -1319,8 +1343,9 @@ try {
         $finalReloadText = Get-LogText -Path $latestLog
         $finalReloadCount = Get-LogMarkerCount -Text $finalReloadText -Marker $reloadMarker
         $finalResourceHashCount = @(Get-PackForgeResolvedResourceHashRecords -Text $finalReloadText).Count
-        if ($finalReloadCount -lt $expectedReloadCount -or $finalResourceHashCount -lt $expectedResourceHashCount) {
-            throw "Fabric controlled reloads did not emit the required completion/hash markers before timeout: reloads=$finalReloadCount/$expectedReloadCount hashes=$finalResourceHashCount/$expectedResourceHashCount."
+        $finalHeavyFixtureEvidenceCount = @(Get-PackForgeHeavyFixtureEvidenceRecords -Text $finalReloadText).Count
+        if ($finalReloadCount -lt $expectedReloadCount -or $finalResourceHashCount -lt $expectedResourceHashCount -or $finalHeavyFixtureEvidenceCount -lt $expectedHeavyFixtureEvidenceCount) {
+            throw "Fabric controlled reloads did not emit the required completion/hash/heavy-fixture markers before timeout: reloads=$finalReloadCount/$expectedReloadCount hashes=$finalResourceHashCount/$expectedResourceHashCount heavyFixture=$finalHeavyFixtureEvidenceCount/$expectedHeavyFixtureEvidenceCount."
         }
     } else {
         for ($reload = 1; $reload -le $ReloadCount; $reload++) {
@@ -1453,6 +1478,15 @@ $resolvedResourceSha256 = if ($controllerMode) {
 } else {
     $null
 }
+$heavyFixtureEvidenceRecords = if ($requiresHeavyFixtureEvidence) {
+    @(Resolve-PackForgeHeavyFixtureEvidence `
+        -Text $finalLog `
+        -FixtureId $heavyFixtureId `
+        -MinimumCount ($ReloadCount + 1) `
+        -Context 'Fabric production smoke')
+} else {
+    @()
+}
 
 if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 2) {
     $runtimeEvidencePath = Join-Path $runRoot 'compatibility-runtime-evidence.log'
@@ -1465,4 +1499,5 @@ if ($null -ne $compatibilityProfile -and [int] $compatibilityProfile.schema -eq 
 }
 
 $resolvedResourceToken = if ($null -eq $resolvedResourceSha256) { '' } else { " resolvedResourceSha256=$resolvedResourceSha256" }
-Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash$resolvedResourceToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"
+$heavyFixtureToken = if ($requiresHeavyFixtureEvidence) { " heavyFixtureEvidence=$($heavyFixtureEvidenceRecords.Count)" } else { '' }
+Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash$resolvedResourceToken$heavyFixtureToken additionalMods=$($stagedAdditionalMods.Count) reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"

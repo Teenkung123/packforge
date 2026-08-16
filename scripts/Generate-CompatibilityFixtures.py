@@ -26,6 +26,12 @@ HIGH_ENTRY_COUNT = 20_000
 MODEL_COUNT = 256
 FONT_PROVIDER_COUNT = 32
 SEMANTIC_HASH_MARKER = "assets/example/textures/fixture-marker.txt"
+MIPMAP_TEXTURES = (
+    ("assets/minecraft/textures/block/stone.png", 256, 64),
+    ("assets/minecraft/textures/block/dirt.png", 512, 128),
+    ("assets/minecraft/textures/block/oak_planks.png", 1024, 256),
+)
+MIPMAP_METADATA_PATH = "assets/minecraft/textures/block/oak_planks.png.mcmeta"
 
 
 def json_bytes(value: object) -> bytes:
@@ -63,6 +69,15 @@ def png_rgba(width: int, height: int, seed: int) -> bytes:
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)) + chunk(
         b"IDAT", zlib.compress(bytes(rows), level=9)
     ) + chunk(b"IEND", b"")
+
+
+def png_dimensions(contents: bytes) -> tuple[int, int]:
+    """Read the dimensions from a deterministic PNG without image dependencies."""
+    if len(contents) < 26 or contents[:8] != b"\x89PNG\r\n\x1a\n":
+        raise AssertionError("fixture entry is not a PNG")
+    if contents[12:16] != b"IHDR" or struct.unpack(">I", contents[8:12])[0] != 13:
+        raise AssertionError("fixture PNG has no canonical IHDR")
+    return struct.unpack(">II", contents[16:24])
 
 
 @dataclass(frozen=True)
@@ -180,18 +195,30 @@ def font_heavy_entries() -> list[ArchiveEntry]:
         character = chr(ord("A") + index % 26)
         path = f"minecraft:font/fixture_{index:02d}.png"
         providers.append({"ascent": 8, "chars": [character], "file": path, "height": 8, "type": "bitmap"})
-        entries.append(ArchiveEntry(f"assets/minecraft/font/fixture_{index:02d}.png", png_rgba(8, 8, index)))
+        entries.append(ArchiveEntry(f"assets/minecraft/textures/font/fixture_{index:02d}.png", png_rgba(8, 8, index)))
     entries.append(ArchiveEntry("assets/minecraft/font/default.json", json_bytes({"providers": providers})))
     return entries
 
 
 def model_heavy_entries() -> list[ArchiveEntry]:
     entries = base_entries("PackForge model-heavy compatibility fixture")
+    overrides = [
+        {"predicate": {"custom_model_data": index + 1}, "model": f"minecraft:item/fixture_{index:03d}"}
+        for index in range(MODEL_COUNT)
+    ]
+    entries.append(ArchiveEntry(
+        "assets/minecraft/models/item/stick.json",
+        json_bytes({
+            "overrides": overrides,
+            "parent": "item/generated",
+            "textures": {"layer0": "minecraft:item/stick"},
+        }),
+    ))
     for index in range(MODEL_COUNT):
         name = f"fixture_{index:03d}"
         entries.append(ArchiveEntry(
             f"assets/minecraft/models/item/{name}.json",
-            json_bytes({"parent": "item/generated", "textures": {"layer0": f"minecraft:item/{name}"}}),
+            json_bytes({"parent": "item/generated", "textures": {"layer0": "minecraft:item/stick"}}),
         ))
         entries.append(ArchiveEntry(
             f"assets/minecraft/blockstates/{name}.json",
@@ -202,13 +229,10 @@ def model_heavy_entries() -> list[ArchiveEntry]:
 
 def mipmap_high_resolution_entries() -> list[ArchiveEntry]:
     entries = base_entries("PackForge mipmap/high-resolution compatibility fixture")
-    for size in (256, 512, 1024):
-        entries.append(ArchiveEntry(
-            f"assets/minecraft/textures/fixture/mipmap_{size}.png",
-            png_rgba(size, size, size // 4),
-        ))
+    for path, size, seed in MIPMAP_TEXTURES:
+        entries.append(ArchiveEntry(path, png_rgba(size, size, seed)))
     entries.append(ArchiveEntry(
-        "assets/minecraft/textures/fixture/mipmap_1024.png.mcmeta",
+        MIPMAP_METADATA_PATH,
         json_bytes({"animation": {"frametime": 2}}),
     ))
     return entries
@@ -269,23 +293,23 @@ FIXTURES = (
         "font-heavy-resource-pack.zip",
         "Bitmap font-provider discovery and font reload work with 32 deterministic providers.",
         font_heavy_entries,
-        ("pack.mcmeta", "assets/minecraft/font/default.json", "assets/minecraft/font/fixture_31.png"),
+        ("pack.mcmeta", "assets/minecraft/font/default.json", "assets/minecraft/textures/font/fixture_31.png"),
         4 + FONT_PROVIDER_COUNT + 1,
     ),
     FixtureSpec(
         "model-heavy-resource-pack",
         "model-heavy-resource-pack.zip",
-        "Model and blockstate loading with 256 deterministic model pairs.",
+        "Known stick-item model override loading and blockstate parsing with 256 deterministic model pairs.",
         model_heavy_entries,
-        ("pack.mcmeta", "assets/minecraft/models/item/fixture_255.json", "assets/minecraft/blockstates/fixture_255.json"),
-        4 + MODEL_COUNT * 2,
+        ("pack.mcmeta", "assets/minecraft/models/item/stick.json", "assets/minecraft/models/item/fixture_255.json", "assets/minecraft/blockstates/fixture_255.json"),
+        5 + MODEL_COUNT * 2,
     ),
     FixtureSpec(
         "mipmap-heavy-resource-pack",
         "mipmap-heavy-resource-pack.zip",
         "High-resolution texture decode and atlas mipmap work with 256, 512, and 1024 pixel PNGs.",
         mipmap_high_resolution_entries,
-        ("pack.mcmeta", "assets/minecraft/textures/fixture/mipmap_1024.png", "assets/minecraft/textures/fixture/mipmap_1024.png.mcmeta"),
+        ("pack.mcmeta", "assets/minecraft/textures/block/stone.png", "assets/minecraft/textures/block/oak_planks.png", MIPMAP_METADATA_PATH),
         8,
     ),
 )
@@ -376,6 +400,65 @@ def generate(output_directory: Path) -> dict[str, object]:
     return manifest
 
 
+def assert_font_fixture_contract(archive: zipfile.ZipFile, names: list[str]) -> None:
+    configuration = json.loads(archive.read("assets/minecraft/font/default.json").decode("utf-8"))
+    providers = configuration.get("providers")
+    if not isinstance(providers, list) or len(providers) != FONT_PROVIDER_COUNT:
+        raise AssertionError(f"font fixture provider count changed: {providers}")
+
+    expected_textures: set[str] = set()
+    for index, provider in enumerate(providers):
+        expected_file = f"minecraft:font/fixture_{index:02d}.png"
+        if provider.get("type") != "bitmap" or provider.get("file") != expected_file:
+            raise AssertionError(f"font provider {index} is not the expected bitmap resource: {provider}")
+        texture_path = f"assets/minecraft/textures/font/fixture_{index:02d}.png"
+        if texture_path not in names:
+            raise AssertionError(f"font provider texture is missing: {texture_path}")
+        if png_dimensions(archive.read(texture_path)) != (8, 8):
+            raise AssertionError(f"font provider texture dimensions changed: {texture_path}")
+        expected_textures.add(texture_path)
+
+    actual_textures = {name for name in names if name.startswith("assets/minecraft/textures/font/fixture_")}
+    if actual_textures != expected_textures:
+        raise AssertionError("font fixture contains unreferenced or missing provider textures")
+
+
+def assert_model_fixture_contract(archive: zipfile.ZipFile, names: list[str]) -> None:
+    stick_path = "assets/minecraft/models/item/stick.json"
+    stick_model = json.loads(archive.read(stick_path).decode("utf-8"))
+    overrides = stick_model.get("overrides")
+    if not isinstance(overrides, list) or len(overrides) != MODEL_COUNT:
+        raise AssertionError(f"stick model override count changed: {overrides}")
+    if stick_model.get("parent") != "item/generated" or stick_model.get("textures") != {"layer0": "minecraft:item/stick"}:
+        raise AssertionError("stick model no longer has a valid known texture base")
+
+    for index, override in enumerate(overrides):
+        name = f"fixture_{index:03d}"
+        expected_model = f"minecraft:item/{name}"
+        if override.get("predicate") != {"custom_model_data": index + 1} or override.get("model") != expected_model:
+            raise AssertionError(f"stick model override {index} changed: {override}")
+        model_path = f"assets/minecraft/models/item/{name}.json"
+        if model_path not in names:
+            raise AssertionError(f"referenced fixture model is missing: {model_path}")
+        model = json.loads(archive.read(model_path).decode("utf-8"))
+        if model.get("parent") != "item/generated" or model.get("textures") != {"layer0": "minecraft:item/stick"}:
+            raise AssertionError(f"fixture model {name} has an invalid parent or known texture")
+
+        blockstate_path = f"assets/minecraft/blockstates/{name}.json"
+        if json.loads(archive.read(blockstate_path).decode("utf-8"))["variants"][""]["model"] != expected_model:
+            raise AssertionError(f"fixture blockstate {name} does not target its fixture model")
+
+
+def assert_mipmap_fixture_contract(archive: zipfile.ZipFile, names: list[str]) -> None:
+    for path, size, _ in MIPMAP_TEXTURES:
+        if path not in names:
+            raise AssertionError(f"known atlas texture is missing: {path}")
+        if png_dimensions(archive.read(path)) != (size, size):
+            raise AssertionError(f"known atlas texture dimensions changed: {path}")
+    if json.loads(archive.read(MIPMAP_METADATA_PATH).decode("utf-8")) != {"animation": {"frametime": 2}}:
+        raise AssertionError("mipmap fixture animation metadata changed")
+
+
 def assert_zip_contract(spec: FixtureSpec, path: Path) -> None:
     if not zipfile.is_zipfile(path):
         raise AssertionError(f"fixture is not ZIP-readable: {path}")
@@ -398,6 +481,12 @@ def assert_zip_contract(spec: FixtureSpec, path: Path) -> None:
             actual_contents = tuple(archive.read(entry) for entry in matching)
             if actual_contents != expected_contents:
                 raise AssertionError(f"duplicate entry contract changed for {spec.fixture_id}")
+        if spec.fixture_id == "font-heavy-resource-pack":
+            assert_font_fixture_contract(archive, names)
+        elif spec.fixture_id == "model-heavy-resource-pack":
+            assert_model_fixture_contract(archive, names)
+        elif spec.fixture_id == "mipmap-heavy-resource-pack":
+            assert_mipmap_fixture_contract(archive, names)
 
 
 def assert_catalog_contract(output_directory: Path) -> None:

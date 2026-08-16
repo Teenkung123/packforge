@@ -2,6 +2,7 @@ package com.teenkung.packforge.client.mixin.model;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.teenkung.packforge.client.HeavyFixtureEvidence;
 import com.teenkung.packforge.concurrent.CoalescingExecutor;
 import com.teenkung.packforge.concurrent.ModelSchedulingPlan;
 import com.teenkung.packforge.platform.PackForgeCompat;
@@ -34,7 +35,7 @@ public abstract class ModelManagerMixin {
 			return original.call(manager, executor);
 		}
 		ModelSchedulingPlan plan = ModelSchedulingPlan.current();
-		return switch (plan.strategy()) {
+		CompletableFuture<Map<ResourceLocation, BlockModel>> future = switch (plan.strategy()) {
 			case ORIGINAL -> original.call(manager, executor);
 			// DIRECT_BATCHED is intentionally unreachable until hook safety is proven.
 			case DIRECT_BATCHED -> original.call(manager, executor);
@@ -43,5 +44,13 @@ public abstract class ModelManagerMixin {
 				CoalescingExecutor.bounded(executor, plan.workerBudget())
 			);
 		};
+		if (!HeavyFixtureEvidence.enabled()) {
+			return future;
+		}
+		return future.whenComplete((models, error) -> {
+			if (error == null && models != null) {
+				models.keySet().forEach(id -> HeavyFixtureEvidence.recordModelLoad(id.toString()));
+			}
+		});
 	}
 }

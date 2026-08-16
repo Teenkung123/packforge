@@ -76,6 +76,7 @@ public final class RuntimeSmokeController {
 			remainingReloads = reloadCount;
 		}
 		ReloadHooks.registerCompletionHook(RuntimeSmokeController::onReloadCompletion);
+		HeavyFixtureEvidence.initialize();
 		PackForge.LOGGER.info("PackForge runtime smoke controller enabled: requestedReloads={}", reloadCount);
 	}
 

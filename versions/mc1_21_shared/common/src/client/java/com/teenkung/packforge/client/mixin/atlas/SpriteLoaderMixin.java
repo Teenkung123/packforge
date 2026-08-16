@@ -5,6 +5,8 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.teenkung.packforge.client.atlas.AtlasTimings;
 import com.teenkung.packforge.client.atlas.BoundedSpriteDecode;
+import com.teenkung.packforge.client.HeavyFixtureEvidence;
+import com.teenkung.packforge.config.FeatureFlags;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.SpriteLoader;
 import net.minecraft.client.renderer.texture.atlas.SpriteResourceLoader;
@@ -66,7 +68,8 @@ public abstract class SpriteLoaderMixin {
 		Operation<CompletableFuture<List<SpriteContents>>> original
 	) {
 		BoundedSpriteDecode.Plan plan = BoundedSpriteDecode.capturePlan();
-		if (!plan.decodeEnabled() && !plan.phaseTimingsEnabled()) {
+		boolean evidenceEnabled = HeavyFixtureEvidence.enabled();
+		if (!plan.decodeEnabled() && !plan.phaseTimingsEnabled() && !evidenceEnabled) {
 			return original.call(loader, suppliers, executor);
 		}
 		String atlas = PACKFORGE_ATLAS_BY_SOURCES.remove(suppliers);
@@ -78,9 +81,17 @@ public abstract class SpriteLoaderMixin {
 			? BoundedSpriteDecode.decode(suppliers, executor, plan, supplier -> supplier.apply(loader))
 			: original.call(loader, suppliers, executor);
 		String timingAtlas = atlas;
-		return plan.phaseTimingsEnabled()
-			? future.whenComplete((ignored, error) -> AtlasTimings.recordDecode(timingAtlas, startNs))
-			: future;
+		if (!plan.phaseTimingsEnabled() && !evidenceEnabled) {
+			return future;
+		}
+		return future.whenComplete((sprites, error) -> {
+			if (plan.phaseTimingsEnabled()) {
+				AtlasTimings.recordDecode(timingAtlas, startNs);
+			}
+			if (error == null) {
+				HeavyFixtureEvidence.recordSprites(sprites);
+			}
+		});
 	}
 
 	@WrapMethod(method = "stitch")
@@ -91,7 +102,8 @@ public abstract class SpriteLoaderMixin {
 		Operation<SpriteLoader.Preparations> original
 	) {
 		BoundedSpriteDecode.Plan plan = BoundedSpriteDecode.capturePlan();
-		if (!plan.phaseTimingsEnabled()) {
+		boolean evidenceEnabled = HeavyFixtureEvidence.enabled();
+		if (!plan.phaseTimingsEnabled() && !evidenceEnabled) {
 			return original.call(sprites, mipLevel, executor);
 		}
 		String atlas = this.location.toString();
@@ -99,7 +111,14 @@ public abstract class SpriteLoaderMixin {
 		SpriteLoader.Preparations preparations = original.call(sprites, mipLevel, executor);
 		AtlasTimings.recordStitch(atlas, startNs);
 		long mipStartNs = System.nanoTime();
-		preparations.readyForUpload().whenComplete((ignored, error) -> AtlasTimings.recordMip(atlas, mipStartNs));
+		preparations.readyForUpload().whenComplete((ignored, error) -> {
+			if (plan.phaseTimingsEnabled()) {
+				AtlasTimings.recordMip(atlas, mipStartNs);
+			}
+			if (error == null) {
+				HeavyFixtureEvidence.recordMipmapStage(FeatureFlags.atlasMipParallelEnabled());
+			}
+		});
 		return preparations;
 	}
 }
