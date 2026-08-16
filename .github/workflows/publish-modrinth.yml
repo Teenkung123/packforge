@@ -6,7 +6,7 @@ on:
       release_version:
         description: Base PackForge version from gradle.properties
         required: true
-        default: "1.3.4"
+        default: "1.4"
       changelog:
         description: Release notes shown on Modrinth
         required: true
@@ -36,6 +36,9 @@ jobs:
         run: |
           echo "smoke=$(python scripts/Generate-CiMatrix.py publish-smoke)" >> "$GITHUB_OUTPUT"
           echo "publish=$(python scripts/Generate-CiMatrix.py publish)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate publication workflow contract
+        run: python scripts/Test-PublicationWorkflow.py
 
   build:
     name: Build all supported artifacts
@@ -87,30 +90,32 @@ jobs:
             sleep "$delay"
           done
 
-      - name: Write exact release SHA256SUMS
+      - name: Generate and verify registry-derived publication set
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 release artifacts, found ${#artifacts[@]}."
-            printf '%s\n' "${artifacts[@]}"
-            exit 1
-          fi
-          (
-            cd build/libs
-            sha256sum "${artifacts[@]}" > SHA256SUMS
-          )
-          checksum_count="$(wc -l < build/libs/SHA256SUMS)"
-          if [[ "$checksum_count" -ne 17 ]]; then
-            echo "Expected 17 checksum rows, found $checksum_count."
-            exit 1
-          fi
-
-      - name: Generate registry-derived release manifest
-        run: |
           python scripts/Generate-ReleaseManifest.py --artifacts-dir build/libs --output-dir build/libs/release
           python scripts/Generate-ReleaseManifest.py --artifacts-dir build/libs --output-dir build/libs/release --verify-existing
+          python scripts/Generate-CiMatrix.py publish > build/libs/release/publish-matrix.json
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("build/libs")
+          manifest = json.loads((root / "release" / "manifest.json").read_text(encoding="utf-8"))
+          with (root / "SHA256SUMS").open("w", encoding="utf-8") as output:
+              for entry in manifest["artifacts"]:
+                  path = root / entry["filename"]
+                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                  output.write(f"{digest}  {path.name}\n")
+          PY
+          python scripts/Validate-PublicationBundle.py \
+            --manifest build/libs/release/manifest.json \
+            --publication-matrix build/libs/release/publish-matrix.json \
+            --artifacts-dir build/libs \
+            --checksums build/libs/SHA256SUMS \
+            --release-table build/libs/release/release-table.md
 
       - name: Upload verified artifacts
         uses: actions/upload-artifact@v4
@@ -121,6 +126,7 @@ jobs:
             build/libs/SHA256SUMS
             build/libs/release/manifest.json
             build/libs/release/release-table.md
+            build/libs/release/publish-matrix.json
           if-no-files-found: error
 
   runtime-smoke:
@@ -141,23 +147,14 @@ jobs:
           name: packforge-all-supported
           path: build/libs
 
-      - name: Verify exact release SHA256SUMS
-        shell: bash
+      - name: Verify registry-derived publication bundle
         run: |
-          set -euo pipefail
-          test -f build/libs/SHA256SUMS
-          mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 downloaded artifacts, found ${#artifacts[@]}."
-            printf '%s\n' "${artifacts[@]}"
-            exit 1
-          fi
-          (
-            cd build/libs
-            sha256sum -c SHA256SUMS
-          )
-          test -f build/libs/release/manifest.json
-          test -f build/libs/release/release-table.md
+          python scripts/Validate-PublicationBundle.py \
+            --manifest build/libs/release/manifest.json \
+            --publication-matrix build/libs/release/publish-matrix.json \
+            --artifacts-dir build/libs \
+            --checksums build/libs/SHA256SUMS \
+            --release-table build/libs/release/release-table.md
 
       - name: Set up target Java
         uses: actions/setup-java@v4
@@ -263,23 +260,14 @@ jobs:
           name: packforge-all-supported
           path: build/libs
 
-      - name: Verify downloaded release SHA256SUMS
-        shell: bash
+      - name: Verify registry-derived publication bundle
         run: |
-          set -euo pipefail
-          test -f build/libs/SHA256SUMS
-          mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 downloaded artifacts, found ${#artifacts[@]}."
-            printf '%s\n' "${artifacts[@]}"
-            exit 1
-          fi
-          (
-            cd build/libs
-            sha256sum -c SHA256SUMS
-          )
-          test -f build/libs/release/manifest.json
-          test -f build/libs/release/release-table.md
+          python scripts/Validate-PublicationBundle.py \
+            --manifest build/libs/release/manifest.json \
+            --publication-matrix build/libs/release/publish-matrix.json \
+            --artifacts-dir build/libs \
+            --checksums build/libs/SHA256SUMS \
+            --release-table build/libs/release/release-table.md
 
       - name: Prepare Modrinth version metadata
         id: release
