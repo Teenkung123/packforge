@@ -30,7 +30,7 @@ public final class PackForgeConfig {
 		public boolean reloadOptimizerEnabled = true;
 		public boolean largeAtlasFixerEnabled = true;
 		public boolean loaderIndexEnabled = true;
-		public boolean loaderZipPoolEnabled = false;
+		public boolean loaderZipPoolEnabled = true;
 		public boolean loaderTimingsEnabled = false;
 		public boolean reloadListenerTimingsEnabled = false;
 		public boolean shaderApplyStallDiagnosticsEnabled = true;
