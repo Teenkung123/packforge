@@ -51,6 +51,9 @@ if (-not $checksumMatches -and -not $SkipChecksum) {
 
 $manifest = [System.Text.Encoding]::UTF8.GetString($manifestBytes) | ConvertFrom-Json
 $releaseIds = @($manifest.versions | Where-Object { $_.type -eq 'release' } | ForEach-Object { [string]$_.id })
+if ($releaseIds.Count -eq 0) {
+    throw 'Mojang stable release manifest contains no release entries.'
+}
 $positions = @{}
 for ($index = 0; $index -lt $releaseIds.Count; $index++) {
     if (-not $positions.ContainsKey($releaseIds[$index])) {
@@ -63,10 +66,21 @@ if ($missing.Count -gt 0) {
     throw "Mojang stable release manifest is missing required releases: $($missing -join ', ')."
 }
 
+# The checked-in matrix intentionally covers every stable release from its
+# minimum through the current latest release. Check the upper boundary as well
+# as the gaps inside the range, so checksum drift cannot hide a newly published
+# stable Minecraft version that PackForge has not added yet.
+$latestExpected = $expected[$expected.Count - 1]
+$latestExpectedPosition = [int]$positions[$latestExpected]
+if ($latestExpectedPosition -ne 0) {
+    $newerUnsupported = @($releaseIds[0..($latestExpectedPosition - 1)])
+    throw "Mojang published newer stable releases after $latestExpected that are missing from PackForge's registry: $($newerUnsupported -join ', ')."
+}
+
 # Mojang publishes newest releases first. The checked-in sequence is oldest to
 # newest, so each subsequent required release must occur exactly one release
-# earlier in the feed. This catches a newly inserted stable release that has not
-# yet been added to PackForge's exact support ledger.
+# earlier in the feed. This catches a stable release inserted anywhere inside
+# the supported range without relying on the volatile whole-manifest checksum.
 for ($index = 1; $index -lt $expected.Count; $index++) {
     $older = $expected[$index - 1]
     $newer = $expected[$index]
@@ -88,6 +102,7 @@ for ($index = 1; $index -lt $expected.Count; $index++) {
 [pscustomobject]@{
     status = 'PASS'
     releases = $expected.Count
+    latest = $latestExpected
     sha256 = $actualSha256
     checksum = if ($SkipChecksum) { 'SKIPPED' } elseif ($checksumMatches) { 'MATCH' } else { 'CHANGED' }
     source = if ($ManifestPath) { (Resolve-Path -LiteralPath $ManifestPath).Path } else { [string]$registry.mojangStableReleaseManifest.url }
