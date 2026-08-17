@@ -217,6 +217,7 @@ class PackForgeConfigScreenModelTest {
 			assertFalse(zipPool.effective());
 			assertEquals("", zipPool.externalOwner());
 			assertEquals("", zipPool.disabledReason());
+			assertFalse(zipPool.warning().isBlank());
 
 			for (String id : List.of(
 				"reload_optimizer",
