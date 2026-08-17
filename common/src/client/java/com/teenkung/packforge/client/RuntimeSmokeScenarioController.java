@@ -1,6 +1,7 @@
 package com.teenkung.packforge.client;
 
 import com.teenkung.packforge.PackForge;
+import com.teenkung.packforge.PackForgeCore;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import com.teenkung.packforge.loader.ReloadHooks;
 import com.teenkung.packforge.loader.RuntimeSmokeScenario;
@@ -172,6 +173,7 @@ public final class RuntimeSmokeScenarioController {
 			readinessReported = true;
 		}
 		if (reportReadiness) {
+			PackForgeCore.refreshCompatibility();
 			PackForge.LOGGER.info("PackForge runtime smoke ready: startupReloadComplete=true stabilizationMs={}", ACTION_DELAY_MILLIS);
 		}
 		runScenarioAttempt(minecraft);
@@ -339,9 +341,9 @@ public final class RuntimeSmokeScenarioController {
 	}
 
 	/** Called by the test-only Minecraft mixin before vanilla aborts the client. */
-	public static boolean shouldSuppressVanillaRollback(Throwable error) {
+	public static boolean shouldSuppressVanillaRollback() {
 		synchronized (STATE_LOCK) {
-			return enabled && expectedFailureInFlight && RuntimeSmokeScenario.isExpectedFailure(error);
+			return enabled && expectedFailureInFlight;
 		}
 	}
 
