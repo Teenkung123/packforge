@@ -2,7 +2,7 @@
 param(
     [string] $CatalogPath = (Join-Path $PSScriptRoot '..\gradle\compatibility-profiles.json'),
     [string] $RegistryPath = (Join-Path $PSScriptRoot '..\gradle\minecraft-targets.json'),
-    [string] $PackForgeConfigPath = (Join-Path $PSScriptRoot '..\common\src\main\java\com\Teenkung\packforge\config\PackForgeConfig.java'),
+    [string] $PackForgeConfigPath = (Join-Path $PSScriptRoot '..\common\src\main\java\com\teenkung\packforge\config\PackForgeConfig.java'),
     [switch] $SelfTest
 )
 
