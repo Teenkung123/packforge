@@ -8,8 +8,9 @@ public final class ForgeModListCompat {
 	private ForgeModListCompat() {
 	}
 
-	public static boolean isLoaded(String modId) {
-		return ModList.get().isLoaded(modId);
+		public static boolean isLoaded(String modId) {
+			return ModList.get().getModContainerById(modId).isPresent()
+				|| ModList.get().getMods().stream().anyMatch(mod -> modId.equals(mod.getModId()));
 	}
 
 	public static Optional<String> version(String modId) {

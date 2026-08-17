@@ -10,15 +10,15 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
-@Mod(PackForge.MOD_ID)
-public final class PackForgeNeoForge {
-	public PackForgeNeoForge(ModContainer container) {
-		PackForgeServices.init(new NeoForgePackForgePlatform());
+	@Mod(PackForge.MOD_ID)
+	public final class PackForgeNeoForge {
+		public PackForgeNeoForge(ModContainer container) {
+			PackForgeServices.init(new NeoForgePackForgePlatform());
 		PackForgeCore.init();
 		PackForgeClient.initClient();
 		RuntimeSmokeController.init();
 		IConfigScreenFactory configScreenFactory =
 			(ignored, parent) -> new PackForgeConfigScreen(parent);
 		container.registerExtensionPoint(IConfigScreenFactory.class, configScreenFactory);
+		}
 	}
-}

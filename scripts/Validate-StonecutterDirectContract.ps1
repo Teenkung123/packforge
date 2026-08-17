@@ -372,7 +372,10 @@ function Get-StonecutterGuardBody([string] $Text, [string] $Opener, [string] $Co
 }
 
 function Normalize-BitmapProviderMixin([string] $Text) {
-    $body = @($Text -split '\r?\n' | Where-Object { $_.Trim() -notmatch '^//\?' }) -join ''
+    $lines = @($Text -split '\r?\n' | Where-Object { $_.Trim() -notmatch '^//\?' })
+    $imports = @($lines | Where-Object { $_.Trim() -match '^import\s+' } | Sort-Object)
+    $bodyLines = @($lines | Where-Object { $_.Trim() -notmatch '^import\s+' })
+    $body = @($imports + $bodyLines) -join ''
     $body = [regex]::Replace($body, '\bresourceManager\b', 'manager')
     $body = $body -replace '\s+', ''
     return $body.Replace('if(cached!=null){returncached;}', 'if(cached!=null)returncached;')

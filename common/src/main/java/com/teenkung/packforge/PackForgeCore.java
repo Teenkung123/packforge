@@ -29,9 +29,7 @@ public final class PackForgeCore {
 		long configStartNs = System.nanoTime();
 		PackForgeConfig.load();
 		StartupTimings.recordDuration("packforge_config_load", System.nanoTime() - configStartNs);
-		QuickPackCompatibility.detectAndLog();
-		CompatibilityProfileReporter.reportIfRequested();
-		StartupTimings.event("packforge_config_loaded");
+			StartupTimings.event("packforge_config_loaded");
 		PackForge.LOGGER.info("PackForge capabilities: target={} available={} unavailable={}",
 			PackForgeCapabilities.target(), PackForgeCapabilities.available(), PackForgeCapabilities.unavailable());
 		if (!PackForgeCapabilities.unknownIdentifiers().isEmpty()) {
@@ -48,8 +46,17 @@ public final class PackForgeCore {
 		if (FeatureFlags.startupExecutorTuningEnabled()) {
 			PackForge.LOGGER.info("PackForge startup: executor tuning is applied during early client bootstrap; changes require a restart to affect the next run");
 		}
-		StartupTimings.mark("core_init");
-		StartupStatus.update("Waiting for", "Minecraft bootstrap");
+			StartupTimings.mark("core_init");
+			StartupStatus.update("Waiting for", "Minecraft bootstrap");
+		}
+
+		/**
+		 * Refresh loader-owned compatibility after mod containers have been registered.
+		 * Forge-family constructors run before that registration is complete.
+		 */
+	public static void refreshCompatibility() {
+			QuickPackCompatibility.detectAndLog();
+			CompatibilityProfileReporter.reportIfRequested();
 	}
 
 	private PackForgeCore() {}

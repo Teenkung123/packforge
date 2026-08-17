@@ -30,8 +30,27 @@ jobs:
         id: generate
         shell: bash
         run: |
-          echo "targets=$(python scripts/Generate-CiMatrix.py build)" >> "$GITHUB_OUTPUT"
-          echo "smoke=$(python scripts/Generate-CiMatrix.py smoke)" >> "$GITHUB_OUTPUT"
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              build_kind=representative-build
+              smoke_kind=representative-smoke
+              ;;
+            push)
+              build_kind=expanded-build
+              smoke_kind=expanded-smoke
+              ;;
+            schedule|workflow_dispatch)
+              build_kind=build
+              smoke_kind=smoke
+              ;;
+            *)
+              echo "Unsupported workflow event: $GITHUB_EVENT_NAME"
+              exit 1
+              ;;
+          esac
+          echo "tier=$build_kind/$smoke_kind"
+          echo "targets=$(python scripts/Generate-CiMatrix.py "$build_kind")" >> "$GITHUB_OUTPUT"
+          echo "smoke=$(python scripts/Generate-CiMatrix.py "$smoke_kind")" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.target }} artifact bundle
@@ -149,6 +168,11 @@ jobs:
 
   benchmark:
     name: 1.21.1 Fabric release benchmark
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'performance'))
     runs-on: ubuntu-latest
     timeout-minutes: 180
 

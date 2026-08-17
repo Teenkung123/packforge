@@ -6,8 +6,8 @@ import net.fabricmc.api.ModInitializer;
 
 public final class PackForgeFabric implements ModInitializer {
 	@Override
-	public void onInitialize() {
-		PackForgeServices.init(new FabricPackForgePlatform());
-		PackForgeCore.init();
-	}
+		public void onInitialize() {
+			PackForgeServices.init(new FabricPackForgePlatform());
+			PackForgeCore.init();
+		}
 }

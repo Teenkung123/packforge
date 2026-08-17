@@ -255,7 +255,7 @@ function Invoke-SelfTests($Catalog, [string] $ConfigSource) {
     Assert-MutationRejected 'missing-source-path' { param($c) $c.candidates[0].sourcePaths[0] = 'missing/PhaseJ.java' } $Catalog $ConfigSource
     Assert-MutationRejected 'unknown-gate-state' { param($c) $c.candidates[0].gates.performance = 'SOURCE_ONLY' } $Catalog $ConfigSource
     Assert-MutationRejected 'missing-gate' { param($c) $c.candidates[0].gates.PSObject.Properties.Remove('lifecycle') } $Catalog $ConfigSource
-    Assert-MutationRejected 'pass-without-evidence' { param($c) $c.candidates[0].gates.semanticParity = 'PASS' } $Catalog $ConfigSource
+    Assert-MutationRejected 'pass-without-evidence' { param($c) $c.candidates[0].gates.semanticParity = 'PASS'; $c.candidates[0].evidenceResults = @() } $Catalog $ConfigSource
     Assert-MutationRejected 'promotion-without-gates' { param($c) $c.candidates[0].disposition = 'PROMOTED_DEFAULT_ON' } $Catalog $ConfigSource
     Assert-MutationRejected 'failed-without-reason' { param($c) $c.candidates[2].reason = '' } $Catalog $ConfigSource
     Assert-MutationRejected 'keep-off-without-missing-evidence' { param($c) $c.candidates[0].missingEvidence = @() } $Catalog $ConfigSource

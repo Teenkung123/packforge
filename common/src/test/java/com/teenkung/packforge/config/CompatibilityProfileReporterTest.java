@@ -126,5 +126,79 @@ class CompatibilityProfileReporterTest {
 				+ "retained=ATLAS_CAP:true,ATLAS_DECODE_BATCHING:true,ATLAS_PHASE_TIMINGS:false,ATLAS_RETRY:true,FONT_BITMAP_CACHE:true,FONT_RELOAD_DIAGNOSTICS:true,IMMEDIATELY_FAST_FONT_ATLAS_COMPAT:true,LOADER_TIMINGS:true,LOADING_STATUS_OVERLAY:true,MODEL_ADAPTIVE_BATCHING:false,MODEL_DUPLICATE_CACHE:false,MODEL_PARSE_BATCHING:true,MODEL_PARSE_TIMINGS:false,MODEL_UV_TRANSPARENCY_CLAMP:true,RELOAD_LISTENER_TIMINGS:true,RELOAD_SUMMARY_TOAST:true,SHADER_STALL_DIAGNOSTICS:true,STARTUP_ASYNC_CLASS_SCAN:false,STARTUP_ASYNC_DATA:false,STARTUP_ASYNC_FONT_ATLAS:false,STARTUP_EXECUTOR_TUNING:true,STARTUP_OPTIMIZER:true,STARTUP_STATUS_OVERLAY:true,STARTUP_TIMINGS:true,ZIP_READ_POOL:true",
 			summary
 		);
+		}
+
+	@Test
+	void snapshotNormalizesForgeQuickPackModIdToCanonicalEvidenceId() {
+		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
+		Properties properties = new Properties();
+		properties.setProperty("target", "test-target");
+		properties.setProperty("capabilities", String.join(",", Arrays.stream(PackForgeCapability.values()).map(Enum::name).toList()));
+		FeaturePolicy policy = FeaturePolicy.forTesting(
+			config,
+			PackForgeCapabilityProfile.fromProperties(properties),
+			QuickPackCompatibility.forTesting("1.5.0+1.21.1")
+		);
+		OptionalModPresence optionalMods = new OptionalModPresence() {
+			@Override
+			public boolean isModLoaded(String modId) {
+				return modId.equals("quick_pack");
+			}
+
+			@Override
+			public Optional<String> modVersion(String modId) {
+				return modId.equals("quick_pack") ? Optional.of("1.5.0") : Optional.empty();
+			}
+		};
+		var request = CompatibilityProfileReporter.requestFrom(Map.of(
+			CompatibilityProfileReporter.PROFILE_ID_ENV, "forge-quick-pack",
+			CompatibilityProfileReporter.MOD_IDS_ENV, "quick-pack"
+		)).orElseThrow();
+
+		var snapshot = CompatibilityProfileReporter.capture(request, optionalMods, "forge", "mc1_21_1", policy);
+		assertTrue(snapshot.summary().contains("mods=quick-pack:true:1.5.0"));
+		assertEquals(QuickPackCompatibility.Status.MODULE_HANDOFF, snapshot.quickPackStatus());
+	}
+
+	@Test
+	void compatibilityPathMarkerFollowsExternalOwnershipAndHookPreservation() {
+		var quickPackRequest = CompatibilityProfileReporter.requestFrom(Map.of(
+			CompatibilityProfileReporter.PROFILE_ID_ENV, "forge-quick-pack",
+			CompatibilityProfileReporter.MOD_IDS_ENV, "quick-pack"
+		)).orElseThrow();
+		var quickPackMods = new OptionalModPresence() {
+			@Override
+			public boolean isModLoaded(String modId) {
+				return modId.equals("quick_pack");
+			}
+		};
+		assertEquals(
+			CompatibilityProfileReporter.EXTERNALLY_OWNED_PATH,
+			CompatibilityProfileReporter.compatibilityPath(quickPackRequest, quickPackMods)
+		);
+
+		var immediatelyFastRequest = CompatibilityProfileReporter.requestFrom(Map.of(
+			CompatibilityProfileReporter.PROFILE_ID_ENV, "fabric-immediatelyfast",
+			CompatibilityProfileReporter.MOD_IDS_ENV, "immediatelyfast"
+		)).orElseThrow();
+		var immediatelyFastMods = new OptionalModPresence() {
+			@Override
+			public boolean isModLoaded(String modId) {
+				return modId.equals("immediatelyfast");
+			}
+		};
+		assertEquals(
+			CompatibilityProfileReporter.HOOK_PRESERVING_COALESCED_PATH,
+			CompatibilityProfileReporter.compatibilityPath(immediatelyFastRequest, immediatelyFastMods)
+		);
+
+		var safeRequest = CompatibilityProfileReporter.requestFrom(Map.of(
+			CompatibilityProfileReporter.PROFILE_ID_ENV, "fabric-sodium",
+			CompatibilityProfileReporter.MOD_IDS_ENV, "sodium"
+		)).orElseThrow();
+		assertEquals(
+			CompatibilityProfileReporter.SAFE_ORIGINAL_PATH,
+			CompatibilityProfileReporter.compatibilityPath(safeRequest, immediatelyFastMods)
+		);
 	}
 }

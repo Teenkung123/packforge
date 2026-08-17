@@ -190,9 +190,19 @@ def entity_entries() -> list[ArchiveEntry]:
 
 def font_heavy_entries() -> list[ArchiveEntry]:
     entries = base_entries("PackForge font-heavy compatibility fixture")
-    providers: list[dict[str, object]] = []
+    # Keep the vanilla ASCII/unicode providers intact.  Replacing the complete
+    # default font with one fixture bitmap per ASCII character makes every
+    # Minecraft screen render the fixture's opaque test pixels in place of its
+    # normal glyphs (for example, the main-menu labels).  The fixture providers
+    # therefore use private-use characters so they exercise bitmap-provider
+    # loading without changing ordinary UI text.
+    providers: list[dict[str, object]] = [
+        {"type": "reference", "id": "minecraft:include/space"},
+        {"type": "reference", "id": "minecraft:include/default", "filter": {"uniform": False}},
+        {"type": "reference", "id": "minecraft:include/unifont"},
+    ]
     for index in range(FONT_PROVIDER_COUNT):
-        character = chr(ord("A") + index % 26)
+        character = chr(0xE000 + index)
         path = f"minecraft:font/fixture_{index:02d}.png"
         providers.append({"ascent": 8, "chars": [character], "file": path, "height": 8, "type": "bitmap"})
         entries.append(ArchiveEntry(f"assets/minecraft/textures/font/fixture_{index:02d}.png", png_rgba(8, 8, index)))
@@ -403,13 +413,26 @@ def generate(output_directory: Path) -> dict[str, object]:
 def assert_font_fixture_contract(archive: zipfile.ZipFile, names: list[str]) -> None:
     configuration = json.loads(archive.read("assets/minecraft/font/default.json").decode("utf-8"))
     providers = configuration.get("providers")
-    if not isinstance(providers, list) or len(providers) != FONT_PROVIDER_COUNT:
+    if not isinstance(providers, list) or len(providers) != FONT_PROVIDER_COUNT + 3:
         raise AssertionError(f"font fixture provider count changed: {providers}")
 
+    expected_references = [
+        {"type": "reference", "id": "minecraft:include/space"},
+        {"type": "reference", "id": "minecraft:include/default", "filter": {"uniform": False}},
+        {"type": "reference", "id": "minecraft:include/unifont"},
+    ]
+    if providers[:3] != expected_references:
+        raise AssertionError(f"font fixture no longer preserves vanilla providers: {providers[:3]}")
+
     expected_textures: set[str] = set()
-    for index, provider in enumerate(providers):
+    for index, provider in enumerate(providers[3:]):
         expected_file = f"minecraft:font/fixture_{index:02d}.png"
-        if provider.get("type") != "bitmap" or provider.get("file") != expected_file:
+        expected_character = chr(0xE000 + index)
+        if (
+            provider.get("type") != "bitmap"
+            or provider.get("file") != expected_file
+            or provider.get("chars") != [expected_character]
+        ):
             raise AssertionError(f"font provider {index} is not the expected bitmap resource: {provider}")
         texture_path = f"assets/minecraft/textures/font/fixture_{index:02d}.png"
         if texture_path not in names:

@@ -21,6 +21,9 @@ import java.util.stream.Collectors;
 public final class CompatibilityProfileReporter {
 	static final String PROFILE_ID_ENV = "PACKFORGE_COMPAT_PROFILE_ID";
 	static final String MOD_IDS_ENV = "PACKFORGE_COMPAT_MOD_IDS";
+	static final String SAFE_ORIGINAL_PATH = "SAFE_ORIGINAL_PATH";
+	static final String HOOK_PRESERVING_COALESCED_PATH = "HOOK_PRESERVING_COALESCED_PATH";
+	static final String EXTERNALLY_OWNED_PATH = "EXTERNALLY_OWNED_PATH";
 	private static final Pattern SAFE_ID = Pattern.compile("[a-z0-9][a-z0-9._-]{0,127}");
 	private static final Set<PackForgeCapability> QUICK_PACK_OVERLAP = Set.copyOf(EnumSet.of(
 		PackForgeCapability.RESOURCE_PACK_INDEX,
@@ -43,15 +46,16 @@ public final class CompatibilityProfileReporter {
 		}
 
 		var platform = PackForgeServices.platform();
-		Snapshot snapshot = capture(
-			request,
-			platform,
+			Snapshot snapshot = capture(
+				request,
+				platform,
 			platform.loaderName(),
 			PackForgeCapabilities.target(),
-			FeaturePolicy.current()
-		);
-		PackForge.LOGGER.info("PackForge compatibility profile: {}", snapshot.summary());
-	}
+				FeaturePolicy.current()
+			);
+			PackForge.LOGGER.info("PackForge compatibility path: {}", compatibilityPath(request, platform));
+			PackForge.LOGGER.info("PackForge compatibility profile: {}", snapshot.summary());
+		}
 
 	static Optional<Request> requestFrom(Map<String, String> environment) {
 		Objects.requireNonNull(environment, "environment");
@@ -82,6 +86,18 @@ public final class CompatibilityProfileReporter {
 		return Optional.of(new Request(profileId, List.copyOf(modIds)));
 	}
 
+	static String compatibilityPath(Request request, OptionalModPresence optionalMods) {
+		Objects.requireNonNull(request, "request");
+		Objects.requireNonNull(optionalMods, "optionalMods");
+		if (QuickPackCompatibility.isLoaded(optionalMods)) {
+			return EXTERNALLY_OWNED_PATH;
+		}
+		if (request.modIds().contains("immediatelyfast") && optionalMods.isModLoaded("immediatelyfast")) {
+			return HOOK_PRESERVING_COALESCED_PATH;
+		}
+		return SAFE_ORIGINAL_PATH;
+	}
+
 	static Snapshot capture(
 		Request request,
 		OptionalModPresence optionalMods,
@@ -92,12 +108,16 @@ public final class CompatibilityProfileReporter {
 		Objects.requireNonNull(request, "request");
 		Objects.requireNonNull(optionalMods, "optionalMods");
 		Objects.requireNonNull(policy, "policy");
-		List<ModStatus> mods = new ArrayList<>();
-		for (String modId : request.modIds()) {
-			boolean loaded = optionalMods.isModLoaded(modId);
-			String version = loaded ? optionalMods.modVersion(modId).orElse("unknown") : "absent";
-			mods.add(new ModStatus(modId, loaded, normalizeVersion(version)));
-		}
+			List<ModStatus> mods = new ArrayList<>();
+			for (String modId : request.modIds()) {
+				boolean loaded = optionalMods.isModLoaded(modId);
+				String version = loaded ? optionalMods.modVersion(modId).orElse("unknown") : "absent";
+				if (!loaded && QuickPackCompatibility.MOD_ID.equals(modId)) {
+					loaded = QuickPackCompatibility.isLoaded(optionalMods);
+					version = loaded ? QuickPackCompatibility.version(optionalMods).orElse("unknown") : "absent";
+				}
+				mods.add(new ModStatus(modId, loaded, normalizeVersion(version)));
+			}
 
 		Map<PackForgeCapability, Boolean> effective = effectiveCapabilities(policy);
 		Map<String, Boolean> overlap = new TreeMap<>();

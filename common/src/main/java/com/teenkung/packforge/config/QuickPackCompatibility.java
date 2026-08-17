@@ -19,6 +19,7 @@ import static com.teenkung.packforge.config.PackForgeCapability.RESOURCE_PACK_IN
 /** Public-API-only compatibility policy for the optional Quick Pack mod. */
 public final class QuickPackCompatibility {
 	public static final String MOD_ID = "quick-pack";
+	private static final String FORGE_MOD_ID = "quick_pack";
 
 	private static final AtomicReference<Profile> CACHED = new AtomicReference<>();
 	private static final Set<PackForgeCapability> KNOWN_OVERLAPS = Set.of(
@@ -54,20 +55,24 @@ public final class QuickPackCompatibility {
 		Profile detected;
 		try {
 			OptionalModPresence optionalMods = PackForgeServices.platform();
-			if (!optionalMods.isModLoaded(MOD_ID)) {
-				detected = Profile.absent();
-			} else {
-				detected = classify(optionalMods.modVersion(MOD_ID));
+				if (!isLoaded(optionalMods)) {
+					detected = Profile.absent();
+				} else {
+					detected = classify(version(optionalMods));
 			}
 		} catch (RuntimeException exception) {
 			detected = Profile.detectionFailed();
 			PackForge.LOGGER.warn("PackForge could not read Quick Pack metadata; applying conservative ownership", exception);
 		}
 
+		// Mod-list queries can briefly return ABSENT while Forge-family mod
+		// containers are still being registered. Do not cache that early false
+		// negative; PackForgeCore refreshes after the first completed reload.
+		if (detected.status() == Status.ABSENT) {
+			return detected;
+		}
 		if (CACHED.compareAndSet(null, detected)) {
-			if (detected.loaded()) {
-				PackForge.LOGGER.info("PackForge Quick Pack compatibility: {}", detected.summary());
-			}
+			PackForge.LOGGER.info("PackForge Quick Pack compatibility: {}", detected.summary());
 			return detected;
 		}
 		return CACHED.get();
@@ -79,6 +84,25 @@ public final class QuickPackCompatibility {
 
 	static Profile absentForTesting() {
 		return Profile.absent();
+	}
+
+	/**
+	 * Forge and NeoForge normalize the Quick Pack mod id to {@code quick_pack},
+	 * while Fabric exposes the published {@code quick-pack} id. Keep ownership
+	 * detection loader-neutral without changing the canonical evidence spelling.
+	 */
+	static boolean isLoaded(OptionalModPresence optionalMods) {
+		return optionalMods.isModLoaded(MOD_ID) || optionalMods.isModLoaded(FORGE_MOD_ID);
+	}
+
+	static Optional<String> version(OptionalModPresence optionalMods) {
+		if (optionalMods.isModLoaded(MOD_ID)) {
+			return optionalMods.modVersion(MOD_ID);
+		}
+		if (optionalMods.isModLoaded(FORGE_MOD_ID)) {
+			return optionalMods.modVersion(FORGE_MOD_ID);
+		}
+		return Optional.empty();
 	}
 
 	private static Profile classify(Optional<String> version) {

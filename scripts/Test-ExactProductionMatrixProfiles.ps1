@@ -176,6 +176,26 @@ try {
     $materializeWithoutProfile = Invoke-Runner @('-MaterializeProfileOnly')
     Assert-Failure $materializeWithoutProfile 'materialize without profile rejection' 'require -ProfileId'
 
+    $overrideWithoutProfile = Invoke-Runner @('-PlanOnly', '-FeatureOverridesJson', '{"loaderZipPoolEnabled":true}')
+    Assert-Failure $overrideWithoutProfile 'focused override without profile rejection' 'FeatureOverridesJson requires -ProfileId'
+
+    $focusedOverride = Invoke-Runner @(
+        '-PlanOnly', '-ProfileId', 'fabric-sodium', '-CompatibilityCatalogPath', $catalogPath,
+        '-FeatureOverridesJson', '{"loaderZipPoolEnabled":true,"fontBitmapProviderCacheEnabled":true,"atlasDecodeBatchingEnabled":true}'
+    )
+    Assert-Success $focusedOverride 'focused override catalog-cell binding'
+    Assert-NoNetworkOrSmoke $focusedOverride 'focused override catalog-cell binding'
+    if (($focusedOverride.Output -join [Environment]::NewLine) -notmatch 'PROFILE id=fabric-sodium cell=1\.21\.1/fabric availability=AVAILABLE') {
+        throw 'Focused override plan did not remain bound to the selected catalog profile/cell.'
+    }
+
+    $invalidFocusedOverride = Invoke-Runner @(
+        '-PlanOnly', '-ProfileId', 'fabric-sodium', '-CompatibilityCatalogPath', $catalogPath,
+        '-FeatureOverridesJson', '{"atlasMipParallelEnabled":true}'
+    )
+    Assert-Failure $invalidFocusedOverride 'focused override unsupported-key rejection' 'unsupported key'
+    Assert-NoNetworkOrSmoke $invalidFocusedOverride 'focused override unsupported-key rejection'
+
     $conflict = Invoke-Runner @('-PlanOnly', '-ProfileId', 'fabric-quick-pack', '-CompatibilityCatalogPath', $catalogPath, '-AdditionalModPaths', 'never-resolve.jar')
     Assert-Failure $conflict 'legacy argument conflict' 'cannot be combined with legacy compatibility argument'
 
@@ -231,18 +251,18 @@ try {
         throw 'ImmediatelyFast profile without path-specific evidence materialized result inputs.'
     }
 
-    $pendingProfileId = 'fabric-quick-pack'
-    $pendingResults = Join-Path $testRoot 'pending-results'
-    $pending = Invoke-Runner @('-ProfileId', $pendingProfileId, '-CompatibilityCatalogPath', $catalogPath, '-ResultsRoot', $pendingResults)
-    Assert-Success $pending 'pending profile recording'
-    Assert-NoSmokeLaunch $pending $pendingResults 'pending profile recording'
-    $pendingRecord = Get-Content -LiteralPath (Join-Path $pendingResults 'results.jsonl') -Raw | ConvertFrom-Json
-    $pendingSummary = Get-Content -LiteralPath (Join-Path $pendingResults 'summary.json') -Raw | ConvertFrom-Json
-    if ($pendingRecord.executed -ne $false -or $pendingRecord.profileId -ne $pendingProfileId -or $pendingRecord.availability -ne 'PENDING_METADATA' -or $pendingRecord.result -ne 'UNTESTED') {
-        throw 'Pending results.jsonl record does not preserve the non-executed profile state.'
+    $deferredProfileId = 'fabric-quick-pack-default-on'
+    $deferredResults = Join-Path $testRoot 'deferred-results'
+    $deferred = Invoke-Runner @('-ProfileId', $deferredProfileId, '-CompatibilityCatalogPath', $catalogPath, '-ResultsRoot', $deferredResults)
+    Assert-Success $deferred 'deferred profile recording'
+    Assert-NoSmokeLaunch $deferred $deferredResults 'deferred profile recording'
+    $deferredRecord = Get-Content -LiteralPath (Join-Path $deferredResults 'results.jsonl') -Raw | ConvertFrom-Json
+    $deferredSummary = Get-Content -LiteralPath (Join-Path $deferredResults 'summary.json') -Raw | ConvertFrom-Json
+    if ($deferredRecord.executed -ne $false -or $deferredRecord.profileId -ne $deferredProfileId -or $deferredRecord.availability -ne 'UNAVAILABLE' -or $deferredRecord.result -ne 'UNAVAILABLE') {
+        throw 'Deferred results.jsonl record does not preserve the non-executed profile state.'
     }
-    if ($pendingSummary.executed -ne $false -or $pendingSummary.catalogSha256 -notmatch '^[A-F0-9]{64}$') {
-        throw 'Pending summary.json does not preserve execution state and catalog identity.'
+    if ($deferredSummary.executed -ne $false -or $deferredSummary.catalogSha256 -notmatch '^[A-F0-9]{64}$') {
+        throw 'Deferred summary.json does not preserve execution state and catalog identity.'
     }
 
     $unavailableProfileId = 'fabric-resource-pack-unbounded'
@@ -258,6 +278,8 @@ try {
     $availableCatalog = Copy-Catalog $catalog
     $availableProfile = @($availableCatalog.profiles | Where-Object id -eq 'fabric-quick-pack')[0]
     $availableProfile.availability = 'AVAILABLE'
+    $availableProfile.result = 'UNTESTED'
+    $availableProfile.PSObject.Properties.Remove('availabilityEvidence')
     $availableProfile.expectedLogMarkers = @(
         'PackForge compatibility profile: id=fabric-quick-pack',
         'quick-pack:true:',
@@ -449,7 +471,20 @@ try {
         throw 'Resume-evidence self-test did not report the current resolved-resource hash mutations.'
     }
 
-    Write-Output 'Exact production matrix profile self-test PASS: selection states, path-evidence gate, typed override rejection, offline hash cache, fixture/schema-2 materialization, fixed config merge/hash, filename collision, resume evidence, and exact Fabric/Forge/NeoForge transport verified without network, build, or smoke launch.'
+    $runnerSource = Get-Content -LiteralPath $runnerPath -Raw
+    foreach ($requiredContract in @(
+        "[ValidateSet('repeat', 'cancel-in-flight', 'forced-resource-failure', 'retry-success', 'retry-exhaustion')]",
+        '[string] $RuntimeSmokeScenario = ''repeat''',
+        'runtimeSmokeScenario = $RuntimeSmokeScenario',
+        "'-RuntimeSmokeScenario', `$RuntimeSmokeScenario",
+        'scenarioEvidence=true'
+    )) {
+        if (-not $runnerSource.Contains($requiredContract)) {
+            throw "Exact matrix runtime-scenario contract is missing: $requiredContract"
+        }
+    }
+
+    Write-Output 'Exact production matrix profile self-test PASS: selection states, catalog-bound focused overrides, path-evidence gate, typed override rejection, offline hash cache, fixture/schema-2 materialization, fixed config merge/hash, filename collision, resume evidence, and exact Fabric/Forge/NeoForge transport verified without network, build, or smoke launch.'
 } finally {
     if (Test-Path -LiteralPath $testRoot) {
         Remove-Item -LiteralPath $testRoot -Recurse -Force

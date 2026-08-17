@@ -12,6 +12,8 @@ param(
 
     [string] $ProfileId,
 
+    [string] $FeatureOverridesJson,
+
     [string] $CompatibilityCatalogPath,
 
     [string] $CompatibilityCacheRoot,
@@ -34,7 +36,10 @@ param(
     [int] $TimeoutSeconds = 900,
 
     [ValidateRange(10, 10)]
-    [int] $ReloadCount = 10
+    [int] $ReloadCount = 10,
+
+    [ValidateSet('repeat', 'cancel-in-flight', 'forced-resource-failure', 'retry-success', 'retry-exhaustion')]
+    [string] $RuntimeSmokeScenario = 'repeat'
 )
 
 Set-StrictMode -Version 2.0
@@ -241,7 +246,10 @@ function Resolve-PinnedCompatibilityInputs {
             New-Item -ItemType Directory -Path $hashRoot -Force | Out-Null
             $temporaryPath = Join-Path $hashRoot (".$($pin.artifact)." + [guid]::NewGuid().ToString('N') + '.download')
             try {
-                Write-Output "DOWNLOAD compatibility mod id=$($pin.id) version=$($pin.version) sha256=$($pin.sha256)"
+                # Keep progress logging out of the function's object pipeline. Callers
+                # materialize this function with @(...); emitting a string here would
+                # mix it with the resolved mod records and break property access.
+                Write-Host "DOWNLOAD compatibility mod id=$($pin.id) version=$($pin.version) sha256=$($pin.sha256)"
                 Invoke-WebRequest -Uri ([string] $pin.sourceUrl) -OutFile $temporaryPath -UseBasicParsing
                 $downloadHash = (Get-FileHash -LiteralPath $temporaryPath -Algorithm SHA256).Hash.ToUpperInvariant()
                 if ($downloadHash -ne [string] $pin.sha256) {
@@ -898,7 +906,13 @@ function Get-RecordProperty {
 }
 
 function Get-ExactMatrixPassRecordError {
-    param($Record, $ExpectedRow, [string] $ExpectedEvidenceFingerprint, [int] $ExpectedReloads)
+    param(
+        $Record,
+        $ExpectedRow,
+        [string] $ExpectedEvidenceFingerprint,
+        [int] $ExpectedReloads,
+        [string] $ExpectedRuntimeSmokeScenario = 'repeat'
+    )
 
     if ([string] (Get-RecordProperty -Record $Record -Name 'status') -cne 'PASS') {
         return 'status is not PASS'
@@ -928,6 +942,7 @@ function Get-ExactMatrixPassRecordError {
         artifactHash = [string] $ExpectedRow.ArtifactHash
         fixtureHash = [string] $ExpectedRow.FixtureHash
         evidenceFingerprint = $ExpectedEvidenceFingerprint
+        runtimeSmokeScenario = $ExpectedRuntimeSmokeScenario
     }
     foreach ($entry in $expectedValues.GetEnumerator()) {
         $actual = Get-RecordProperty -Record $Record -Name $entry.Key
@@ -979,11 +994,15 @@ function Get-ExactMatrixPassRecordError {
         "sha256=$([regex]::Escape([string] $ExpectedRow.ArtifactHash))",
         "resolvedResourceSha256=$([regex]::Escape($resolvedResourceSha256))",
         "reloads=$ExpectedReloads",
+        "scenario=$([regex]::Escape($ExpectedRuntimeSmokeScenario))",
         'cleanExit=true'
     )) {
         if ($passLine -notmatch "(?:^|\s)$token(?:\s|$)") {
             return "PASS line is missing exact token '$($token.Replace('\\', ''))'"
         }
+    }
+    if ($ExpectedRuntimeSmokeScenario -ne 'repeat' -and $passLine -notmatch '(?:^|\s)scenarioEvidence=true(?:\s|$)') {
+        return 'scenario PASS line is missing scenarioEvidence=true'
     }
 
     foreach ($evidence in @(
@@ -1012,7 +1031,13 @@ function Get-ExactMatrixPassRecordError {
 }
 
 function Get-PriorPasses {
-    param([string] $Path, [hashtable] $ExpectedRowsByCell, [hashtable] $ExpectedEvidenceFingerprints, [int] $ExpectedReloads)
+    param(
+        [string] $Path,
+        [hashtable] $ExpectedRowsByCell,
+        [hashtable] $ExpectedEvidenceFingerprints,
+        [int] $ExpectedReloads,
+        [string] $ExpectedRuntimeSmokeScenario = 'repeat'
+    )
 
     $passes = @{}
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $passes }
@@ -1027,7 +1052,8 @@ function Get-PriorPasses {
             -Record $record `
             -ExpectedRow $ExpectedRowsByCell[$cell] `
             -ExpectedEvidenceFingerprint ([string] $ExpectedEvidenceFingerprints[$cell]) `
-            -ExpectedReloads $ExpectedReloads
+            -ExpectedReloads $ExpectedReloads `
+            -ExpectedRuntimeSmokeScenario $ExpectedRuntimeSmokeScenario
         if ($null -eq $validationError) {
             $passes[$key] = $record
         } elseif ($evidenceFingerprint -ceq [string] $ExpectedEvidenceFingerprints[$cell]) {
@@ -1039,7 +1065,13 @@ function Get-PriorPasses {
 }
 
 function Get-LatestExactMatrixRecords {
-    param([string] $Path, [hashtable] $ExpectedRowsByCell, [hashtable] $ExpectedEvidenceFingerprints, [int] $ExpectedReloads)
+    param(
+        [string] $Path,
+        [hashtable] $ExpectedRowsByCell,
+        [hashtable] $ExpectedEvidenceFingerprints,
+        [int] $ExpectedReloads,
+        [string] $ExpectedRuntimeSmokeScenario = 'repeat'
+    )
 
     $latest = @{}
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $latest }
@@ -1054,7 +1086,8 @@ function Get-LatestExactMatrixRecords {
                 -Record $record `
                 -ExpectedRow $ExpectedRowsByCell[$cell] `
                 -ExpectedEvidenceFingerprint ([string] $ExpectedEvidenceFingerprints[$cell]) `
-                -ExpectedReloads $ExpectedReloads
+                -ExpectedReloads $ExpectedReloads `
+                -ExpectedRuntimeSmokeScenario $ExpectedRuntimeSmokeScenario
             if ($null -ne $validationError) {
                 $record | Add-Member -Force -NotePropertyName 'status' -NotePropertyValue 'FAIL'
                 $record | Add-Member -Force -NotePropertyName 'resumeValidationError' -NotePropertyValue $validationError
@@ -1089,7 +1122,7 @@ function Invoke-ResumeEvidenceSelfTest {
         }
         $fingerprint = 'C' * 64
         $resolvedResourceSha256 = 'D' * 64
-        $passLine = "PASS Fabric production smoke: artifact=$([IO.Path]::GetFileName($row.Artifact)) sha256=$($row.ArtifactHash) resolvedResourceSha256=$resolvedResourceSha256 reloads=10 cleanExit=true controlledTermination=true provenance=$provenancePath"
+        $passLine = "PASS Fabric production smoke: artifact=$([IO.Path]::GetFileName($row.Artifact)) sha256=$($row.ArtifactHash) resolvedResourceSha256=$resolvedResourceSha256 scenario=repeat reloads=10 cleanExit=true controlledTermination=true provenance=$provenancePath"
         [IO.File]::WriteAllText($logPath, $passLine + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText($provenancePath, '{"schema":3}', [Text.UTF8Encoding]::new($false))
         $newRecord = {
@@ -1102,9 +1135,10 @@ function Invoke-ResumeEvidenceSelfTest {
                 coordinate = $row.Coordinate
                 artifact = [IO.Path]::GetFileName($row.Artifact)
                 artifactHash = $row.ArtifactHash
-        fixtureHash = $row.FixtureHash
-        releaseManifestSha256 = ('E' * 64)
-        resolvedResourceSha256 = $resolvedResourceSha256
+                fixtureHash = $row.FixtureHash
+                releaseManifestSha256 = ('E' * 64)
+                resolvedResourceSha256 = $resolvedResourceSha256
+                runtimeSmokeScenario = 'repeat'
                 reloads = 10
                 evidenceFingerprint = $fingerprint
                 cleanExit = $true
@@ -1199,11 +1233,15 @@ foreach ($selectedCell in $selectedCells) {
 }
 
 $profileIdProvided = $PSBoundParameters.ContainsKey('ProfileId')
+$featureOverridesProvided = $PSBoundParameters.ContainsKey('FeatureOverridesJson')
 $catalogPathProvided = $PSBoundParameters.ContainsKey('CompatibilityCatalogPath')
 $cacheRootProvided = $PSBoundParameters.ContainsKey('CompatibilityCacheRoot')
 $fixtureManifestProvided = $PSBoundParameters.ContainsKey('CompatibilityFixtureManifestPath')
 if ($profileIdProvided -and [string]::IsNullOrWhiteSpace($ProfileId)) {
     throw '-ProfileId must be a non-empty compatibility profile ID.'
+}
+if ($featureOverridesProvided -and -not $profileIdProvided) {
+    throw '-FeatureOverridesJson requires -ProfileId so the focused run remains bound to a catalog cell.'
 }
 if ($catalogPathProvided -and -not $profileIdProvided) {
     throw '-CompatibilityCatalogPath requires -ProfileId.'
@@ -1256,6 +1294,16 @@ if ($profileIdProvided) {
     $selectedProfile.featureOverrides = ConvertTo-NormalizedFeatureOverrides `
         -Overrides $selectedProfile.featureOverrides `
         -Context "Compatibility profile '$ProfileId' featureOverrides"
+    if ($featureOverridesProvided) {
+        try {
+            $requestedOverrides = $FeatureOverridesJson | ConvertFrom-Json
+        } catch {
+            throw "-FeatureOverridesJson is not valid JSON: $($_.Exception.Message)"
+        }
+        $selectedProfile.featureOverrides = ConvertTo-NormalizedFeatureOverrides `
+            -Overrides $requestedOverrides `
+            -Context "focused override set for compatibility profile '$ProfileId'"
+    }
     $profileRelease = [string] $selectedProfile.minecraftVersion
     $profileLoader = [string] $selectedProfile.loader
     $profileRuntimeLoaderVersion = Get-PropertyValue -Object $selectedProfile -Name 'runtimeLoaderVersion'
@@ -1431,6 +1479,11 @@ $profileIdentity = [ordered]@{
     profileId = if ($null -ne $selectedProfile) { [string] $selectedProfile.id } else { $null }
     catalogSha256 = if ($null -ne $selectedProfile) { $catalogSha256 } else { $null }
     runtimeLoaderVersion = if ($null -ne $selectedProfile) { $profileRuntimeLoaderVersion } else { $null }
+    featureOverrides = if ($null -ne $selectedProfile) {
+        $selectedProfile.featureOverrides
+    } else {
+        $null
+    }
     additionalMods = if ($null -ne $selectedProfile) {
         @($materializedCatalogMods | Sort-Object artifact | ForEach-Object {
             [ordered]@{ id = $_.id; artifact = $_.artifact; sha256 = $_.sha256 }
@@ -1450,7 +1503,7 @@ $profileFingerprint = if ($compatibilityProfileRequested) {
 }
 
 $uniqueArtifactCount = @($rows | ForEach-Object { $_.Artifact } | Sort-Object -Unique).Count
-Write-Output "MATRIX resolved=$($rows.Count) artifacts=$uniqueArtifactCount reloads=$ReloadCount"
+Write-Output "MATRIX resolved=$($rows.Count) artifacts=$uniqueArtifactCount reloads=$ReloadCount scenario=$RuntimeSmokeScenario"
 if ($compatibilityProfileRequested) {
     Write-Output "PROFILE fingerprint=$profileFingerprint additionalMods=$($profileAdditionalMods.Count) expectedMarkers=$($profileExpectedMarkers.Count) forbiddenMarkers=$($profileForbiddenMarkers.Count)"
 }
@@ -1585,7 +1638,7 @@ foreach ($row in $rows) {
         }
     })
     $evidenceIdentity = [ordered]@{
-        schema = 3
+        schema = 4
         cell = [string] $row.Cell
         coordinate = [string] $row.Coordinate
         artifactHash = [string] $row.ArtifactHash
@@ -1613,7 +1666,8 @@ $priorPasses = if ($Resume.IsPresent) {
         -Path $resultsPath `
         -ExpectedRowsByCell $expectedRowsByCell `
         -ExpectedEvidenceFingerprints $expectedEvidenceFingerprints `
-        -ExpectedReloads $ReloadCount
+        -ExpectedReloads $ReloadCount `
+        -ExpectedRuntimeSmokeScenario $RuntimeSmokeScenario
 } else {
     @{}
 }
@@ -1672,6 +1726,7 @@ foreach ($row in $rows) {
     $arguments.AddRange([string[]] @(
         '-TimeoutSeconds', [string] $TimeoutSeconds,
         '-ReloadCount', [string] $ReloadCount,
+        '-RuntimeSmokeScenario', $RuntimeSmokeScenario,
         '-AllowControlledTermination'
     ))
 
@@ -1751,6 +1806,7 @@ foreach ($row in $rows) {
         resolvedResourceSha256 = $resolvedResourceSha256
         resolvedResourceValidationError = $resolvedResourceValidationError
         reloads = $ReloadCount
+        runtimeSmokeScenario = $RuntimeSmokeScenario
         profileFingerprint = $profileFingerprint
         evidenceFingerprint = $evidenceFingerprint
         cleanExit = $cleanExit
@@ -1770,7 +1826,8 @@ foreach ($row in $rows) {
             -Record ([pscustomobject] $record) `
             -ExpectedRow $row `
             -ExpectedEvidenceFingerprint $evidenceFingerprint `
-            -ExpectedReloads $ReloadCount
+            -ExpectedReloads $ReloadCount `
+            -ExpectedRuntimeSmokeScenario $RuntimeSmokeScenario
     } else {
         $null
     }
@@ -1787,6 +1844,7 @@ foreach ($row in $rows) {
             profileId = if ($null -ne $selectedProfile) { [string] $selectedProfile.id } else { $null }
             catalogSha256 = if ($null -ne $selectedProfile) { $catalogSha256 } else { $null }
             runtimeLoaderVersion = if ($null -ne $selectedProfile) { $profileRuntimeLoaderVersion } else { $null }
+            featureOverrides = if ($null -ne $selectedProfile) { $selectedProfile.featureOverrides } else { $null }
             additionalMods = if ($null -ne $schema2ProfileInput) {
                 @($schema2ProfileInput.RuntimeMods | ForEach-Object {
                     [ordered]@{ id = $_.id; artifact = $_.artifact; sha256 = $_.sha256 }
@@ -1825,7 +1883,8 @@ $latestRecords = Get-LatestExactMatrixRecords `
     -Path $resultsPath `
     -ExpectedRowsByCell $expectedRowsByCell `
     -ExpectedEvidenceFingerprints $expectedEvidenceFingerprints `
-    -ExpectedReloads $ReloadCount
+    -ExpectedReloads $ReloadCount `
+    -ExpectedRuntimeSmokeScenario $RuntimeSmokeScenario
 $latestValues = @($latestRecords.Values)
 $cumulativePassed = @($latestValues | Where-Object { [string] $_.status -eq 'PASS' }).Count
 $cumulativeFailed = @($latestValues | Where-Object { [string] $_.status -ne 'PASS' }).Count
@@ -1840,6 +1899,7 @@ $summary = [ordered]@{
     cumulativePassed = $cumulativePassed
     cumulativeFailed = $cumulativeFailed
     reloadsPerCell = $ReloadCount
+    runtimeSmokeScenario = $RuntimeSmokeScenario
     profileFingerprint = $profileFingerprint
     results = $resultsPath
 }

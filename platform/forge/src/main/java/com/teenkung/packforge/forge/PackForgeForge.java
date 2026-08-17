@@ -10,18 +10,18 @@ import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 
-@Mod(PackForge.MOD_ID)
-public final class PackForgeForge {
-	public PackForgeForge() {
-		PackForgeServices.init(new ForgePackForgePlatform());
-		PackForgeCore.init();
-		PackForgeClient.initClient();
-		RuntimeSmokeController.init();
+	@Mod(PackForge.MOD_ID)
+	public final class PackForgeForge {
+		public PackForgeForge() {
+			PackForgeServices.init(new ForgePackForgePlatform());
+			PackForgeCore.init();
+			PackForgeClient.initClient();
+			RuntimeSmokeController.init();
 		ModLoadingContext.get().registerExtensionPoint(
 			ConfigScreenHandler.ConfigScreenFactory.class,
 			() -> new ConfigScreenHandler.ConfigScreenFactory(
 				(ignored, parent) -> new PackForgeConfigScreen(parent)
 			)
-		);
+			);
+		}
 	}
-}

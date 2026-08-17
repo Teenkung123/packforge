@@ -23,7 +23,8 @@ public final class NeoForgePackForgePlatform implements PackForgePlatform {
 
 	@Override
 	public boolean isModLoaded(String modId) {
-		return ModList.get().isLoaded(modId);
+		return ModList.get().getModContainerById(modId).isPresent()
+			|| ModList.get().getMods().stream().anyMatch(mod -> modId.equals(mod.getModId()));
 	}
 
 	@Override

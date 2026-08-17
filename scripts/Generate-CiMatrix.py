@@ -14,6 +14,23 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "gradle" / "minecraft-targets.json"
 LOADERS = ("fabric", "forge", "neoforge")
 
+# Keep the tier definitions registry-key based. This makes the representative
+# and expanded jobs explicit, reviewable, and resilient to release-cell range
+# changes without inventing a second version list.
+REPRESENTATIVE_TARGET_KEYS = (
+    "mc1_20_1",
+    "mc1_21_1",
+    "mc1_21_11",
+    "mc26_1_to_26_2",
+)
+EXPANDED_TARGET_KEYS = (
+    "mc1_20_1",
+    "mc1_21_1",
+    "mc1_21_8",
+    "mc1_21_11",
+    "mc26_1_to_26_2",
+)
+
 
 def load_registry() -> dict[str, Any]:
     with REGISTRY_PATH.open(encoding="utf-8") as stream:
@@ -42,9 +59,22 @@ def artifact_minecraft(target: dict[str, Any], loader: str) -> str:
     return str(target["platforms"][loader].get("artifactMinecraft", target["artifactMinecraft"]))
 
 
-def build_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def _target_keys_for_tier(registry: dict[str, Any], target_keys: tuple[str, ...]) -> list[str]:
     targets = target_map(registry)
-    active_target_keys = list(dict.fromkeys(str(cell["targetKey"]) for cell in registry["releaseCells"]))
+    active = list(dict.fromkeys(str(cell["targetKey"]) for cell in registry["releaseCells"]))
+    missing = [key for key in target_keys if key not in targets or key not in active]
+    if missing:
+        raise SystemExit(f"CI tier references missing active registry targets: {', '.join(missing)}")
+    return list(target_keys)
+
+
+def build_matrix(registry: dict[str, Any], target_keys: tuple[str, ...] | None = None) -> dict[str, list[dict[str, Any]]]:
+    targets = target_map(registry)
+    active_target_keys = (
+        list(dict.fromkeys(str(cell["targetKey"]) for cell in registry["releaseCells"]))
+        if target_keys is None
+        else _target_keys_for_tier(registry, target_keys)
+    )
     rows = []
     for target_key in active_target_keys:
         target = targets[target_key]
@@ -59,11 +89,18 @@ def build_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     return {"include": rows}
 
 
-def exact_smoke_matrix(registry: dict[str, Any], published_only: bool = False) -> dict[str, list[dict[str, Any]]]:
+def exact_smoke_matrix(
+    registry: dict[str, Any],
+    published_only: bool = False,
+    target_keys: tuple[str, ...] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
     targets = target_map(registry)
+    selected_targets = None if target_keys is None else set(_target_keys_for_tier(registry, target_keys))
     rows = []
     for cell in registry["releaseCells"]:
         target_key = str(cell["targetKey"])
+        if selected_targets is not None and target_key not in selected_targets:
+            continue
         if published_only and str(cell["buildStatus"]) != "existing":
             continue
         target = targets[target_key]
@@ -90,6 +127,22 @@ def exact_smoke_matrix(registry: dict[str, Any], published_only: bool = False) -
                 row["neoforge_version"] = exact_loader_version(target, release, loader)
             rows.append(row)
     return {"include": rows}
+
+
+def representative_build_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return build_matrix(registry, REPRESENTATIVE_TARGET_KEYS)
+
+
+def expanded_build_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return build_matrix(registry, EXPANDED_TARGET_KEYS)
+
+
+def representative_smoke_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return exact_smoke_matrix(registry, target_keys=REPRESENTATIVE_TARGET_KEYS)
+
+
+def expanded_smoke_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return exact_smoke_matrix(registry, target_keys=EXPANDED_TARGET_KEYS)
 
 
 def publication_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -126,13 +179,33 @@ def publication_matrix(registry: dict[str, Any]) -> dict[str, list[dict[str, Any
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("kind", choices=("build", "smoke", "publish-smoke", "publish"))
+    parser.add_argument(
+        "kind",
+        choices=(
+            "build",
+            "smoke",
+            "representative-build",
+            "representative-smoke",
+            "expanded-build",
+            "expanded-smoke",
+            "publish-smoke",
+            "publish",
+        ),
+    )
     args = parser.parse_args()
     registry = load_registry()
     if args.kind == "build":
         matrix = build_matrix(registry)
     elif args.kind == "smoke":
         matrix = exact_smoke_matrix(registry)
+    elif args.kind == "representative-build":
+        matrix = representative_build_matrix(registry)
+    elif args.kind == "representative-smoke":
+        matrix = representative_smoke_matrix(registry)
+    elif args.kind == "expanded-build":
+        matrix = expanded_build_matrix(registry)
+    elif args.kind == "expanded-smoke":
+        matrix = expanded_smoke_matrix(registry)
     elif args.kind == "publish-smoke":
         matrix = exact_smoke_matrix(registry, published_only=True)
     else:

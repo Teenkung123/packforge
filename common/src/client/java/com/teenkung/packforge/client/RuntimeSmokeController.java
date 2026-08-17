@@ -1,6 +1,7 @@
 package com.teenkung.packforge.client;
 
 import com.teenkung.packforge.PackForge;
+import com.teenkung.packforge.PackForgeCore;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import com.teenkung.packforge.loader.ReloadHooks;
 import net.minecraft.client.Minecraft;
@@ -162,6 +163,7 @@ public final class RuntimeSmokeController {
 			}
 		}
 		if (reportReadiness) {
+			PackForgeCore.refreshCompatibility();
 			PackForge.LOGGER.info("PackForge runtime smoke ready: startupReloadComplete=true stabilizationMs={}",
 				ACTION_DELAY_MILLIS);
 		}
