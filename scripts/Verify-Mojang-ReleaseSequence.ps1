@@ -16,6 +16,7 @@ if ($expected.Count -eq 0) {
     throw 'The registry releaseSequence is empty.'
 }
 
+$usingLiveManifest = -not [bool]$ManifestPath
 if ($ManifestPath) {
     $manifestBytes = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $ManifestPath))
 } else {
@@ -33,19 +34,18 @@ if ($ManifestPath) {
 
 $actualSha256 = ([System.BitConverter]::ToString(
     [System.Security.Cryptography.SHA256]::Create().ComputeHash($manifestBytes)
-)).Replace('-', '').ToLowerInvariant()
+).Replace('-', '').ToLowerInvariant()
 $recordedSha256 = [string]$registry.mojangStableReleaseManifest.sha256
-# Mojang's live manifest changes whenever a release is appended. Pull requests
-# still validate the required release sequence, while push/release validation
-# retains the pinned checksum gate.
 $checksumMismatch = $actualSha256 -ne $recordedSha256.ToLowerInvariant()
-$pullRequestValidation = $env:GITHUB_EVENT_NAME -eq 'pull_request'
-if ($checksumMismatch -and -not $SkipChecksum -and -not $pullRequestValidation) {
-    throw "Mojang manifest checksum changed: expected $recordedSha256, actual $actualSha256. Refresh the recorded provenance deliberately."
-}
-if ($checksumMismatch) {
-    $validationMode = if ($pullRequestValidation) { 'pull-request validation' } else { 'checksum-skipped validation' }
-    Write-Warning "Mojang manifest checksum changed: expected $recordedSha256, actual $actualSha256. Required release ordering will still be validated during $validationMode."
+if ($checksumMismatch -and -not $SkipChecksum) {
+    if ($usingLiveManifest) {
+        # Mojang appends releases to this official live feed. Its checksum is a
+        # last-verified provenance marker, not an immutable content address.
+        # Continue only after the required release IDs and ordering below pass.
+        Write-Warning "Mojang live manifest checksum changed: expected $recordedSha256, actual $actualSha256. Required release ordering will still be validated; refresh recorded provenance deliberately."
+    } else {
+        throw "Mojang manifest checksum changed: expected $recordedSha256, actual $actualSha256. Refresh the recorded provenance deliberately."
+    }
 }
 
 $manifest = [System.Text.Encoding]::UTF8.GetString($manifestBytes) | ConvertFrom-Json
@@ -74,5 +74,6 @@ for ($index = 1; $index -lt $expected.Count; $index++) {
     status = 'PASS'
     releases = $expected.Count
     sha256 = $actualSha256
+    checksum = if ($checksumMismatch) { 'CHANGED' } else { 'MATCH' }
     source = if ($ManifestPath) { (Resolve-Path -LiteralPath $ManifestPath).Path } else { [string]$registry.mojangStableReleaseManifest.url }
 } | ConvertTo-Json -Compress
