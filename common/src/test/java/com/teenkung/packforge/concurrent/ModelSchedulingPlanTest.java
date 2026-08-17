@@ -32,12 +32,4 @@ class ModelSchedulingPlanTest {
 		}
 	}
 
-	@Test
-	void directBatchedIsNeverSelected() {
-		ModelSchedulingPlan original = ModelSchedulingPlan.fromFlags(false, false, false, false, 3);
-		ModelSchedulingPlan coalesced = ModelSchedulingPlan.fromFlags(true, true, true, true, 3);
-
-		assertNotEquals(ModelSchedulingPlan.Strategy.DIRECT_BATCHED, original.strategy());
-		assertNotEquals(ModelSchedulingPlan.Strategy.DIRECT_BATCHED, coalesced.strategy());
-	}
 }

@@ -36,8 +36,6 @@ public abstract class ModelManagerMixin {
 		ModelSchedulingPlan plan = ModelSchedulingPlan.current();
 		return switch (plan.strategy()) {
 			case ORIGINAL -> original.call(manager, executor);
-			// DIRECT_BATCHED is intentionally unreachable until hook safety is proven.
-			case DIRECT_BATCHED -> original.call(manager, executor);
 			case COALESCED_ORIGINAL -> original.call(
 				manager,
 				CoalescingExecutor.bounded(executor, plan.workerBudget())

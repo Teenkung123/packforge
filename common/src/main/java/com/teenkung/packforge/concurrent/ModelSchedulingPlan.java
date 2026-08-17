@@ -53,8 +53,6 @@ public record ModelSchedulingPlan(Strategy strategy, int workerBudget) {
 	}
 
 	public enum Strategy {
-		/** Reserved, unreachable until direct hook safety is proven. */
-		DIRECT_BATCHED,
 		COALESCED_ORIGINAL,
 		ORIGINAL
 	}

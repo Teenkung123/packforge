@@ -29,23 +29,23 @@ public abstract class ModelManagerMixin {
 	private CompletableFuture<Map<ResourceLocation, BlockModel>> packforge$batchModels(
 		ResourceManager manager,
 		Executor executor,
-		Operation<CompletableFuture<Map<ResourceLocation, BlockModel>>> original
-	) {
-		if (PackForgeCompat.mustPreservePlatformModelLoading()) {
-			return original.call(manager, executor);
-		}
-		ModelSchedulingPlan plan = ModelSchedulingPlan.current();
-		CompletableFuture<Map<ResourceLocation, BlockModel>> future = switch (plan.strategy()) {
-			case ORIGINAL -> original.call(manager, executor);
-			// DIRECT_BATCHED is intentionally unreachable until hook safety is proven.
-			case DIRECT_BATCHED -> original.call(manager, executor);
-			case COALESCED_ORIGINAL -> original.call(
-				manager,
-				CoalescingExecutor.bounded(executor, plan.workerBudget())
-			);
-		};
-		if (!HeavyFixtureEvidence.enabled()) {
-			return future;
+			Operation<CompletableFuture<Map<ResourceLocation, BlockModel>>> original
+		) {
+			CompletableFuture<Map<ResourceLocation, BlockModel>> future;
+			if (PackForgeCompat.mustPreservePlatformModelLoading()) {
+				future = original.call(manager, executor);
+			} else {
+				ModelSchedulingPlan plan = ModelSchedulingPlan.current();
+				future = switch (plan.strategy()) {
+					case ORIGINAL -> original.call(manager, executor);
+					case COALESCED_ORIGINAL -> original.call(
+						manager,
+						CoalescingExecutor.bounded(executor, plan.workerBudget())
+					);
+				};
+			}
+			if (!HeavyFixtureEvidence.enabled()) {
+				return future;
 		}
 		return future.whenComplete((models, error) -> {
 			if (error == null && models != null) {
