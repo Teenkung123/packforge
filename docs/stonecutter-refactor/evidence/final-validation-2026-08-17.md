@@ -1,6 +1,6 @@
 # PackForge 1.4 final-byte validation evidence
 
-Date: 2026-08-17  
+Date: 2026-08-17
 Branch: `1.4`
 
 ## Final artifact and matrix identity

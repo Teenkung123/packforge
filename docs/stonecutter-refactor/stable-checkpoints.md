@@ -2,6 +2,19 @@
 
 Checkpoint entries are chronological and must include commit SHA, parent, scope, exact verification, result, and rollback instruction.
 
+## Current working-tree continuation (2026-08-17, uncommitted)
+
+This section is the current evidence boundary until the next dedicated commit
+is created. It has no commit SHA or rollback point yet. A fresh
+`buildAllSupported` regenerated exactly 20 registry-named 1.4 JARs;
+`verifyAllArtifacts`, `verifyExistingArtifacts`, `inspectArtifactSizes`, and
+generated-manifest verification pass. The manifest SHA-256 is
+`D8F4A54AF5BBB51D146B8077AA65AEBC8E1AFE345E8CED18506FF2FC320F4241`.
+Focused profile/lifecycle evidence is current for the refreshed artifacts, and
+the final-byte matrix records 62/62 PASS. Live UI checks, comparative
+performance, and final rollback commit remain open. Earlier entries below
+are historical checkpoints and must not be read as current release proof.
+
 ## 1.4 artifact-hardening checkpoint
 
 - Follow-up repair SHA: `8aa6844` (parent `6591e79`); content-aware nested-JAR scan and direct-shading rejection pass on the three representative artifacts.

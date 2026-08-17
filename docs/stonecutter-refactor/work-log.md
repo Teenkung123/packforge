@@ -1,5 +1,12 @@
 # Stonecutter refactor work log
 
+> **Evidence boundary (2026-08-17):** The full 62-cell section immediately
+> below records the pre-path-marker runtime checkpoint and is historical for
+> cells whose final JAR bytes changed afterward. The current working tree has a
+> fresh verified 20-artifact build and manifest, and a final-byte 62-cell
+> rerun now records 62/62 PASS. Live UI and comparative performance remain
+> separate unexecuted gates.
+
 ## Current 1.4 full final-JAR matrix verification
 
 - Date: 2026-08-16

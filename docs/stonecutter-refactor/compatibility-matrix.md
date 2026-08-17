@@ -6,15 +6,26 @@ Date: 2026-08-16
 
 The current 1.4 source/artifact checkpoint includes the full direct/parity build graph, target-specific production fixtures, and the bounded final-JAR matrix recorded at `build/production-matrix/full-62-20260816-batched`. The older Quick Pack ownership statement is historical and is superseded by the version-aware policy: `<1.4` owns resource indexing; `1.4.x` adds loading fade; `1.5+` adds font-provider preselection and atlas-mipmap generation; unknown or failed metadata uses all four known overlaps. ZIP pooling, the PackForge loading-status overlay, diagnostics, toast, atlas protection, sprite decode, and model scheduling remain PackForge-owned.
 
-The current source metrics are 209 production files / 15,814 LOC with a zero-shortfall Phase F metric gate. A clean/incremental build produces exactly 20 current 1.4 artifacts; artifact, nested-JAR, duplicate-entry, and release-manifest verification pass. The full exact runtime matrix also passes 62/62 cells with ten reloads, a positive stable resolved-resource hash, and clean exit. PackIndex/comparative reload benchmarking remains a separate microbenchmark gate; the bounded benchmark attempt timed out before samples.
+The current generated source metrics are 216 production files / 16,731 LOC; the
+Phase F metric gate is `FAIL` with a 915-LOC shortfall and status
+`IMPLEMENTED_UNVERIFIED`. A clean/incremental build produces exactly 20 current
+1.4 artifacts; artifact, nested-JAR, duplicate-entry, and release-manifest
+verification pass. The retained pre-path-marker exact runtime matrix passed
+62/62 cells, and the current-byte final run now records 62/62 PASS with ten
+reloads per cell. PackIndex/comparative reload benchmarking remains a separate
+microbenchmark gate.
 
 Outcome labels are `FULL_OPTIMIZED_PATH`, `HOOK_PRESERVING_COALESCED_PATH`, `SAFE_ORIGINAL_PATH`, `EXTERNALLY_OWNED_PATH`, `UNAVAILABLE`, `UNTESTED`, and `FAILED`.
 
 Current branch status is **PARTIAL** and **NOT RELEASE READY**. Current version-1.4 artifacts use the resolved MixinExtras `0.5.4:slim` classifier. Registry presence, profile metadata, fixture generation, compilation, packaging, and runtime are separate evidence classes.
 
-## Exact release ledger
+## Historical exact release ledger (pre-marker checkpoint)
 
-The registry contains 22 exact releases and 62 officially applicable loader runtime cells. Current-byte runtime evidence covers all 62 cells using the authoritative final artifacts; every cell completed ten deterministic reloads, emitted one stable positive resolved-resource SHA-256, and exited cleanly.
+The registry contains 22 exact releases and 62 officially applicable loader
+runtime cells. The table below preserves the pre-path-marker 62/62 runtime
+checkpoint; it is not current-byte final-distribution proof. The current
+20-artifact structural set, manifest, and final-byte 62-cell runtime result are
+verified; final evidence is recorded separately.
 
 | Minecraft release | Registry loaders | Maturity | Current final-JAR runtime |
 |---|---|---|---|
@@ -49,15 +60,23 @@ Forge 1.21.2, Forge/NeoForge 1.20.5, and NeoForge 1.20.1 are absent because the 
 
 | Profile group | Count | Catalog state | Runtime result |
 |---|---:|---|---|
-| Materializable exact-loader recipes | 21 | `AVAILABLE` with pinned URL, version, exact mod IDs/dependencies, loader floors, and SHA-256 | `UNTESTED` |
-| Exact-loader profiles with no supported artifact | 11 | `UNAVAILABLE` with dated public-source evidence | `UNAVAILABLE` |
-| Remaining declared profiles | 4 | `PENDING_METADATA` | `UNTESTED` |
+| Materializable exact-loader recipes | 21 | `AVAILABLE` with pinned URL, version, exact mod IDs/dependencies, loader floors, and SHA-256 | 14 `SAFE_ORIGINAL_PATH`, four `HOOK_PRESERVING_COALESCED_PATH`, two `EXTERNALLY_OWNED_PATH`, one documented `FAILED` renderer-environment run |
+| Exact-loader profiles with no supported artifact | 15 | `UNAVAILABLE` with dated public-source evidence | `UNAVAILABLE` |
+| Remaining declared profiles | 0 | No `PENDING_METADATA` or `UNTESTED` records remain | — |
 
-`AVAILABLE` means inputs can be materialized and hash-verified. It does not mean Minecraft launched or a profile passed. No profile currently has a PASS result.
+`AVAILABLE` means inputs can be materialized and hash-verified. The current
+available profiles now also have immutable focused runtime evidence or a narrow
+documented failure disposition; this does not substitute for the complete
+62-cell base matrix.
 
-Twenty unique new artifact pins were independently verified against SHA-256 and embedded loader metadata; exact loader floors, dependencies, and runtime mod IDs are catalogued. Eight formerly pending exact-loader records now carry dated public-source evidence and are explicitly `UNAVAILABLE`; the remaining four stay `PENDING_METADATA` because their exact loader-floor/feature-set disposition is unresolved. Fabric Quick Pack remains pending because its public 1.21.1 artifacts require Fabric Loader `>=0.17.3`, while the exact PackForge 1.21.1 smoke cell uses `0.15.11`. Verification downloads were not retained.
+Pinned artifact inputs are independently SHA-256 and metadata verified; exact
+loader floors, dependencies, and runtime mod IDs are catalogued. Fabric Quick
+Pack and the other unsupported exact-loader records are explicitly
+`UNAVAILABLE` with dated evidence because their loader floors or platform
+artifacts cannot be used by the declared cells. Verification downloads are not
+retained as source dependencies.
 
-Quick Pack policy assigns exactly four known capabilities to `EXTERNALLY_OWNED_PATH` when detected or when metadata is unknown: resource-pack index, font-provider preselection, atlas-mip parallelism, and loading-fade control. ZIP read pooling and loading-status overlay remain PackForge-owned, as do the other 25 capabilities. This assignment is structurally/unit tested; current final-JAR runtime remains `UNTESTED`.
+Quick Pack policy assigns exactly four known capabilities to `EXTERNALLY_OWNED_PATH` when detected or when metadata is unknown: resource-pack index, font-provider preselection, atlas-mip parallelism, and loading-fade control. ZIP read pooling and loading-status overlay remain PackForge-owned, as do the other 25 capabilities. This assignment is structurally/unit tested; the focused current final-JAR profile results are recorded in the evidence files above.
 
 ## Harness and fixture state
 
@@ -65,7 +84,13 @@ Quick Pack policy assigns exactly four known capabilities to `EXTERNALLY_OWNED_P
 - Schema-2 profile materialization supports hash-addressed caching, safe decoded names, collision protection, SHA-256 verification, dependency staging, fixture metadata, expected markers, and evidence-path transport across all three loader wrappers.
 - Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy resources; the generator adds one stable `example`-namespace texture marker to every family so controlled hashing cannot silently pass with zero entries.
 - ImmediatelyFast-only path evidence and nonempty configuration overrides fail closed until dedicated instrumentation exists.
-- No third-party compatibility-profile download or profile execution has been recorded for current bytes. Three separate focused slim-MixinExtras final-JAR smokes (Fabric `mc1_21_1`, Forge `mc1_20_2`, NeoForge `mc1_21_1`) did launch, perform one reload, emit a positive deterministic resolved-resource hash, initialize MixinExtras 0.5.4, and cleanly exit. The bounded base matrix additionally ran every exact cell for ten reloads with the target-specific production fixture; the nine compatibility fixtures and cancellation/failure scenarios remain separate unexecuted gates.
+- Current third-party profile execution is recorded under
+  `docs/stonecutter-refactor/evidence/`: all available profiles ran ten
+  controlled reloads (the VulkanMod renderer crash is the single documented
+  failure), emitted stable hashes where startup completed, and retained clean
+  exit/fatal-marker evidence. The bounded base matrix remains historical for
+  cells affected by the refreshed artifact; heavy/cancellation scenario
+  evidence is retained separately.
 
 ## Build and publication state
 
@@ -75,4 +100,8 @@ Registry publication metadata expects 20 artifacts. `buildAllSupported` now prod
 
 ## Historical runtime evidence
 
-Older checkpoints recorded 62/62 exact cells, same-JAR range proof, and a Fabric 1.21.1 Quick Pack 1.5.0 ten-reload result. Those records bind to pre-cutover artifacts and remain regression references only. The current 62/62 base result is recorded separately under `full-62-20260816-batched`; compatibility-profile results remain `UNTESTED`.
+Older checkpoints recorded 62/62 exact cells, same-JAR range proof, and a Fabric
+1.21.1 Quick Pack 1.5.0 ten-reload result. Those records bind to pre-cutover
+artifacts and remain regression references only. The current focused profile
+summaries are immutable evidence, and the complete current-byte 62-cell base
+rerun is now recorded in `evidence/final-validation-2026-08-17.md`.

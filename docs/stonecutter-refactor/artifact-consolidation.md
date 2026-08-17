@@ -1,10 +1,17 @@
 # Artifact consolidation baseline
 
-> **Current-evidence notice (2026-08-13): HISTORICAL / INVALIDATED FOR CURRENT DIRECT-BUILD BYTES.** The artifact counts, hashes, structural checks, same-artifact runtime results, and manifest statements below preserve evidence from their named historical checkpoints. Phase E changed artifact production to the direct Stonecutter graph, and those resulting JAR bytes have not received an equivalent final 20-artifact build, hash binding, manifest verification, or 62-cell runtime pass. The registry still declares a 20-artifact publication topology, but this document is not current release-ready proof.
+> **Current-evidence notice (2026-08-16): MIXED HISTORICAL/CURRENT.** The baseline and historical sections below preserve evidence from their named checkpoints and are not current marketplace or runtime proof. The current working tree now has a fresh direct-graph 20-artifact build, verified manifest, and structural/size checks; the current manifest SHA-256 is `410E8855AD674CE6E2A4E41C88C6E70B380F36A61C7732A77ED41DC4786028F3`. A current-byte full 62-cell runtime rerun and release publication proof remain open.
 
 ## Superseding 1.4 structural checkpoint (2026-08-16)
 
-HEAD `8aa6844` adds current final-JAR invariants: one exact loader-specific `mixinextras-*-0.5.4-slim.jar` at the outer distribution level, no alternate normal top-level MixinExtras copy, recursive content scanning of every other nested JAR, recursive Forge slim-wrapper/common-runtime metadata and class checks, required mixin/refmap checks, and a 128x128 PNG icon capped at 32KiB. Fresh representative Fabric/Forge/NeoForge artifacts pass these checks; the measured icon is 10,607 bytes. The existing root directory remains mixed current/stale, so its 17 unrecreated artifacts must not be used as a current 20-artifact release set. No current all-20 manifest, same-binary range, or runtime matrix proof is asserted.
+The current artifact invariants require one exact loader-specific
+`mixinextras-*-0.5.4-slim.jar` at the outer distribution level, no alternate
+normal top-level MixinExtras copy, recursive content scanning of every other
+nested JAR, recursive Forge slim-wrapper/common-runtime metadata and class
+checks, required mixin/refmap checks, and a 128x128 PNG icon capped at 32KiB.
+The fresh 20-artifact set passes these checks; the measured icon is 10,607
+bytes and no duplicate ZIP entries are present. Same-binary range/runtime
+claims remain separate from this structural evidence.
 
 Baseline published/build artifact count was 17:
 

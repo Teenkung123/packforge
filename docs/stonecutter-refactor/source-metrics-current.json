@@ -11,12 +11,12 @@
         "generatedPolicy": "All build/generated/Stonecutter output lies outside handwritten source roots."
     },
     "production": {
-        "files": 209,
-        "nonblankLoc": 15814,
-        "bridgeFiles": 110,
-        "bridgeLoc": 5553,
-        "bridgePercent": 35.11,
-        "locPerExactRelease": 718.82,
+        "files": 216,
+        "nonblankLoc": 16731,
+        "bridgeFiles": 113,
+        "bridgeLoc": 5671,
+        "bridgePercent": 33.90,
+        "locPerExactRelease": 760.50,
         "layerPrecedence": [
             "neutralCommon",
             "loaderCommon",
@@ -26,8 +26,8 @@
         "aggregateBridgePolicy": "Bridge totals include loader-owned bridge/compat files plus non-loader exact-version bridges.",
         "layers": {
             "neutralCommon": {
-                "files": 60,
-                "loc": 6175
+                "files": 66,
+                "loc": 6994
             },
             "versionCommon": {
                 "files": 42,
@@ -35,11 +35,11 @@
             },
             "loaderCommon": {
                 "files": 22,
-                "loc": 730
+                "loc": 740
             },
             "exactVersionBridge": {
-                "files": 85,
-                "loc": 4718
+                "files": 86,
+                "loc": 4806
             }
         }
     },
@@ -57,13 +57,13 @@
             "versions": 894
         },
         "addedLocBasis": "Nonblank production-Java additions from the committed baseline tree, with exact-content renames/copies excluded; tests, generated sources, build output, documentation, and resources are excluded.",
-        "rawReductionLoc": 1023,
-        "rawReductionPercent": 6.08,
+        "rawReductionLoc": 106,
+        "rawReductionPercent": 0.63,
         "requiredReductionPercent": 20,
         "requiredReductionLoc": 3368,
-        "ledgerAdjustedReductionLoc": 3370,
-        "ledgerAdjustedReductionPercent": 20.02,
-        "remainingShortfallLoc": 0,
+        "ledgerAdjustedReductionLoc": 2453,
+        "ledgerAdjustedReductionPercent": 14.57,
+        "remainingShortfallLoc": 915,
         "platformBranchBaseline": 4,
         "platformTargetConditionalLines": 0,
         "platformBranchReductionPercent": 100.00,
@@ -72,8 +72,8 @@
             "noByteIdenticalTriples": "PASS",
             "versionLocalBelowShared": "PASS",
             "platformBranchReduction": "PASS",
-            "adjustedShrink": "PASS",
-            "allMetrics": "PASS"
+            "adjustedShrink": "FAIL",
+            "allMetrics": "FAIL"
         },
         "status": "IMPLEMENTED_UNVERIFIED"
     },
@@ -92,7 +92,7 @@
         "targetKeyReferences": 81,
         "platformTargetKeyReferences": 18,
         "targetVersionReferences": 15,
-        "targetKeyLiteralReferences": 103,
+        "targetKeyLiteralReferences": 101,
         "targetConditionalLines": 6,
         "platformTargetConditionalLines": 0
     },

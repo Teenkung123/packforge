@@ -6,21 +6,21 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 
 | Metric | Value |
 |---|---:|
-| Production Java files | 209 |
-| Production nonblank LOC | 15814 |
-| Bridge files | 110 |
-| Bridge LOC | 5553 (35.11%) |
+| Production Java files | 216 |
+| Production nonblank LOC | 16731 |
+| Bridge files | 113 |
+| Bridge LOC | 5671 (33.90%) |
 | Exact duplicate groups | 0 |
 | Normalized version duplicate groups | 0 |
 | Platform `target.key` references | 18 |
 | Target-key/version conditional lines | 6 |
 | Platform target conditional lines | 0 |
-| Phase F raw reduction | 1023 LOC (6.08%) |
+| Phase F raw reduction | 106 LOC (0.63%) |
 | Phase F mandatory added LOC ledger | 2347 |
-| Phase F ledger-adjusted reduction | 3370 LOC (20.02%) |
+| Phase F ledger-adjusted reduction | 2453 LOC (14.57%) |
 | Phase F required reduction | 3368 LOC (20%) |
-| Phase F remaining shortfall | 0 LOC |
-| Phase F metric gate | PASS |
+| Phase F remaining shortfall | 915 LOC |
+| Phase F metric gate | FAIL |
 | Phase F status | IMPLEMENTED_UNVERIFIED |
 | Configuration renderer bodies | 3 |
 | Configuration renderer adapters | 2 |
@@ -41,11 +41,11 @@ Generated deterministically by `./gradlew.bat reportSourceMetrics`. The checked-
 | Baseline normalized surplus LOC | 2375 |
 | Mandatory added LOC | 2347 |
 | Required reduction | 3368 LOC (20%) |
-| Ledger-adjusted reduction | 3370 LOC (20.02%) |
-| Remaining shortfall | 0 LOC |
+| Ledger-adjusted reduction | 2453 LOC (14.57%) |
+| Remaining shortfall | 915 LOC |
 | Platform branch baseline | 4 conditional lines |
 | Platform branch reduction | 0 remaining (100.00%) |
-| Gate result | PASS |
+| Gate result | FAIL |
 | Phase F status | IMPLEMENTED_UNVERIFIED |
 
 Added-LOC basis: Nonblank production-Java additions from the committed baseline tree, with exact-content renames/copies excluded; tests, generated sources, build output, documentation, and resources are excluded.
@@ -61,10 +61,10 @@ Added-LOC basis: Nonblank production-Java additions from the committed baseline 
 
 | Layer | Files | Nonblank LOC |
 |---|---:|---:|
-| `neutralCommon` | 60 | 6175 |
+| `neutralCommon` | 66 | 6994 |
 | `versionCommon` | 42 | 4191 |
-| `loaderCommon` | 22 | 730 |
-| `exactVersionBridge` | 85 | 4718 |
+| `loaderCommon` | 22 | 740 |
+| `exactVersionBridge` | 86 | 4806 |
 
 Classification is exclusive and precedence-ordered: root `common` is neutral common; canonical loader roots (`fabric`, `forge`, and `neoforge`), platform directories, and version-loader directories are loader common; remaining version-local mixin/bridge/compat paths are exact-version bridges; all other Minecraft-facing version source is version common. Aggregate bridge files/LOC include canonical and platform loader-owned bridge/compat files as well as the non-loader `exactVersionBridge` layer.
 

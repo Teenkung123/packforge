@@ -1,5 +1,30 @@
 # Rollback plan
 
+## Final 1.4 evidence checkpoint (2026-08-17)
+
+- Implementation checkpoints: `0895ada` (version-neutral rollback callback),
+  `72d3498` (PackForge 1.4 implementation), `346748a` (dead model strategy),
+  and `2185788` (Quick Pack ownership tests).
+- Evidence checkpoint: `f7148f8`.
+- Documentation checkpoint: this final documentation commit; record its SHA in
+  the release handoff after commit creation.
+- Final manifest SHA-256:
+  `D8F4A54AF5BBB51D146B8077AA65AEBC8E1AFE345E8CED18506FF2FC320F4241`.
+- Final matrix summary/results:
+  `842D4BA9C2DCF3A4FC0318E837CF821C10CE78BA74DA628087138D90F660DB7D` /
+  `A8CDEF15FDD62E69FE3CC8FCFB4355FF461099C45D83663AED27C8A0B309E7ED`;
+  `62/62 PASS`, ten reloads per cell.
+- Verification: `buildAllSupported`; `verifyAllArtifacts`; `verifyExistingArtifacts`;
+  `verifyReleaseManifest`; final-byte 62-cell resume validation; lifecycle
+  scenarios; CI, publication, catalog, fixture, config, matrix, and direct
+  contract self-tests.
+- Known limitations: live UI interaction and neutral four-mode comparative
+  performance remain unexecuted; ImmediatelyFast injected retry exhaustion did
+  not reach readiness, while normal profile and FerriteCore lifecycle evidence
+  pass. Phase F remains `IMPLEMENTED_UNVERIFIED` with a 915-LOC shortfall.
+- Rollback order: revert the final documentation checkpoint, then `f7148f8`,
+  `72d3498`, `0895ada`, `346748a`, and `2185788` newest-first.
+
 ## Baseline
 
 The functional baseline is commit `609270f533666e7636d11f7d16590be925ec836f`. The implementation branch is `1.4`; the unrelated modified `.github/ISSUE_TEMPLATE/bug-report.yml`, untracked `.codegraph/`, and untracked `docs/PackForge_Missing_Implementation_Plan.md` must remain outside functional commits.
@@ -12,6 +37,15 @@ The functional baseline is commit `609270f533666e7636d11f7d16590be925ec836f`. Th
 - Keep legacy parity tasks available as an explicit rollback option until Stonecutter current-matrix parity is proven.
 - Keep per-target capability exclusions and per-feature defaults as rollback controls.
 - If an optional path fails, return to vanilla/original control flow without disabling unrelated capabilities.
+
+## Current working-tree boundary (2026-08-16)
+
+The latest committed rollback point remains `9e23e72` (`test(runtime): add
+reload scenario evidence`); the current clean-build artifacts and evidence
+documentation are uncommitted working-tree changes. The fresh manifest SHA-256
+is `410E8855AD674CE6E2A4E41C88C6E70B380F36A61C7732A77ED41DC4786028F3`.
+Do not use the older `8aa6844`/`6591e79` artifact-hardening descriptions below
+as the latest current checkpoint; they remain valid historical rollback units.
 
 ## Migration rollback points
 

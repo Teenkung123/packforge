@@ -2,15 +2,42 @@
 
 Date: 2026-08-15
 
+## Final handoff continuation checkpoint (2026-08-16)
+
+This section supersedes older current-status rows below. The current generated
+metrics report is 216 production files / 16,731 nonblank LOC / 113 bridge files
+and a Phase F metric gate of `FAIL` with a 915-LOC shortfall; Phase F remains
+`IMPLEMENTED_UNVERIFIED`.
+
+- Compatibility Phase 8 is now fully dispositioned: 14 safe-path PASS, four
+  hook-preserving PASS, two externally owned PASS, one evidence-backed VulkanMod
+  renderer-environment `FAILED`, and 15 dated `UNAVAILABLE` records. Catalog
+  validation passes 36/36; no `UNTESTED` or `PENDING_METADATA` profile remains.
+- The current Fabric `mc1_21_1` artifact is
+  `018A5B5962B79F06C679D18ABF728F2C33A88DA0096547484FA8528E918AEE42`.
+  Axiom and the combined ModernFix/FerriteCore profile pass ten reloads with
+  heavy-fixture/scenario evidence; VulkanMod fails before readiness in its own
+  Vulkan initialization with no PackForge fatal-mixin marker.
+- A fresh `clean buildAllSupported` regenerated all 20 registry-named 1.4
+  artifacts. `verifyAllArtifacts`, `verifyExistingArtifacts`,
+  `inspectArtifactSizes`, and release-manifest verification pass; manifest
+  SHA-256 is
+  `410E8855AD674CE6E2A4E41C88C6E70B380F36A61C7732A77ED41DC4786028F3`.
+- Phase 6 remains default-off because promotion gates are `NOT_RUN`; Phase 7
+  has structural route/renderer-contract PASS but no live UI evidence; Phase 9
+  comparative Quick Pack performance and Phase 11 final evidence/rollback,
+  evidence, and rollback closeout remain open. Overall state is **PARTIAL** and
+  **NOT RELEASE READY**.
+
 ## Superseding 1.4 checkpoint (2026-08-16)
 
 Use this section for current status; later tables preserve historical checkpoint wording. HEAD is `8aa6844` on branch `1.4`.
 
 - Capability metadata now excludes unreachable atlas-mip, model adaptive/cache/timing, and startup-async scaffolding. The configuration fields remain readable for backward compatibility but are marked unavailable.
 - Quick Pack policy is version-aware and no longer claims ZIP pooling or the PackForge status overlay as externally supplied. The Fabric profile-only Loader `0.17.3` override is structural only.
-- Current source metrics: 209 production files, 15,814 LOC, 3,370 ledger-adjusted reduction / 3,368 required, zero shortfall, and `phaseFMetricGate=PASS`; Phase F remains `IMPLEMENTED_UNVERIFIED` pending behavior parity.
+- Current source metrics: 216 production files, 16,731 LOC, 2,453 ledger-adjusted reduction / 3,368 required, a 915-LOC shortfall, and `phaseFMetricGate=FAIL`; Phase F remains `IMPLEMENTED_UNVERIFIED` pending further source consolidation and behavior parity.
 - Artifact hardening commit `6591e79` verifies one exact loader-specific `mixinextras-*-0.5.4-slim.jar`, rejects normal/alternate top-level copies, recursively checks Forge's `MixinExtras-0.5.4.jar` metadata and required classes, and gates the 128x128, <=32KiB icon. Representative Fabric/Forge/NeoForge target verification passes.
-- The root directory still contains 17 stale artifacts from an earlier build; all-20 current rebuild, manifest proof, same-binary ranges, runtime profiles, and full matrix remain open. The PackIndex benchmark attempt timed out and is not evidence.
+- The current root contains the rebuilt 20-artifact set, manifest proof, current runtime profiles, and final 62-cell matrix; same-binary range documentation, live UI, neutral comparative performance, and final rollback closeout remain open. The PackIndex microbenchmark is separate evidence.
 
 Current status: **PARTIAL** on `1.4`; **NOT RELEASE READY**. Current loader artifacts use MixinExtras `0.5.4:slim`.
 
@@ -21,16 +48,16 @@ This report describes current implementation state. Earlier full-matrix and Quic
 | Phase | Status | Implemented | Still required |
 |---|---|---|---|
 | A — audit and source gates | `IMPLEMENTED_UNVERIFIED` | Deterministic source inventory, duplicate checks, ownership/category metrics, conditional counts, renderer-family counts, registry/publication counts, and the canonical A-L audit exist. | Current 20-artifact build/structural verification and manifest verification now pass; runtime/profile gates remain. |
-| B — Quick Pack ownership | `IMPLEMENTED_UNVERIFIED` | Exactly four known overlap capabilities are handed off; 25 capabilities remain PackForge-owned; unknown metadata uses the same conservative four-capability handoff; mixed non-overlap behavior is retained; UI reports configured/effective ownership. | Current final-JAR structural ownership checks pass; required Quick Pack profiles remain unexecuted. |
-| C — optional-mod detection | `IMPLEMENTED_UNVERIFIED` | Loader-neutral runtime detection and environment-gated profile reporter exist; detection failures fail conservatively. | Current Fabric/Forge/NeoForge Quick Pack profile launches and retained evidence. |
+| B — Quick Pack ownership | `IMPLEMENTED_UNVERIFIED` | Exactly four known overlap capabilities are handed off; 25 capabilities remain PackForge-owned; unknown metadata uses the same conservative four-capability handoff; mixed non-overlap behavior is retained; UI reports configured/effective ownership. | Current Forge/NeoForge Quick Pack and Fabric optional-mod profiles have retained evidence; live UI and comparative performance remain open. |
+| C — optional-mod detection | `IMPLEMENTED_UNVERIFIED` | Loader-neutral runtime detection and environment-gated profile reporter exist; detection failures fail conservatively. | All available profiles now have immutable evidence or a narrow documented failure; rerun after artifact changes remains required. |
 | D — registry graph | `VERIFIED_COMPLETE` | Registry generates 12 source families, 19 registry build targets (direct source nodes), 53 loader distributions, and a separate 62-cell exact runtime ledger. | Keep registry/direct-node bijection mandatory as graph evolves. |
 | E — authoritative direct build | `IMPLEMENTED_UNVERIFIED` | All 53 loader distributions are authoritative direct cells; public graph is direct-only; contract validation is mandatory. `stonecutter-build.gradle` is validation/context only, the always-on direct helper owns leaf registration, and legacy wrapper parity is explicit opt-in. Fabric native preprocessing is proven for archive capture on 16 targets, SharedZip on 17, ReloadableResourceManager on 18 pre26 targets, RuntimeResourceHash on 17, LoadingOverlayToast on 14, Bitmap provider definition on all 19 targets, and SimpleReload on four targets (1.21.5 through 1.21.8). | Current 20-artifact build/structural verification and three representative direct/parity cells pass with slim MixinExtras; remaining all-53 parity, Java 17/21/25 proof, broader remap/refmap/JarJar parity, runtime, then removal of the optional parity oracle remain. |
 | F — source ownership | `IMPLEMENTED_UNVERIFIED` | Zero exact/normalized duplicate groups; 15 target/version conditionals; zero target-key platform branches; registry-backed source policy; deterministic metric snapshot; and a current-tree ledger with 2,347 mandatory added LOC are recorded. | The adjusted shrink gate is 761 LOC short; retain the explicit failure and prevent branch/duplicate regression. |
 | G — configuration renderers | `IMPLEMENTED_UNVERIFIED` | Unknown fields survive save; integer validation is shared; replacement-stage failure preserves the live snapshot and existing target while cleaning the temporary file; renderer families are reduced to three bodies plus two adapters; atlas retry configured/effective state is separated. | Live UI parity across entry routes/renderer families and shader/atlas runtime behavior. |
 | H — range artifacts | `IMPLEMENTED_UNVERIFIED` | Registry expresses seven publication anchors and 20 loader artifacts without crossing maturity boundaries. | Current 1.4 exact 20-artifact build, structural verification, and release manifest verification pass; same-JAR proof for every exact release in each range remains. |
-| I — compatibility profiles | `IMPLEMENTED_UNVERIFIED` | 36-profile catalog, 21 pinned available inputs, 11 dated unavailable dispositions, four pending records, profile reporter, schema-2 materializer, execution-scenario declarations, release preflight, three-loader transport, and deterministic fixtures. | Resolve four pending dispositions, then download/launch every available profile and retain current final-JAR evidence. |
-| J — default-off evaluation | `VERIFIED_COMPLETE` | Eleven candidates frozen: five `SAFE_KEEP_DEFAULT_OFF`, six `FAILED_WITH_REASON`, zero promoted. | Runtime/performance gates only if a future promotion is proposed. |
-| K — exact final-artifact matrix | `IMPLEMENTED_UNVERIFIED` | Existing-manifest verifier, exact-cell controller, provenance transport, nine deterministic fixtures with a hash-visible marker, fixture/scenario/release-manifest preflight, and a shared resolved-resource hash contract exist. Controlled Fabric/Forge/NeoForge smoke PASS lines carry a deterministic hash, the matrix binds it into resumable records, and exact cells require ten reloads. | Current 20-JAR manifest plus focused one-reload final-JAR smokes pass; full 62-cell ten-reload/fixture/exit proof and cancellation execution remain. |
+| I — compatibility profiles | `IMPLEMENTED_UNVERIFIED` | 36-profile catalog, 21 pinned available inputs, 15 dated unavailable dispositions, profile reporter, schema-2 materializer, execution-scenario declarations, release preflight, three-loader transport, and deterministic fixtures. | All available profiles now have immutable ten-reload evidence or a narrow documented failure; the VulkanMod renderer waiver/rerun boundary remains open. |
+| J — default-off evaluation | `IMPLEMENTED_UNVERIFIED` | Eleven candidates frozen: five safe-keep-default-off, six failed-with-reason, zero promoted. | The revised handoff reopens the three strongest implemented candidates; all six promotion gates remain `NOT_RUN` until focused lifecycle/performance evidence exists. |
+| K — exact final-artifact matrix | `IMPLEMENTED_UNVERIFIED` | Existing-manifest verifier, exact-cell controller, provenance transport, nine deterministic fixtures with a hash-visible marker, fixture/scenario/release-manifest preflight, and a shared resolved-resource hash contract exist. Controlled Fabric/Forge/NeoForge smoke PASS lines carry a deterministic hash, the matrix binds it into resumable records, and exact cells require ten reloads. | Final-byte 62/62 ten-reload/fixture/exit proof passes; live UI, neutral performance, and final rollback/docs commits remain open. |
 | L — final reconciliation | `IMPLEMENTED_UNVERIFIED` | Current-status docs distinguish historical 62-cell, Quick Pack, manifest, and hash evidence from current structural implementation; this batch reconciles the direct/parity, source-ledger, profile, fixture, slim-MixinExtras, and manifest status. | Final evidence and rollback checkpoint after H/K and required profiles pass. |
 
 ## Current build architecture
@@ -69,15 +96,15 @@ Configuration persistence preserves unknown JSON fields. Shared renderer/model c
 
 The compatibility catalog contains 36 recipes:
 
-- Twenty-one `AVAILABLE`/`UNTESTED` recipes with exact loader-family artifacts, dependency sets, runtime IDs, versions, URLs, and SHA-256 pins.
-- Eleven exact-loader profiles marked `UNAVAILABLE` with dated public-source evidence; the three ResourcePackUnbounded 1.21.1 recipes remain among them.
-- Four recipes remain `PENDING_METADATA`/`UNTESTED`. Fabric Quick Pack profiles are among them because public 1.21.1 builds require Fabric Loader `>=0.17.3`, while the exact PackForge cell uses `0.15.11`.
+- Twenty-one `AVAILABLE` recipes with exact loader-family artifacts, dependency sets, runtime IDs, versions, URLs, and SHA-256 pins; each now has immutable runtime evidence or a narrow documented failure disposition.
+- Fifteen exact-loader profiles are explicitly `UNAVAILABLE` with dated public-source evidence, including the Fabric Quick Pack recipes blocked by their loader/access-widener incompatibility.
+- No recipe remains `PENDING_METADATA` or silently `UNTESTED`; `fabric-quick-pack-default-on` remains deferred until a default is actually promoted.
 
 Every available recipe is pinned by URL/version/SHA-256 and requires runtime evidence markers. Twenty unique newly added pins were independently checked against their SHA-256 and embedded loader metadata; no downloaded artifacts were retained. `CompatibilityProfileReporter` reports profile ID, loader, target, observed mods, Quick Pack state, four handed-off capabilities, and 25 retained capabilities only when profile environment variables are present.
 
 Schema-2 materialization validates the catalog before resolving inputs, uses a hash-addressed cache, derives safe decoded basenames, verifies SHA-256, transports fixture and expected-marker metadata, and rejects unsupported paths. Offline materialization and AST tests pass. Exactly five safe boolean overrides are merged against a complete 50-field v12 baseline; unsupported keys and values fail closed. No third-party compatibility-profile download or profile execution belongs to this evidence; the separate three-loader slim-MixinExtras smoke is recorded in `final-validation.md`. ImmediatelyFast-only path proof remains unavailable.
 
-Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected-textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy packs. Each includes a stable `example`-namespace texture marker for positive resolved-resource hashing. Manifest contracts also cover overlay/namespace/duplicate and malformed-but-ZIP-readable entries. Fixture generation is deterministic; runtime, repeated reload, and cancellation evidence remain open.
+Nine deterministic 1.21.1 fixtures cover normal, high-entry-count, shader, connected-textures, CIT, entity, font-heavy, model-heavy, and mipmap-heavy packs. Each includes a stable `example`-namespace texture marker for positive resolved-resource hashing. Manifest contracts also cover overlay/namespace/duplicate and malformed-but-ZIP-readable entries. Fixture generation is deterministic; repaired heavy-stage, lifecycle, and final-byte matrix evidence is current.
 
 ## Current default-off decisions
 
