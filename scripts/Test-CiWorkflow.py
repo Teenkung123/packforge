@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cheap contract test for registry-derived runtime CI tiers."""
+"""Cheap contract test for registry-derived CI tiers and PR cancellation."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX_SCRIPT = ROOT / "scripts" / "Generate-CiMatrix.py"
-WORKFLOW_PATH = ROOT / ".github" / "workflows" / "runtime-smoke.yml"
+BUILD_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "build.yml"
+RUNTIME_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "runtime-smoke.yml"
 
 
 def _load_matrix_module() -> Any:
@@ -20,6 +21,13 @@ def _load_matrix_module() -> Any:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _require_fragments(path: Path, fragments: tuple[str, ...], label: str) -> None:
+    workflow = path.read_text(encoding="utf-8")
+    missing = [fragment for fragment in fragments if fragment not in workflow]
+    if missing:
+        raise AssertionError(f"{label} workflow is missing CI tier wiring: {', '.join(missing)}")
 
 
 def main() -> None:
@@ -49,31 +57,53 @@ def main() -> None:
     representative_targets = {row["target"] for row in representative_smoke}
     representative_families = {target_by_key[key]["sourceFamily"] for key in representative_targets}
     representative_loaders = {row["platform"] for row in representative_smoke}
+    representative_build_families = {row["source_family"] for row in representative_build}
     required_families = {"mc1_20_1", "mc1_21_0_1", "mc1_21_9_11", "mc26"}
     if not required_families.issubset(representative_families):
         raise AssertionError(
             "representative smoke tier must cover every Java/source family: "
             f"missing={sorted(required_families - representative_families)}"
         )
+    if not required_families.issubset(representative_build_families):
+        raise AssertionError(
+            "representative build tier must cover every Java/source family: "
+            f"missing={sorted(required_families - representative_build_families)}"
+        )
     if representative_loaders != {"fabric", "forge", "neoforge"}:
         raise AssertionError(f"representative smoke tier loader coverage drifted: {representative_loaders}")
 
-    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-    required_fragments = (
-        "representative-build",
-        "representative-smoke",
-        "expanded-build",
-        "expanded-smoke",
-        "schedule|workflow_dispatch",
-        "contains(github.event.pull_request.labels.*.name, 'performance')",
+    concurrency_fragments = (
+        "github.workflow",
+        "github.event.pull_request.number || github.ref",
+        "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
     )
-    missing = [fragment for fragment in required_fragments if fragment not in workflow]
-    if missing:
-        raise AssertionError(f"runtime workflow is missing CI tier wiring: {', '.join(missing)}")
+    _require_fragments(
+        BUILD_WORKFLOW_PATH,
+        (
+            "representative-build",
+            "matrix_kind=build",
+            *concurrency_fragments,
+        ),
+        "build",
+    )
+    _require_fragments(
+        RUNTIME_WORKFLOW_PATH,
+        (
+            "representative-build",
+            "representative-smoke",
+            "expanded-build",
+            "expanded-smoke",
+            "schedule|workflow_dispatch",
+            "contains(github.event.pull_request.labels.*.name, 'performance')",
+            *concurrency_fragments,
+        ),
+        "runtime",
+    )
 
     print(
-        "PASS runtime CI workflow contract "
-        f"representative={len(representative_smoke)} expanded={len(expanded_smoke)} full={len(full_smoke)} "
+        "PASS CI workflow contract "
+        f"build={len(representative_build)}/{len(expanded_build)}/{len(full_build)} "
+        f"smoke={len(representative_smoke)}/{len(expanded_smoke)}/{len(full_smoke)} "
         f"families={len(representative_families)} loaders={','.join(sorted(representative_loaders))}"
     )
 
