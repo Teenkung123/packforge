@@ -41,7 +41,21 @@ jobs:
       - name: Generate target matrix from registry
         id: generate
         shell: bash
-        run: echo "targets=$(python scripts/Generate-CiMatrix.py build)" >> "$GITHUB_OUTPUT"
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              matrix_kind=representative-build
+              ;;
+            push|workflow_dispatch)
+              matrix_kind=build
+              ;;
+            *)
+              echo "Unsupported workflow event: $GITHUB_EVENT_NAME"
+              exit 1
+              ;;
+          esac
+          echo "tier=$matrix_kind"
+          echo "targets=$(python scripts/Generate-CiMatrix.py "$matrix_kind")" >> "$GITHUB_OUTPUT"
 
   build:
     name: ${{ matrix.target }}
