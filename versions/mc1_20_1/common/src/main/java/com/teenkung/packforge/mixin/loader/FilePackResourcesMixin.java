@@ -58,22 +58,24 @@ public abstract class FilePackResourcesMixin {
 	}
 
 	@Unique
-	private PackIndex packforge$index(ZipFile zipFile) {
-		if (!this.packforge$loaderIndexEnabled() || zipFile == null) {
-			return null;
-		}
-		PackArchiveState archiveState = this.packforge$archiveState;
-		if (archiveState == null || archiveState.isClosed()) {
+	private PackArchiveState packforge$state(ZipFile zipFile) {
+		PackArchiveState state = this.packforge$archiveState;
+		if (state == null || state.isClosed() || zipFile == null) {
 			return null;
 		}
 		try {
-			if (this.packforge$callGetOrCreateZipFile() != zipFile) {
-				return null;
-			}
+			return this.packforge$callGetOrCreateZipFile() == zipFile ? state : null;
 		} catch (RuntimeException ignored) {
 			return null;
 		}
-		return archiveState.index(
+	}
+
+	@Unique
+	private PackIndex packforge$index(ZipFile zipFile) {
+		if (!this.packforge$loaderIndexEnabled()) return null;
+		PackArchiveState state = this.packforge$state(zipFile);
+		if (state == null) return null;
+		return state.index(
 			zipFile,
 			this.file.toString(),
 			failure -> PackForge.LOGGER.warn(
@@ -82,30 +84,6 @@ public abstract class FilePackResourcesMixin {
 				failure.cause()
 			)
 		);
-	}
-
-	@Unique
-	private IoSupplier<InputStream> packforge$supplier(
-		String path,
-		IoSupplier<InputStream> fallbackSupplier,
-		boolean duplicatePath
-	) {
-		if (!this.packforge$loaderZipPoolEnabled() || duplicatePath) {
-			return fallbackSupplier;
-		}
-		InputStreamSupplier fallback = fallbackSupplier::get;
-		InputStreamSupplier pooled = this.packforge$archiveState.pooledSupplier(
-			this.file,
-			ZipReadPool.DEFAULT_MAX_HANDLES,
-			path,
-			fallback,
-			failure -> PackForge.LOGGER.warn(
-				"PackForge ZIP read pool failed for {}; using vanilla reads until pack close",
-				failure.archiveFile(),
-				failure.cause()
-			)
-		);
-		return pooled::get;
 	}
 
 	@WrapOperation(
@@ -140,7 +118,7 @@ public abstract class FilePackResourcesMixin {
 		ZipEntry entry,
 		Operation<IoSupplier<InputStream>> original
 	) {
-		return this.packforge$maybePooledSupplier(zipFile, entry, original);
+		return this.packforge$maybePooledSupplier(zipFile, entry, original, true);
 	}
 
 	@WrapOperation(
@@ -198,25 +176,29 @@ public abstract class FilePackResourcesMixin {
 		ZipEntry entry,
 		Operation<IoSupplier<InputStream>> original
 	) {
-		return this.packforge$maybePooledSupplier(zipFile, entry, original);
+		return this.packforge$maybePooledSupplier(zipFile, entry, original, false);
 	}
 
 	@Unique
 	private IoSupplier<InputStream> packforge$maybePooledSupplier(
-		ZipFile zipFile,
-		ZipEntry entry,
-		Operation<IoSupplier<InputStream>> original
+		ZipFile zipFile, ZipEntry entry, Operation<IoSupplier<InputStream>> original, boolean exactLookup
 	) {
 		IoSupplier<InputStream> vanilla = original.call(zipFile, entry);
-		if (!this.packforge$loaderZipPoolEnabled()) {
-			return vanilla;
-		}
-		PackIndex index = this.packforge$index(zipFile);
-		if (index == null) {
-			return vanilla;
-		}
+		if (!this.packforge$loaderZipPoolEnabled()) return vanilla;
 		String path = entry.getName();
-		return this.packforge$supplier(path, vanilla, index.hasDuplicatePath(path));
+		PackIndex index = this.packforge$index(zipFile);
+		if (!ZipReadPool.canReopenByPath(index, path, exactLookup)) return vanilla;
+		PackArchiveState state = this.packforge$state(zipFile);
+		if (state == null) return vanilla;
+		InputStreamSupplier pooled = state.pooledSupplier(
+			this.file, ZipReadPool.DEFAULT_MAX_HANDLES, path, vanilla::get,
+			failure -> PackForge.LOGGER.warn(
+				"PackForge ZIP read pool failed for {}; using vanilla reads until pack close",
+				failure.archiveFile(),
+				failure.cause()
+			)
+		);
+		return pooled::get;
 	}
 
 	@Unique
