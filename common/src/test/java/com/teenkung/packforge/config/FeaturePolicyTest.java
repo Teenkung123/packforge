@@ -42,6 +42,25 @@ class FeaturePolicyTest {
 	}
 
 	@Test
+	void zipPoolDefaultRequiresThePackForgeIndex() {
+		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
+		Properties properties = new Properties();
+		properties.setProperty("target", "test");
+		properties.setProperty("capabilities", "RESOURCE_PACK_INDEX,ZIP_READ_POOL");
+		PackForgeCapabilityProfile capabilities = PackForgeCapabilityProfile.fromProperties(properties);
+
+		FeaturePolicy enabled = FeaturePolicy.forTesting(config, capabilities);
+		assertTrue(config.loaderZipPoolEnabled);
+		assertTrue(enabled.loaderIndexEnabled());
+		assertTrue(enabled.loaderZipPoolEnabled());
+
+		config.loaderIndexEnabled = false;
+		FeaturePolicy withoutIndex = FeaturePolicy.forTesting(config, capabilities);
+		assertFalse(withoutIndex.loaderIndexEnabled());
+		assertFalse(withoutIndex.loaderZipPoolEnabled());
+	}
+
+	@Test
 	void unreachableCapabilitiesStayInactiveEvenWhenLegacyConfigEnablesThem() {
 		PackForgeConfig.Cfg config = new PackForgeConfig.Cfg();
 		config.largeAtlasFixerEnabled = true;
@@ -122,7 +141,7 @@ class FeaturePolicyTest {
 			assertEquals(QUICK_PACK_OWNED.contains(capability), policy.quickPackOwns(capability), capability.name());
 		}
 		assertFalse(policy.loaderIndexEnabled());
-		assertTrue(policy.loaderZipPoolEnabled());
+		assertFalse(policy.loaderZipPoolEnabled());
 		assertFalse(policy.fontPrepareProviderSelectionEnabled());
 		assertFalse(policy.atlasMipParallelEnabled());
 		assertFalse(policy.loadingScreenFadeOutDisabled());
@@ -171,6 +190,7 @@ class FeaturePolicyTest {
 		for (PackForgeCapability capability : retained) {
 			assertFalse(policy.quickPackOwns(capability), capability.name());
 		}
+		assertFalse(policy.loaderZipPoolEnabled());
 		assertTrue(policy.loaderTimingsEnabled());
 		assertTrue(policy.reloadListenerTimingsEnabled());
 		assertTrue(policy.shaderApplyStallDiagnosticsEnabled());
