@@ -122,7 +122,7 @@ function Read-BooleanDefault([string] $Source, [string] $ConfigKey, [string] $Co
     if ($ConfigKey -notmatch '^[A-Za-z][A-Za-z0-9]*$') { Fail "$Context has invalid configKey '$ConfigKey'." }
     $pattern = '(?m)public\s+boolean\s+' + [regex]::Escape($ConfigKey) + '\s*=\s*(true|false)\s*;'
     $matches = [regex]::Matches($Source, $pattern)
-    if ($matches.Count -ne 1) { Fail "$Context configKey '$ConfigKey' must have exactly one boolean default assignment." }
+    if ($matches.Count -ne 1) { Fail "$context configKey '$ConfigKey' must have exactly one boolean default assignment." }
     return $matches[0].Groups[1].Value -eq 'true'
 }
 
@@ -247,8 +247,8 @@ function Invoke-SelfTests($Catalog, [string] $ConfigSource) {
     Invoke-CatalogValidation $Catalog $ConfigSource | Out-Null
     Assert-MutationRejected 'missing-candidate' { param($c) $c.candidates = @($c.candidates | Select-Object -Skip 1) } $Catalog $ConfigSource
     Assert-MutationRejected 'duplicate-candidate' { param($c) $c.candidates[1].id = $c.candidates[0].id } $Catalog $ConfigSource
-    Assert-MutationRejected 'configured-default-drift' { param($c) $c.candidates[0].configuredDefault = $true } $Catalog $ConfigSource
-    Assert-MutationRejected 'effective-default-drift' { param($c) $c.candidates[0].effectiveDefault = $true } $Catalog $ConfigSource
+    Assert-MutationRejected 'configured-default-drift' { param($c) $c.candidates[0].configuredDefault = -not [bool] $c.candidates[0].configuredDefault } $Catalog $ConfigSource
+    Assert-MutationRejected 'effective-default-drift' { param($c) $c.candidates[0].effectiveDefault = -not [bool] $c.candidates[0].effectiveDefault } $Catalog $ConfigSource
     Assert-MutationRejected 'config-key-swap' { param($c) $c.candidates[0].configKey = $c.candidates[1].configKey } $Catalog $ConfigSource
     Assert-MutationRejected 'invalid-default-guard' { param($c) $c.candidates[6].defaultGuard = 'startupOptimizerEnabled=true' } $Catalog $ConfigSource
     Assert-MutationRejected 'missing-canonical-guard' { param($c) $c.candidates[7].defaultGuard = '' } $Catalog $ConfigSource
@@ -256,9 +256,9 @@ function Invoke-SelfTests($Catalog, [string] $ConfigSource) {
     Assert-MutationRejected 'unknown-gate-state' { param($c) $c.candidates[0].gates.performance = 'SOURCE_ONLY' } $Catalog $ConfigSource
     Assert-MutationRejected 'missing-gate' { param($c) $c.candidates[0].gates.PSObject.Properties.Remove('lifecycle') } $Catalog $ConfigSource
     Assert-MutationRejected 'pass-without-evidence' { param($c) $c.candidates[0].gates.semanticParity = 'PASS'; $c.candidates[0].evidenceResults = @() } $Catalog $ConfigSource
-    Assert-MutationRejected 'promotion-without-gates' { param($c) $c.candidates[0].disposition = 'PROMOTED_DEFAULT_ON' } $Catalog $ConfigSource
+    Assert-MutationRejected 'promotion-without-gates' { param($c) $c.candidates[1].disposition = 'PROMOTED_DEFAULT_ON' } $Catalog $ConfigSource
     Assert-MutationRejected 'failed-without-reason' { param($c) $c.candidates[2].reason = '' } $Catalog $ConfigSource
-    Assert-MutationRejected 'keep-off-without-missing-evidence' { param($c) $c.candidates[0].missingEvidence = @() } $Catalog $ConfigSource
+    Assert-MutationRejected 'keep-off-without-missing-evidence' { param($c) $c.candidates[1].missingEvidence = @() } $Catalog $ConfigSource
     Write-Output 'Default-off candidate catalog self-test PASS: baseline accepted; 14 mutations rejected.'
 }
 
