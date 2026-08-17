@@ -35,8 +35,17 @@ $actualSha256 = ([System.BitConverter]::ToString(
     [System.Security.Cryptography.SHA256]::Create().ComputeHash($manifestBytes)
 )).Replace('-', '').ToLowerInvariant()
 $recordedSha256 = [string]$registry.mojangStableReleaseManifest.sha256
-if (-not $SkipChecksum -and $actualSha256 -ne $recordedSha256.ToLowerInvariant()) {
+# Mojang's live manifest changes whenever a release is appended. Pull requests
+# still validate the required release sequence, while push/release validation
+# retains the pinned checksum gate.
+$checksumMismatch = $actualSha256 -ne $recordedSha256.ToLowerInvariant()
+$pullRequestValidation = $env:GITHUB_EVENT_NAME -eq 'pull_request'
+if ($checksumMismatch -and -not $SkipChecksum -and -not $pullRequestValidation) {
     throw "Mojang manifest checksum changed: expected $recordedSha256, actual $actualSha256. Refresh the recorded provenance deliberately."
+}
+if ($checksumMismatch) {
+    $validationMode = if ($pullRequestValidation) { 'pull-request validation' } else { 'checksum-skipped validation' }
+    Write-Warning "Mojang manifest checksum changed: expected $recordedSha256, actual $actualSha256. Required release ordering will still be validated during $validationMode."
 }
 
 $manifest = [System.Text.Encoding]::UTF8.GetString($manifestBytes) | ConvertFrom-Json
