@@ -34,7 +34,7 @@ if ($ManifestPath) {
 
 $actualSha256 = ([System.BitConverter]::ToString(
     [System.Security.Cryptography.SHA256]::Create().ComputeHash($manifestBytes)
-).Replace('-', '').ToLowerInvariant()
+)).Replace('-', '').ToLowerInvariant()
 $recordedSha256 = [string]$registry.mojangStableReleaseManifest.sha256
 $checksumMismatch = $actualSha256 -ne $recordedSha256.ToLowerInvariant()
 if ($checksumMismatch -and -not $SkipChecksum) {
