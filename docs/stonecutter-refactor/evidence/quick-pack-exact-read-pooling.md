@@ -18,10 +18,15 @@ The adapters now distinguish two supplier sources:
   path may select a different duplicate than the enumerated entry, so pooling
   still requires a PackForge index proving that the path is unique.
 
-The modern shared adapter and Minecraft 1.20.1 adapter both verify that the
-pooled archive owner still refers to the exact active `ZipFile` before creating
-a supplier. Closed or replaced archive state continues to fall back to the
-vanilla supplier.
+All three production archive-adapter families apply the same rule:
+
+- Minecraft 1.20.1's direct `FilePackResources` owner;
+- the shared 1.20.2–1.21.10 `SharedZipFileAccess` adapter;
+- the modern 1.21.11/26.x `SharedZipFileAccess` adapter.
+
+Each adapter verifies that the pooled archive owner still refers to the exact
+active `ZipFile` before creating a supplier. Closed or replaced archive state
+continues to fall back to the vanilla supplier.
 
 Focused unit coverage verifies that a pooled exact duplicate lookup returns the
 same bytes selected by vanilla `ZipFile#getEntry(String)`. Existing lifecycle

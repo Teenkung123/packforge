@@ -66,7 +66,7 @@ public abstract class FilePackResourcesMixin implements FilePackResourcesArchive
 		ZipEntry entry,
 		Operation<IoSupplier<InputStream>> original
 	) {
-		return this.packforge$maybePooledSupplier(zipFile, entry, original);
+		return this.packforge$maybePooledSupplier(zipFile, entry, original, true);
 	}
 
 	@WrapOperation(
@@ -124,7 +124,7 @@ public abstract class FilePackResourcesMixin implements FilePackResourcesArchive
 		ZipEntry entry,
 		Operation<IoSupplier<InputStream>> original
 	) {
-		return this.packforge$maybePooledSupplier(zipFile, entry, original);
+		return this.packforge$maybePooledSupplier(zipFile, entry, original, false);
 	}
 
 	@Override
@@ -139,28 +139,38 @@ public abstract class FilePackResourcesMixin implements FilePackResourcesArchive
 	}
 
 	@Unique
-	private PackIndex packforge$index(ZipFile zipFile) {
-		if (!this.packforge$loaderIndexEnabled() || zipFile == null) {
-			return null;
-		}
+	private PackArchiveState packforge$state(ZipFile zipFile) {
 		SharedZipFileAccessBridge archive = this.packforge$archive;
-		if (archive == null) {
+		if (archive == null || zipFile == null) {
 			return null;
 		}
-		PackArchiveState archiveState = archive.packforge$archiveState();
-		if (archiveState == null || archiveState.isClosed()) {
+		PackArchiveState state = archive.packforge$archiveState();
+		if (state == null || state.isClosed()) {
 			return null;
 		}
 		try {
 			if (archive.packforge$getOrCreateZipFile() != zipFile) {
 				return null;
 			}
+			zipFile.size();
+			return state;
 		} catch (RuntimeException ignored) {
 			return null;
 		}
-		return archiveState.index(
+	}
+
+	@Unique
+	private PackIndex packforge$index(ZipFile zipFile) {
+		if (!this.packforge$loaderIndexEnabled()) {
+			return null;
+		}
+		PackArchiveState state = this.packforge$state(zipFile);
+		if (state == null) {
+			return null;
+		}
+		return state.index(
 			zipFile,
-			archive.packforge$archiveFile().toString(),
+			this.packforge$archive.packforge$archiveFile().toString(),
 			failure -> PackForge.LOGGER.warn(
 				"PackIndex build failed for {}; using vanilla until reopen",
 				failure.archiveName(),
@@ -170,20 +180,30 @@ public abstract class FilePackResourcesMixin implements FilePackResourcesArchive
 	}
 
 	@Unique
-	private IoSupplier<InputStream> packforge$supplier(
-		String path,
-		IoSupplier<InputStream> fallbackSupplier,
-		boolean duplicatePath
+	private IoSupplier<InputStream> packforge$maybePooledSupplier(
+		ZipFile zipFile,
+		ZipEntry entry,
+		Operation<IoSupplier<InputStream>> original,
+		boolean exactLookup
 	) {
-		if (!this.packforge$loaderZipPoolEnabled() || duplicatePath) {
-			return fallbackSupplier;
+		IoSupplier<InputStream> vanilla = original.call(zipFile, entry);
+		if (!this.packforge$loaderZipPoolEnabled()) {
+			return vanilla;
 		}
-		InputStreamSupplier fallback = fallbackSupplier::get;
-		InputStreamSupplier pooled = this.packforge$archive.packforge$archiveState().pooledSupplier(
+		String path = entry.getName();
+		PackIndex index = this.packforge$index(zipFile);
+		if (!ZipReadPool.canReopenByPath(index, path, exactLookup)) {
+			return vanilla;
+		}
+		PackArchiveState state = this.packforge$state(zipFile);
+		if (state == null) {
+			return vanilla;
+		}
+		InputStreamSupplier pooled = state.pooledSupplier(
 			this.packforge$archive.packforge$archiveFile(),
 			ZipReadPool.DEFAULT_MAX_HANDLES,
 			path,
-			fallback,
+			vanilla::get,
 			failure -> PackForge.LOGGER.warn(
 				"PackForge ZIP read pool failed for {}; using vanilla reads until reopen",
 				failure.archiveFile(),
@@ -191,24 +211,6 @@ public abstract class FilePackResourcesMixin implements FilePackResourcesArchive
 			)
 		);
 		return pooled::get;
-	}
-
-	@Unique
-	private IoSupplier<InputStream> packforge$maybePooledSupplier(
-		ZipFile zipFile,
-		ZipEntry entry,
-		Operation<IoSupplier<InputStream>> original
-	) {
-		IoSupplier<InputStream> vanilla = original.call(zipFile, entry);
-		if (!this.packforge$loaderZipPoolEnabled()) {
-			return vanilla;
-		}
-		PackIndex index = this.packforge$index(zipFile);
-		if (index == null) {
-			return vanilla;
-		}
-		String path = entry.getName();
-		return this.packforge$supplier(path, vanilla, index.hasDuplicatePath(path));
 	}
 
 	@Unique
