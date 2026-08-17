@@ -207,9 +207,19 @@ class PackForgeConfigScreenModelTest {
 				assertFalse(state.disabledReason().isBlank(), id);
 			}
 
+			PackForgeConfigScreenModel.EffectiveState zipPool = PackForgeConfigScreenModel.effectiveState(
+				option("loader_zip_pool"),
+				config,
+				quickPack
+			);
+			assertEquals("on", zipPool.configuredValue());
+			assertEquals("off", zipPool.effectiveValue());
+			assertFalse(zipPool.effective());
+			assertEquals("", zipPool.externalOwner());
+			assertEquals("", zipPool.disabledReason());
+
 			for (String id : List.of(
 				"reload_optimizer",
-				"loader_zip_pool",
 				"loading_status_overlay",
 				"loader_timings",
 				"reload_summary_toast",
