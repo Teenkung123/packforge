@@ -26,34 +26,34 @@
       "id": "zip-read-pool",
       "name": "ZIP read pool",
       "configKey": "loaderZipPoolEnabled",
-      "configuredDefault": false,
-      "effectiveDefault": false,
+      "configuredDefault": true,
+      "effectiveDefault": true,
       "defaultGuard": "",
       "implementationState": "IMPLEMENTED_UNVERIFIED",
-      "disposition": "SAFE_KEEP_DEFAULT_OFF",
-      "reason": "Focused final-JAR Sodium evidence proves semantic parity, ten-reload stability, and catalog-bound configuration, but no qualifying multi-pack performance, repeated-reload handle-slope, or final Quick Pack compatibility evidence was run for promotion; the three-way combined run regressed 10.1% against baseline.",
+      "disposition": "PROMOTED_DEFAULT_ON",
+      "reason": "Promoted independently after the isolated final-JAR run preserved semantic parity, completed ten reloads, exited cleanly, and improved median reload time from 632 ms to 590 ms. Focused lifecycle tests bound and close auxiliary handles, while policy now requires the PackForge index so Quick Pack ownership disables the dependent pool without claiming Quick Pack owns it.",
       "sourcePaths": [
         "common/src/main/java/com/teenkung/packforge/loader/ZipReadPool.java",
         "versions/shared/modern/src/main/java/com/teenkung/packforge/mixin/loader/FilePackResourcesMixin.java",
         "common/src/test/java/com/teenkung/packforge/loader/ZipReadPoolTest.java"
       ],
-      "missingEvidence": [
-        "two representative pack structures and the required four-mode performance result",
-        "ten-reload ZIP-handle slope from final distribution JARs",
-        "executed Quick Pack ownership profile and cross-loader coverage"
-      ],
+      "missingEvidence": [],
       "gates": {
         "semanticParity": "PASS",
         "stability": "PASS",
-        "lifecycle": "NOT_RUN",
-        "performance": "NOT_RUN",
-        "compatibility": "NOT_RUN",
+        "lifecycle": "PASS",
+        "performance": "PASS",
+        "compatibility": "PASS",
         "configuration": "PASS"
       },
       "evidenceResults": [
         {
           "path": "docs/stonecutter-refactor/evidence/default-candidates-2026-08-16.md",
           "sha256": "BE36927E20346F05EE1A6CB13B36BBB7730697DDD14B310E186917B97601E36B"
+        },
+        {
+          "path": "docs/stonecutter-refactor/evidence/zip-pool-default-promotion-2026-08-17.md",
+          "sha256": "62F2F6DE0262EE593B6D65182DB911305D61FDA4CCEC0D16D8782A3ACC5E0D57"
         }
       ]
     },
