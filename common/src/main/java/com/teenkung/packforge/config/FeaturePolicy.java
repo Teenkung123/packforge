@@ -102,7 +102,7 @@ public final class FeaturePolicy {
 	public boolean reloadOptimizerEnabled() { return config.reloadOptimizerEnabled; }
 	public boolean largeAtlasFixerEnabled() { return config.largeAtlasFixerEnabled; }
 	public boolean loaderIndexEnabled() { return enabled(RESOURCE_PACK_INDEX, reloadOptimizerEnabled(), config.loaderIndexEnabled); }
-	public boolean loaderZipPoolEnabled() { return enabled(ZIP_READ_POOL, reloadOptimizerEnabled() && loaderIndexEnabled(), config.loaderZipPoolEnabled); }
+	public boolean loaderZipPoolEnabled() { return enabled(ZIP_READ_POOL, reloadOptimizerEnabled(), config.loaderZipPoolEnabled); }
 	public boolean loaderTimingsEnabled() { return enabled(LOADER_TIMINGS, true, config.loaderTimingsEnabled); }
 	public boolean reloadListenerTimingsEnabled() { return enabled(RELOAD_LISTENER_TIMINGS, reloadOptimizerEnabled(), config.reloadListenerTimingsEnabled); }
 	public boolean shaderApplyStallDiagnosticsEnabled() { return enabled(SHADER_STALL_DIAGNOSTICS, reloadOptimizerEnabled(), config.shaderApplyStallDiagnosticsEnabled); }
