@@ -46,7 +46,7 @@ function New-CompatibilityBaseConfig {
         reloadOptimizerEnabled = $true
         largeAtlasFixerEnabled = $true
         loaderIndexEnabled = $true
-        loaderZipPoolEnabled = $false
+        loaderZipPoolEnabled = $true
         loaderTimingsEnabled = $true
         reloadListenerTimingsEnabled = $false
         shaderApplyStallDiagnosticsEnabled = $true
