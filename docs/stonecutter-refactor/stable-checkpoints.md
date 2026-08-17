@@ -2,10 +2,11 @@
 
 Checkpoint entries are chronological and must include commit SHA, parent, scope, exact verification, result, and rollback instruction.
 
-## Current working-tree continuation (2026-08-17, uncommitted)
+## Final documentation checkpoint (2026-08-17)
 
-This section is the current evidence boundary until the next dedicated commit
-is created. It has no commit SHA or rollback point yet. A fresh
+This section is the current evidence boundary for the final documentation
+checkpoint. Commit SHA: `3c375cc`; parent evidence checkpoint: `f7148f8`.
+A fresh
 `buildAllSupported` regenerated exactly 20 registry-named 1.4 JARs;
 `verifyAllArtifacts`, `verifyExistingArtifacts`, `inspectArtifactSizes`, and
 generated-manifest verification pass. The manifest SHA-256 is
@@ -14,6 +15,7 @@ Focused profile/lifecycle evidence is current for the refreshed artifacts, and
 the final-byte matrix records 62/62 PASS. Live UI checks, comparative
 performance, and final rollback commit remain open. Earlier entries below
 are historical checkpoints and must not be read as current release proof.
+- Rollback: `git revert 3c375cc`.
 
 ## 1.4 artifact-hardening checkpoint
 

@@ -6,8 +6,7 @@
   `72d3498` (PackForge 1.4 implementation), `346748a` (dead model strategy),
   and `2185788` (Quick Pack ownership tests).
 - Evidence checkpoint: `f7148f8`.
-- Documentation checkpoint: this final documentation commit; record its SHA in
-  the release handoff after commit creation.
+- Documentation checkpoint: `3c375cc`.
 - Final manifest SHA-256:
   `D8F4A54AF5BBB51D146B8077AA65AEBC8E1AFE345E8CED18506FF2FC320F4241`.
 - Final matrix summary/results:
