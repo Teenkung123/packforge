@@ -94,6 +94,8 @@ def main() -> None:
             "expanded-build",
             "expanded-smoke",
             "schedule|workflow_dispatch",
+            "Validate implementation contracts for standalone full runs",
+            "-x validateImplementationContracts",
             "contains(github.event.pull_request.labels.*.name, 'performance')",
             *concurrency_fragments,
         ),
