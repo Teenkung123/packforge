@@ -21,6 +21,12 @@ public final class ZipReadPool implements AutoCloseable {
 	public static final int DEFAULT_MAX_HANDLES = 8;
 	public static final int MAX_HANDLES_LIMIT = 32;
 
+	/** Returns whether reopening an entry by path preserves its original selection. */
+	public static boolean canReopenByPath(PackIndex index, String path, boolean exactLookup) {
+		Objects.requireNonNull(path, "path");
+		return exactLookup || (index != null && !index.hasDuplicatePath(path));
+	}
+
 	private final Object lock = new Object();
 	private final File archiveFile;
 	private final ZipFile[] handles;

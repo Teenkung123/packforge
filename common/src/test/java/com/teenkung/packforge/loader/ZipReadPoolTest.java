@@ -16,8 +16,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ZipReadPoolTest {
@@ -73,6 +76,41 @@ class ZipReadPoolTest {
 		}
 		assertEquals(1, reports.get());
 		pool.close();
+	}
+
+	@Test
+	void reopenPolicyRequiresIndexForEnumeratedEntries() throws Exception {
+		String duplicate = "assets/minecraft/textures/duplicate.txt";
+		assertTrue(ZipReadPool.canReopenByPath(null, duplicate, true));
+		assertFalse(ZipReadPool.canReopenByPath(null, duplicate, false));
+
+		Path archive = DeterministicZipFixture.createWithDuplicateEntry(temporaryDirectory.resolve("policy.zip"));
+		try (ZipFile zipFile = new ZipFile(archive.toFile())) {
+			PackIndex index = PackIndex.build(zipFile);
+			assertTrue(ZipReadPool.canReopenByPath(index, duplicate, true));
+			assertFalse(ZipReadPool.canReopenByPath(index, duplicate, false));
+			assertTrue(ZipReadPool.canReopenByPath(index, "assets/minecraft/textures/other.txt", false));
+		}
+	}
+
+	@Test
+	void pooledExactLookupPreservesVanillaDuplicateSelection() throws Exception {
+		Path archive = DeterministicZipFixture.createWithDuplicateEntry(temporaryDirectory.resolve("duplicates.zip"));
+		String path = "assets/minecraft/textures/duplicate.txt";
+		String expected;
+		try (ZipFile vanilla = new ZipFile(archive.toFile())) {
+			ZipEntry selected = vanilla.getEntry(path);
+			try (InputStream input = vanilla.getInputStream(selected)) {
+				expected = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+			}
+		}
+
+		ZipReadPool pool = new ZipReadPool(archive.toFile(), 2);
+		try (InputStream input = pool.open(path, InputStream::nullInputStream, failure -> {})) {
+			assertEquals(expected, new String(input.readAllBytes(), StandardCharsets.UTF_8));
+		} finally {
+			pool.close();
+		}
 	}
 
 	@Test
