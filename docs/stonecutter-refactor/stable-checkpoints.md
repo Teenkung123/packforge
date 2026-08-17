@@ -5,7 +5,7 @@ Checkpoint entries are chronological and must include commit SHA, parent, scope,
 ## Final documentation checkpoint (2026-08-17)
 
 This section is the current evidence boundary for the final documentation
-checkpoint. Commit SHA: `3c375cc`; parent evidence checkpoint: `f7148f8`.
+checkpoint. Commit SHA: `3c375cc`; hash-record follow-up: `1bb66dd`; parent evidence checkpoint: `f7148f8`.
 A fresh
 `buildAllSupported` regenerated exactly 20 registry-named 1.4 JARs;
 `verifyAllArtifacts`, `verifyExistingArtifacts`, `inspectArtifactSizes`, and
