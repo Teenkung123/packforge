@@ -40,16 +40,16 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-            platform/forge/.gradle/mavenizer
-          key: packforge-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+            build/nodes/forge/*/minecraftforge/forgegradle/mavenizer
+          key: packforge-nodes-v1-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
           restore-keys: |
-            packforge-${{ runner.os }}-${{ matrix.target }}-
+            packforge-nodes-v1-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Build, test, and verify exact artifacts
         run: |
           chmod +x gradlew
           for attempt in 1 2 3; do
-            if ./gradlew buildTarget -Ppackforge_target=${{ matrix.target }} --no-daemon --stacktrace; then
+            if ./gradlew :buildTarget -Ppackforge_target=${{ matrix.target }} --configure-on-demand --no-daemon --stacktrace; then
               exit 0
             fi
             if [[ "$attempt" -eq 3 ]]; then
@@ -84,4 +84,4 @@ jobs:
 
       - name: Run close, rename, and delete test on Windows
         shell: pwsh
-        run: .\gradlew.bat -p platform/fabric -Ppackforge_target=mc1_21_1 test --tests com.teenkung.packforge.loader.ZipReadPoolTest --no-daemon --stacktrace
+        run: .\gradlew.bat :common:test --tests com.teenkung.packforge.loader.ZipReadPoolTest --configure-on-demand --no-daemon --stacktrace

@@ -176,19 +176,24 @@ Changes to hot resource-loading paths should avoid repeated archive scans, block
 
 ![gradle](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/compact/built-with/gradle_vector.svg)
 
-Build one target with:
+Run these commands from the repository root:
 
-```text
-gradlew.bat buildTarget -Ppackforge_target=mc26_1_to_26_2 --no-daemon
-```
+| Command | Result |
+|---|---|
+| `.\gradlew.bat build` | Build, test, and verify all 17 supported artifacts. |
+| `.\gradlew.bat buildAllSupported` | Same full build as `build`. |
+| `.\gradlew.bat :buildTarget -Ppackforge_target=mc26_1_to_26_2 --configure-on-demand` | Build, test, and verify only the selected target's loaders. |
+| `.\gradlew.bat :verifyExistingArtifacts --configure-on-demand` | Verify existing final JARs without configuring loader builds. |
 
-Build every supported target with:
+Final JARs are collected in `build/libs`. The full build includes verification of filenames, Java class versions, mixin compatibility, loader ranges, Minecraft ranges, generated pack metadata, and target capability metadata.
 
-```text
-gradlew.bat buildAllSupported --no-daemon
-```
+Use the checked-in Gradle 9.5.1 wrapper with Java 25. Java 17/21 target toolchains are resolved automatically. On Linux/macOS use `./gradlew` instead of `.\gradlew.bat`.
 
-The full build produces 17 artifacts and verifies filenames, Java class versions, mixin compatibility, loader ranges, Minecraft ranges, generated pack metadata, and target capability metadata.
+The build compiles the Java 17 `common` module and runs its tests once. Stonecutter generates only the small version-dependent templates in `src`; larger implementations stay in `versions`. Loader nodes flatten common classes into their final JARs before remapping. Build plugins and the `verification` module are not shipped.
+
+The daemon and local build cache are enabled, with two workers by default. Configuration cache remains off because Loom's shared mappings artifact currently invalidates it between full builds. `scripts/Measure-GradleBuild.ps1` records repeatable timings under `.gradle/measurements`; it does not change sources or clear caches.
+
+Client runs can use `-Ppackforge_run_directory=<directory>` to keep a smoke test or development instance separate from the default run folder. This applies only to the selected `packforge_target`.
 
 ## License
 

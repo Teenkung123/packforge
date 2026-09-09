@@ -121,17 +121,19 @@ PY
 )"
 
 platform_root="platform/$platform"
+node_task=":$platform:$target"
+node_build="build/nodes/$platform/$target"
 run_root="$platform_root/run/$target"
 log_file="$run_root/logs/latest.log"
 gradle_log="$run_root/logs/packforge-smoke-gradle.log"
-fixture_root="$platform_root/build/$target/benchmark"
+fixture_root="$node_build/benchmark"
 fixture="$fixture_root/deterministic-large-pack.zip"
 
 mkdir -p "$run_root/logs" "$run_root/config" "$run_root/resourcepacks"
 rm -f "$log_file" "$gradle_log" "$run_root/logs/packforge-timings.csv" \
   "$run_root/logs/packforge-font-timings.csv" "$run_root/logs/packforge-atlas-timings.csv"
 
-./gradlew -p "$platform_root" -Ppackforge_target="$target" benchmarkPackIndex --no-daemon
+./gradlew "$node_task:benchmarkPackIndex" --configure-on-demand --no-daemon
 cp "$fixture" "$run_root/resourcepacks/deterministic-large-pack.zip"
 
 mkdir -p "$run_root/mods"
@@ -141,8 +143,8 @@ if [[ "$artifact_smoke" == "true" ]]; then
   if [[ -n "$artifact_input_dir" ]]; then
     artifact_path="$artifact_input_dir/$artifact_name"
   else
-    ./gradlew -p "$platform_root" -Ppackforge_target="$target" build --no-daemon
-    artifact_path="$platform_root/build/$target/libs/$artifact_name"
+    ./gradlew "$node_task:build" --configure-on-demand --no-daemon
+    artifact_path="$node_build/libs/$artifact_name"
   fi
   if [[ ! -f "$artifact_path" ]]; then
     echo "expected packaged artifact not found: $artifact_path" >&2
@@ -211,7 +213,7 @@ print_fatal_diagnostics() {
   fi
 }
 
-run_arguments=(-p "$platform_root" -Ppackforge_target="$target")
+run_arguments=("-Ppackforge_target=$target")
 if [[ "$artifact_smoke" == "true" ]]; then
   run_arguments+=(-Ppackforge_artifact_smoke=true)
 fi
@@ -224,7 +226,7 @@ fi
 if [[ -n "$neoforge_version_override" ]]; then
   run_arguments+=("-Ppackforge_neoforge_version_override=$neoforge_version_override")
 fi
-run_arguments+=(runClient --no-daemon)
+run_arguments+=("$node_task:runClient" --configure-on-demand --no-daemon)
 smoke_java_tool_options="${JAVA_TOOL_OPTIONS:-}"
 if [[ -n "$smoke_java_tool_options" ]]; then
   smoke_java_tool_options+=" "

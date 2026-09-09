@@ -24,7 +24,9 @@ param(
     [int] $TimeoutSeconds = 900,
 
     [ValidateRange(0, 10)]
-    [int] $ReloadCount = 2
+    [int] $ReloadCount = 2,
+
+    [switch] $UseRuntimeController
 )
 
 Set-StrictMode -Version 2.0
@@ -364,6 +366,7 @@ function Expand-Token {
 $javaArguments = [Collections.Generic.List[string]]::new()
 $javaArguments.Add('-Xms512m')
 $javaArguments.Add('-Xmx2048m')
+if ($UseRuntimeController) { $javaArguments.Add("-Dpackforge.runtimeSmokeReloadCount=$ReloadCount") }
 $javaArguments.Add("-Djava.library.path=$natives")
 foreach ($argument in (Expand-Arguments -Arguments $allJvmArguments)) {
     $expandedArgument = Expand-Token -Value $argument
@@ -389,6 +392,7 @@ $startInfo = [Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = $java
 $startInfo.WorkingDirectory = $gameRoot
 $startInfo.UseShellExecute = $false
+$startInfo.CreateNoWindow = $true
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
 $startInfo.Arguments = [string]::Join(' ', @($javaArguments | ForEach-Object { ConvertTo-WindowsCommandLineArgument -Value $_ }))
@@ -410,6 +414,23 @@ try {
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
 
+    if ($UseRuntimeController) {
+        while (-not $process.HasExited -and [datetime]::UtcNow -lt $deadline) {
+            Assert-NoFatalLog -Text (Get-LogText -Path $latestLog) -Context 'production controller'
+            Start-Sleep -Seconds 1
+        }
+        if (-not $process.HasExited) { throw 'Production reload controller did not exit before timeout.' }
+        if ($process.ExitCode -ne 0) { throw "Production controller exited with code $($process.ExitCode)." }
+        [string] $controllerLog = Get-LogText -Path $latestLog
+        $hasArtifact = $controllerLog.IndexOf([IO.Path]::GetFileName($artifact), [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasCapabilities = $controllerLog -match "PackForge capabilities:.*target=$([regex]::Escape($targetMarker))"
+        $hasCompleted = $controllerLog -match "PackForge runtime smoke complete: reloads=$ReloadCount(?:\s|$)"
+        $requests = Get-MarkerCount -Text $controllerLog -Marker 'PackForge runtime smoke reload requested:'
+        if (-not $hasArtifact -or -not $hasCapabilities -or -not $hasCompleted -or $requests -ne $ReloadCount) {
+            throw 'Production controller did not prove exact-artifact initialization and all requested reloads.'
+        }
+        $cleanExit = $true
+    } else {
     $ready = $false
     while ([datetime]::UtcNow -lt $deadline) {
         [string] $logText = Get-LogText -Path $latestLog
@@ -463,6 +484,7 @@ try {
         if (-not $process.WaitForExit(90000)) { throw 'Production Forge did not exit after its window was closed.' }
         if ($process.ExitCode -ne 0) { throw "Production Forge clean-close exit code was $($process.ExitCode)." }
         $cleanExit = $true
+    }
     }
     $passed = $true
 } finally {

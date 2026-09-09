@@ -1,0 +1,37 @@
+plugins {
+	id 'java-library'
+}
+
+group = rootProject.group
+version = rootProject.version
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+sourceSets.main.java.srcDir('src/client/java')
+repositories { mavenCentral() }
+
+dependencies {
+	compileOnly libs.gson
+	compileOnly libs.slf4j.api
+	testImplementation platform(libs.junit.bom)
+	testImplementation libs.junit.jupiter
+	testImplementation libs.gson
+	testImplementation libs.commons.compress
+	testRuntimeOnly libs.junit.launcher
+	testRuntimeOnly libs.slf4j.simple
+}
+
+tasks.withType(JavaCompile).configureEach {
+	options.release = 17
+	options.encoding = 'UTF-8'
+}
+tasks.withType(Test).configureEach { useJUnitPlatform() }
+
+// Consumed as classes/resources before each loader's remap step, never nested.
+configurations {
+	testOutput { canBeConsumed = true; canBeResolved = false }
+}
+artifacts {
+	testOutput(tasks.register('testJar', Jar) {
+		archiveClassifier = 'tests'
+		from sourceSets.test.output
+	})
+}

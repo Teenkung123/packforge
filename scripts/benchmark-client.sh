@@ -73,7 +73,7 @@ run_mode baseline false
 run_mode optimized true
 
 benchmark_log="$output_directory/pack-index-benchmark.log"
-./gradlew -p "platform/$platform" -Ppackforge_target="$target" benchmarkPackIndex --no-daemon | tee "$benchmark_log"
+./gradlew ":$platform:$target:benchmarkPackIndex" --configure-on-demand --no-daemon | tee "$benchmark_log"
 pwsh -NoProfile -File "$repository_root/scripts/Test-ReloadBenchmark.ps1" \
   -BaselineWarmCsv "$output_directory/baseline-warm.csv" \
   -OptimizedWarmCsv "$output_directory/optimized-warm.csv" \

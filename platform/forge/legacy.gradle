@@ -1,0 +1,61 @@
+plugins {
+	id 'java'
+	alias(libs.plugins.moddev.legacy)
+}
+apply from: rootProject.file('gradle/node.gradle')
+def target = packforgeTarget
+def loader = packforgePlatform
+def mixinExtras = rootProject.packforgeRegistry.mixinExtrasVersion
+def refmap = 'packforge.refmap.json'
+legacyForge {
+	enable {
+		forgeVersion = packforgeRuntimeVersion('packforge_forge_version_override', loader.version)
+		disableRecompilation = true
+	}
+	runs {
+		client {
+			client()
+			gameDirectory = packforgeRunDirectory
+			systemProperty 'forge.logging.console.level', 'debug'
+		}
+	}
+	mods {
+		packforge {
+			sourceSet sourceSets.main
+			sourceSet project(':common').sourceSets.main
+		}
+	}
+}
+dependencies {
+	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtras}"))
+	annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
+	jarJar(implementation("io.github.llamalad7:mixinextras-forge:${mixinExtras}")) {
+		version { strictly "[${mixinExtras}]"; prefer mixinExtras }
+	}
+}
+mixin {
+	add sourceSets.main, refmap
+	config target.mixinConfigs.main
+	config target.mixinConfigs.client
+}
+tasks.named('processResources') {
+	inputs.property('refmap', refmap)
+	doLast {
+		[target.mixinConfigs.main, target.mixinConfigs.client].each { name ->
+			def file = new File(destinationDir, name)
+			def json = new groovy.json.JsonSlurper().parse(file)
+			json.refmap = refmap
+			file.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)) + '\n', 'UTF-8')
+		}
+	}
+}
+tasks.named('jar', Jar) {
+	manifest.attributes(['MixinConfigs': "${target.mixinConfigs.main},${target.mixinConfigs.client}"])
+}
+tasks.named('reobfJar') { archiveFileName = packforgeArtifactName }
+ext.packforgeArtifact = tasks.named('reobfJar').flatMap { it.archiveFile }
+if (packforgeArtifactSmoke) {
+	tasks.named('runClient') {
+		doFirst { throw new GradleException('Use scripts/Smoke-Forge-Production.ps1 for final-JAR validation in the production SRG namespace.') }
+	}
+}

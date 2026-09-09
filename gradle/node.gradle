@@ -1,0 +1,155 @@
+import groovy.json.JsonOutput
+
+def registry = rootProject.ext.packforgeRegistry
+def loaderId = project.parent.name
+def target = registry.targets.find { it.key == project.name }
+if (target == null || target.platforms[loaderId] == null) {
+	throw new GradleException("Invalid PackForge node ${project.path}")
+}
+def loader = target.platforms[loaderId]
+def runtimeSelected = target.key == rootProject.packforgeSelectedTarget
+def defaultRunDirectory = "platform/${loaderId}/run/${target.key}"
+ext.packforgeRunDirectory = rootProject.file(runtimeSelected
+	? providers.gradleProperty('packforge_run_directory').getOrElse(defaultRunDirectory) : defaultRunDirectory)
+def artifactSmoke = runtimeSelected && providers.gradleProperty('packforge_artifact_smoke').map(Boolean::parseBoolean).getOrElse(false)
+ext.packforgeArtifactSmoke = artifactSmoke
+ext.packforgeRuntimeVersion = { String property, String defaultVersion ->
+	runtimeSelected ? providers.gradleProperty(property).getOrElse(defaultVersion) : defaultVersion
+}
+ext.packforgeTarget = target
+ext.packforgePlatform = loader
+ext.packforgeLoader = loaderId
+ext.packforgeArtifactName = "packforge-${loaderId}-${rootProject.version}${loader.versionSuffix}-mc${target.artifactMinecraft}.jar"
+version = "${rootProject.version}${loader.versionSuffix}"
+group = rootProject.group
+layout.buildDirectory = rootProject.layout.buildDirectory.dir("nodes/${loaderId}/${target.key}")
+
+evaluationDependsOn(':common')
+def common = project(':common')
+def sourceRoots = ["minecraft", "versions/${target.apiAdapter}/common", "platform/${loaderId}", "versions/${target.apiAdapter}/${loaderId}"]
+def clientRoots = sourceRoots + ((target.sharedAdapters ?: []).collect { "versions/${it}/common" })
+def dirs = { roots, sourceSet, kind -> roots.collect { rootProject.file("${it}/src/${sourceSet}/${kind}") } }
+
+java {
+	toolchain.languageVersion = JavaLanguageVersion.of(target.javaVersion as int)
+	sourceCompatibility = JavaVersion.toVersion(target.javaVersion)
+	targetCompatibility = JavaVersion.toVersion(target.javaVersion)
+}
+sourceSets {
+	main {
+		java.setSrcDirs(dirs(sourceRoots, 'main', 'java'))
+		resources.setSrcDirs(dirs(sourceRoots, 'main', 'resources'))
+		if (loaderId != 'fabric') {
+			java.srcDirs(dirs(clientRoots, 'client', 'java'))
+			resources.srcDirs(dirs(clientRoots, 'client', 'resources'))
+			resources.exclude('fabric.mod.json', 'packforge.accesswidener')
+		}
+	}
+	if (loaderId == 'fabric') {
+		client {
+			java.setSrcDirs(dirs(clientRoots, 'client', 'java'))
+			resources.setSrcDirs(dirs(clientRoots, 'client', 'resources'))
+		}
+	}
+	test {
+		java.setSrcDirs(dirs(sourceRoots, 'test', 'java'))
+		resources.setSrcDirs(dirs(sourceRoots, 'test', 'resources'))
+	}
+}
+repositories { mavenCentral() }
+dependencies {
+	// Packaged smoke must load these classes only from the final mod JAR.
+	add(artifactSmoke ? 'compileOnly' : 'implementation', project(':common'))
+	testImplementation platform(libs.junit.bom)
+	testImplementation libs.junit.jupiter
+	testRuntimeOnly libs.junit.launcher
+	testRuntimeOnly libs.slf4j.simple
+}
+configurations {
+	benchmarkRuntime {
+		canBeConsumed = false
+		canBeResolved = true
+	}
+}
+dependencies {
+	benchmarkRuntime project(':common')
+	benchmarkRuntime project(path: ':common', configuration: 'testOutput')
+	benchmarkRuntime libs.gson
+	benchmarkRuntime libs.slf4j.simple
+	benchmarkRuntime libs.commons.compress
+}
+tasks.withType(JavaCompile).configureEach {
+	options.release = target.javaVersion as int
+	options.encoding = 'UTF-8'
+}
+tasks.withType(Test).configureEach { useJUnitPlatform() }
+tasks.withType(Jar).configureEach {
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	preserveFileTimestamps = false
+	reproducibleFileOrder = true
+}
+tasks.named('jar', Jar) {
+	archiveFileName = packforgeArtifactName
+	from(common.sourceSets.main.output)
+}
+
+def properties = [version: version.toString(), minecraft_version_range: loader.minecraftVersionRange,
+	forge_version_range: loader.versionRange, neoforge_version_range: loader.versionRange,
+	main_mixin_config: target.mixinConfigs.main, client_mixin_config: target.mixinConfigs.client,
+	mixin_compatibility: target.mixinCompatibility].findAll { it.value != null }
+def pack = [description: 'PackForge resources']
+if (target.packMetadata.schema == 'single') pack.pack_format = target.packMetadata.packFormat
+else {
+	pack.min_format = target.packMetadata.minFormat
+	pack.max_format = target.packMetadata.maxFormat
+}
+def generated = [
+	'pack.mcmeta': JsonOutput.prettyPrint(JsonOutput.toJson([pack: pack])) + '\n',
+	'packforge-capabilities.properties': "target=${target.key}\nminecraft=${target.artifactMinecraft}\nmaturity=${loader.maturity}\nbeta=${loader.maturity == 'beta'}\ncapabilities=${target.capabilities.join(',')}\n"
+]
+def fixture = [pack: pack]
+def formats = target.packMetadata.schema == 'range'
+	? [min_inclusive: target.packMetadata.minFormat, max_inclusive: target.packMetadata.maxFormat]
+	: ((target.packMetadata.packFormat as int) >= 18
+		? [min_inclusive: target.packMetadata.packFormat, max_inclusive: target.packMetadata.packFormat] : null)
+if (formats != null) fixture.overlays = [entries: [[formats: formats, directory: 'overlay']]]
+tasks.register('benchmarkPackIndex', JavaExec) {
+	group = 'verification'
+	description = 'Runs the deterministic, non-gating PackIndex microbenchmark.'
+	classpath = configurations.benchmarkRuntime
+	mainClass = 'com.teenkung.packforge.loader.PackIndexBenchmark'
+	args layout.buildDirectory.dir('benchmark').get().asFile.absolutePath,
+		Base64.encoder.encodeToString(JsonOutput.toJson(fixture).getBytes('UTF-8'))
+}
+if (loaderId == 'fabric') {
+	def entrypoints = [main: ['com.teenkung.packforge.fabric.PackForgeFabric'], client: ['com.teenkung.packforge.fabric.PackForgeFabricClient']]
+	if (loader.modMenuEntrypoint) entrypoints.modmenu = ['com.teenkung.packforge.client.config.PackForgeModMenuApi']
+	def metadata = [schemaVersion: 1, id: 'packforge', version: version.toString(), name: 'PackForge',
+		description: 'Faster pack reloads and atlas overflow recovery for large resource packs.', authors: ['Teenkung123'],
+		contact: [homepage: 'https://github.com/Teenkung/PackForge', sources: 'https://github.com/Teenkung/PackForge'],
+		license: 'MIT', icon: 'assets/packforge/icon.png', environment: 'client', entrypoints: entrypoints,
+		mixins: [target.mixinConfigs.main, [config: target.mixinConfigs.client, environment: 'client']],
+		accessWidener: 'packforge.accesswidener',
+		depends: [fabricloader: loader.loaderDependency, minecraft: loader.minecraftDependency, java: ">=${target.javaVersion}"]]
+	if (loader.modMenuEntrypoint) metadata.suggests = [modmenu: '*']
+	generated['fabric.mod.json'] = JsonOutput.prettyPrint(JsonOutput.toJson(metadata)) + '\n'
+}
+tasks.named('processResources', ProcessResources) {
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	exclude 'pack.mcmeta', 'fabric.mod.json'
+	inputs.properties(properties)
+	inputs.property('generatedMetadata', generated)
+	filesMatching(['META-INF/mods.toml', 'META-INF/neoforge.mods.toml', target.mixinConfigs.main, target.mixinConfigs.client]) { expand properties }
+	doLast {
+		generated.each { path, content -> new File(destinationDir, path).setText(content, 'UTF-8') }
+	}
+}
+if (loaderId == 'fabric') {
+	tasks.named('processClientResources', ProcessResources) {
+		duplicatesStrategy = DuplicatesStrategy.FAIL
+		inputs.properties(properties)
+		filesMatching(target.mixinConfigs.client) { expand properties }
+	}
+}
+
+apply from: rootProject.file('gradle/stonecutter-sources.gradle')

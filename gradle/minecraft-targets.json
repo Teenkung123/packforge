@@ -59,7 +59,6 @@
         "fabric": {
           "maturity": "stable",
           "versionSuffix": "",
-          "loomVersion": "1.17.16",
           "loaderVersion": "0.18.4",
           "loaderDependency": ">=0.18.4",
           "fabricApiVersion": "0.145.1+26.1",
@@ -87,6 +86,7 @@
     },
     {
       "key": "mc1_21_1",
+      "sharedAdapters": ["mc1_21_shared"],
       "taskSuffix": "Mc1_21_1",
       "minecraftVersion": "1.21.1",
       "artifactMinecraft": "1.21.1",
@@ -126,7 +126,6 @@
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.2",
-          "loomVersion": "1.17.16",
           "loaderVersion": "0.15.11",
           "loaderDependency": ">=0.15.11",
           "fabricApiVersion": "0.116.15+1.21.1",
@@ -154,6 +153,7 @@
     },
     {
       "key": "mc1_21_4",
+      "sharedAdapters": ["mc1_21_shared"],
       "taskSuffix": "Mc1_21_4",
       "minecraftVersion": "1.21.4",
       "artifactMinecraft": "1.21.4",
@@ -193,7 +193,6 @@
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.2",
-          "loomVersion": "1.17.16",
           "loaderVersion": "0.16.9",
           "loaderDependency": ">=0.16.9",
           "fabricApiVersion": "0.119.4+1.21.4",
@@ -221,6 +220,7 @@
     },
     {
       "key": "mc1_21_8",
+      "sharedAdapters": ["mc1_21_shared"],
       "taskSuffix": "Mc1_21_8",
       "minecraftVersion": "1.21.8",
       "artifactMinecraft": "1.21.8",
@@ -260,7 +260,6 @@
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.2",
-          "loomVersion": "1.17.16",
           "loaderVersion": "0.16.14",
           "loaderDependency": ">=0.16.14",
           "fabricApiVersion": "0.136.1+1.21.8",
@@ -328,7 +327,6 @@
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.2",
-          "loomVersion": "1.17.16",
           "loaderVersion": "0.18.1",
           "loaderDependency": ">=0.18.1",
           "fabricApiVersion": "0.141.6+1.21.11",
@@ -394,7 +392,6 @@
         "fabric": {
           "maturity": "beta",
           "versionSuffix": "-beta.2",
-          "loomVersion": "1.17.16",
           "loaderVersion": "0.14.25",
           "loaderDependency": ">=0.14.25",
           "fabricApiVersion": "0.92.11+1.20.1",

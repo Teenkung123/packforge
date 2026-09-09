@@ -1,0 +1,27 @@
+[versions]
+loom = "1.17.16"
+forgegradle = "7.0.25"
+moddev = "2.0.141"
+junit = "5.11.4"
+gson = "2.11.0"
+slf4j = "2.0.17"
+compress = "1.27.1"
+asm = "9.10.1"
+
+[libraries]
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "compress" }
+asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
+
+[plugins]
+loom-legacy = { id = "fabric-loom", version.ref = "loom" }
+loom-modern = { id = "net.fabricmc.fabric-loom", version.ref = "loom" }
+forgegradle = { id = "net.minecraftforge.gradle", version.ref = "forgegradle" }
+forge-jarjar = { id = "net.minecraftforge.jarjar", version = "0.2.3" }
+moddev = { id = "net.neoforged.moddev", version.ref = "moddev" }
+moddev-legacy = { id = "net.neoforged.moddev.legacyforge", version.ref = "moddev" }

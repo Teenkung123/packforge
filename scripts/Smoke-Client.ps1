@@ -707,6 +707,8 @@ switch ($smokeProfile) {
 
 $deadline = [datetime]::UtcNow.AddSeconds($TimeoutSeconds)
 $platformRoot = Get-FullPath -Path (Join-Path $repoRoot "platform\$Platform")
+$nodeTask = ":${Platform}:${Target}"
+$nodeBuild = Join-Path $repoRoot "build\nodes\$Platform\$Target"
 $runRoot = Get-FullPath -Path (Join-Path $platformRoot "run\$Target")
 $logRoot = Join-Path $runRoot 'logs'
 $configRoot = Join-Path $runRoot 'config'
@@ -715,7 +717,7 @@ $modsRoot = Join-Path $runRoot 'mods'
 $logFile = Join-Path $logRoot 'latest.log'
 $gradleStdout = Join-Path $logRoot 'packforge-smoke-gradle.stdout.log'
 $gradleStderr = Join-Path $logRoot 'packforge-smoke-gradle.stderr.log'
-$artifactPath = Join-Path (Join-Path $platformRoot "build\$Target\libs") $artifactName
+$artifactPath = Join-Path (Join-Path $nodeBuild 'libs') $artifactName
 if (-not [string]::IsNullOrWhiteSpace($ArtifactPathOverride)) {
     if (-not $artifactSmoke) {
         throw 'ArtifactPathOverride requires artifact smoke mode.'
@@ -725,7 +727,7 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactPathOverride)) {
         throw "ArtifactPathOverride is missing: $artifactPath"
     }
 }
-$fixturePath = Join-Path (Join-Path $platformRoot "build\$Target\benchmark") 'deterministic-large-pack.zip'
+$fixturePath = Join-Path (Join-Path $nodeBuild 'benchmark') 'deterministic-large-pack.zip'
 $fixtureDestination = Join-Path $resourcePackRoot 'deterministic-large-pack.zip'
 $configFile = Join-Path $configRoot 'packforge.json'
 $optionsFile = Join-Path $runRoot 'options.txt'
@@ -776,7 +778,7 @@ try {
     }
 
     $benchmarkOwnedProcesses = @{}
-    $benchmarkArguments = @('-p', $platformRoot, "-Ppackforge_target=$Target", 'benchmarkPackIndex', '--no-daemon')
+    $benchmarkArguments = @("${nodeTask}:benchmarkPackIndex", '--configure-on-demand', '--no-daemon')
     Invoke-GradleCommand `
         -GradleWrapper $gradleWrapper `
         -Arguments $benchmarkArguments `
@@ -800,7 +802,7 @@ try {
     if ($artifactSmoke) {
         if ([string]::IsNullOrWhiteSpace($ArtifactPathOverride)) {
             $artifactOwnedProcesses = @{}
-            $artifactArguments = @('-p', $platformRoot, "-Ppackforge_target=$Target", 'build', '--no-daemon')
+            $artifactArguments = @("${nodeTask}:build", '--configure-on-demand', '--no-daemon')
             Invoke-GradleCommand `
                 -GradleWrapper $gradleWrapper `
                 -Arguments $artifactArguments `
@@ -859,11 +861,7 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
 
     $existingJavaProcessIds = @(Get-JavaProcessIds)
     $clientStartUtc = [datetime]::UtcNow
-    $runArguments = @(
-        '-p',
-        $platformRoot,
-        "-Ppackforge_target=$Target"
-    )
+    $runArguments = @("-Ppackforge_target=$Target")
     if ($artifactSmoke) { $runArguments += '-Ppackforge_artifact_smoke=true' }
     if ($forgeOverride.Length -gt 0) {
         $runArguments += "-Ppackforge_forge_version_override=$forgeOverride"
@@ -871,7 +869,7 @@ incompatibleResourcePacks:["file/deterministic-large-pack.zip"]
     if ($neoForgeOverride.Length -gt 0) {
         $runArguments += "-Ppackforge_neoforge_version_override=$neoForgeOverride"
     }
-    $runArguments += @('runClient', '--no-daemon')
+    $runArguments += @("${nodeTask}:runClient", '--configure-on-demand', '--no-daemon')
 
     $clientProcess = Start-GradleProcess `
         -GradleWrapper $gradleWrapper `

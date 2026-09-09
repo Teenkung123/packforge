@@ -32,15 +32,15 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-            platform/forge/.gradle/mavenizer
-          key: packforge-runtime-smoke-${{ runner.os }}-all-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+            build/nodes/forge/*/minecraftforge/forgegradle/mavenizer
+          key: packforge-nodes-v1-runtime-smoke-${{ runner.os }}-all-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
           restore-keys: |
-            packforge-runtime-smoke-${{ runner.os }}-all-
+            packforge-nodes-v1-runtime-smoke-${{ runner.os }}-all-
 
       - name: Build and verify all artifacts
         run: |
           chmod +x gradlew
-          ./gradlew buildAllSupported verifyAllArtifacts --no-daemon --stacktrace
+          ./gradlew buildAllSupported --no-daemon --stacktrace
 
       - name: Write exact release SHA256SUMS
         shell: bash
@@ -148,10 +148,10 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-            platform/forge/.gradle/mavenizer
-          key: packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+            build/nodes/forge/*/minecraftforge/forgegradle/mavenizer
+          key: packforge-nodes-v1-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
           restore-keys: |
-            packforge-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
+            packforge-nodes-v1-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
 
       - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
         env:
@@ -200,9 +200,9 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: packforge-benchmark-${{ runner.os }}-mc1_21_1-fabric-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          key: packforge-nodes-v1-benchmark-${{ runner.os }}-mc1_21_1-fabric-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
           restore-keys: |
-            packforge-benchmark-${{ runner.os }}-mc1_21_1-fabric-
+            packforge-nodes-v1-benchmark-${{ runner.os }}-mc1_21_1-fabric-
 
       - name: Enforce warm, cold, and resource-equivalence gates
         run: |

@@ -1,6 +1,46 @@
-rootProject.name = 'packforge'
+import org.gradle.util.GradleVersion
 
-// Loader projects are standalone builds invoked by the root aggregation tasks
-// through the repository wrapper. Do not include them as composite builds here:
-// doing so would make a globally installed Gradle resolve loader plugins before
-// the compatible wrapper version gets a chance to run.
+pluginManagement {
+	if (GradleVersion.current() < GradleVersion.version('9.5.1')) {
+		throw new GradleException('PackForge requires Gradle 9.5.1 or newer. Use the checked-in wrapper: .\\gradlew.bat build')
+	}
+	repositories {
+		gradlePluginPortal()
+		mavenCentral()
+		maven { url = 'https://maven.fabricmc.net/' }
+		maven { url = 'https://maven.minecraftforge.net/' }
+		maven { url = 'https://maven.neoforged.net/releases/' }
+		maven { url = 'https://maven.kikugie.dev/releases/' }
+	}
+}
+
+plugins {
+	id 'dev.kikugie.stonecutter' version '0.9.8'
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+def registry = new groovy.json.JsonSlurper().parse(file('gradle/minecraft-targets.json'))
+if (registry.schemaVersion != 1 || !registry.targets ||
+	registry.targets*.key.toSet().size() != registry.targets.size()) {
+	throw new GradleException('Invalid PackForge target registry.')
+}
+gradle.ext.packforgeRegistry = registry
+
+stonecutter {
+	kotlinController = false
+	centralScript = 'gradle/node.gradle'
+	create(rootProject) {
+		['fabric', 'forge', 'neoforge'].each { loader ->
+			branch(loader) {
+				registry.targets.findAll { it.platforms[loader] != null }.each { target ->
+					def script = loader == 'forge' && target.minecraftVersion == '1.20.1' ? 'legacy.gradle' : 'build.gradle'
+					version(target.key, target.minecraftVersion).buildscript("../platform/${loader}/${script}")
+				}
+			}
+		}
+		vcsVersion = registry.defaultTarget
+	}
+}
+
+include 'common', 'verification'
+rootProject.name = 'packforge'
