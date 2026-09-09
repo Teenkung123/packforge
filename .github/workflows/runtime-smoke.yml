@@ -186,6 +186,15 @@ jobs:
       - name: Install virtual display
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
+      - name: Restore Forge game assets
+        if: matrix.platform == 'forge' && matrix.target != 'mc1_20_1'
+        uses: actions/cache@v4
+        with:
+          path: ~/.minecraft/assets
+          key: packforge-forge-assets-v1-${{ runner.os }}-${{ matrix.target }}-${{ matrix.forge_version || 'registry' }}
+          restore-keys: |
+            packforge-forge-assets-v1-${{ runner.os }}-${{ matrix.target }}-
+
       - name: Restore target-scoped runtime cache
         uses: actions/cache@v4
         with:
@@ -198,6 +207,12 @@ jobs:
           restore-keys: |
             packforge-nodes-v1-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
             ${{ !matrix.minecraft_version && !matrix.forge_version && !matrix.neoforge_version && format('packforge-nodes-v1-{0}-{1}-', runner.os, matrix.target) || '' }}
+
+      - name: Configure headless Forge launch
+        if: matrix.platform == 'forge' && matrix.target != 'mc1_20_1'
+        run: |
+          mkdir -p "platform/forge/run/${{ matrix.target }}/config"
+          printf 'earlyWindowControl = false\n' > "platform/forge/run/${{ matrix.target }}/config/fml.toml"
 
       - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
         env:
