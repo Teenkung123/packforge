@@ -5,9 +5,14 @@ Updated: 2026-09-09. Local branch: `1.4`. Mod version: `1.3.4`.
 ## Status
 
 The build modernization and representative local runtime validation are complete.
-Hosted GitHub Actions validation remains pending: these changes have not been
-committed or pushed. This report does not claim full runtime-matrix or release
-acceptance. No release, version bump, commit, or push was performed.
+The implementation was committed as `2c3bf608be498012965f5adebd97e74684b49ff5`
+and pushed to remote `1.4` on 2026-09-09. The user confirmed that local `1.4`
+replaces the old remote development line; `1.4-archived` remains untouched.
+An attempted merge of the archived history was backed out before publishing.
+The hosted build workflow and final optimized runtime workflow passed. All local
+implementation, representative runtime, full artifact, and hosted CI gates for
+this modernization are complete. This report does not claim release acceptance.
+No release or version bump was performed.
 
 The 16 pre-existing `docs/**` deletions and untracked `.codegraph/` remain outside
 the modernization change set.
@@ -57,7 +62,7 @@ ForgeGradle registered that task, hiding the intended diagnostic.
 | Final artifacts vs pre-incremental SHA-256 snapshot | All 17 byte-identical |
 | Current test XML | 231 tests, 27 suites, zero failures/errors: 99 common, 6 adapter, 126 verifier |
 | Changed workflows | YAML parsing with duplicate-key rejection and job-dependency checks passed |
-| Workflow shell snippets | All 20 Bash snippets passed `bash -n` after expression substitution |
+| Workflow shell snippets | All 22 final Bash snippets passed `bash -n` after expression substitution |
 | Repository launch scripts | Bash syntax and PowerShell parser checks passed |
 | Whitespace check | `git diff --check` passed |
 | Unsupported Forge packaged-smoke guard | Expected failure with production-harness guidance; verified using `runClient -Ppackforge_artifact_smoke=true --configure-on-demand --dry-run` |
@@ -65,7 +70,8 @@ ForgeGradle registered that task, hiding the intended diagnostic.
 The final build reused current test results; it did not rerun all 231 tests.
 An earlier 83-second build included dependency/cache preparation. Neither it nor
 the final eight-second repeat is a new performance benchmark. Final checksums
-are recorded in `SHA256SUMS` beside this report.
+are recorded in `SHA256SUMS` beside this report. Final hosted artifact checksums
+are recorded separately in `CI-SHA256SUMS`.
 
 ### Runtime evidence
 
@@ -118,13 +124,87 @@ Configuration cache remains disabled: strict builds previously stored entries,
 but Loom's rewritten shared mappings artifact prevented reliable reuse. Daemon,
 build cache, parallel execution, and the two-worker limit remain enabled.
 
-## Remaining delivery gates and limits
+## Hosted delivery and validation limits
 
-1. Commit only modernization files and this evidence, excluding the pre-existing
-   documentation deletions and `.codegraph/`, after authorization.
-2. Push the reviewed changes and run the build and runtime-smoke workflows on that
-   exact revision. Do not dispatch the publishing workflow as a validation step.
-3. Inspect hosted runtime-matrix and benchmark results before release acceptance.
+The modernization commit is on remote `1.4`; pre-existing documentation
+deletions and `.codegraph/` were excluded. Both non-publishing workflows were
+dispatched against the exact implementation revision:
+
+- [Build supported targets](https://github.com/Teenkung123/packforge/actions/runs/34326206366): passed all six target-build jobs and the Windows ZIP-handle test.
+- [Runtime client smoke](https://github.com/Teenkung123/packforge/actions/runs/34326209330): passed the full 17-JAR bundle, all 27 exact smoke cells, and the benchmark.
+
+The hosted Fabric 1.21.1 benchmark recorded warm medians of 1,456 ms baseline and
+1,012 ms optimized (30.49% improvement), and cold medians of 3,436 ms baseline and
+2,975 ms optimized (13.42% improvement). Its resource-equivalence gate passed.
+These are fixture-specific measurements, not a universal resource-pack speed claim.
+The publishing workflow was not dispatched.
+
+### Runtime workflow duration and daily schedule
+
+The original full-bundle job took 27m 36s. Commit `c05cf53` replaces that serial
+prerequisite with six parallel `:buildTarget` jobs. A lightweight assembly job
+downloads their outputs, executes `:verifyExistingArtifacts` without configuring
+loader builds, then writes the same 17-artifact checksum manifest. All 27 smoke
+cells and their validation steps are unchanged. Target build caches now share
+keys with the build workflow, and registry-version runtime/benchmark caches can
+fall back to those target caches. ZIP/JAR uploads use zero extra compression.
+
+[Optimized runtime workflow](https://github.com/Teenkung123/packforge/actions/runs/34329246648)
+produced the verified bundle in 6m 21s from the first target-job start to the
+assembly-job finish, compared with 27m 36s for the original bundle job: a 77.0%
+shorter artifact-preparation stage in these runs. All six target jobs passed;
+assembly and the full artifact verifier took 32s. This observed improvement
+includes shared-cache reuse and is not a controlled cold-cache benchmark.
+All 17 JARs from the serial and parallel CI bundles were downloaded and compared;
+their SHA-256 hashes are identical. The first optimized run passed 34 of 35 jobs,
+but its Forge 1.20.1/47.4.22 smoke reused cached binary-patch output after restoring
+the registry-version build cache and failed with a missing Forge loading class.
+Commit `5f25df3` restricts that fallback to registry-version cells. Runtime override
+cells retain only their exact-version cache keys/prefixes. The failure checks and
+all smoke cells remain intact.
+
+[Corrected optimized workflow](https://github.com/Teenkung123/packforge/actions/runs/34330538070)
+produced the verified bundle in 6m 37s (08:41:55Z to 08:48:32Z), 76.0% shorter
+than the original 27m 36s stage. Its legacy override passed; 34 of 35 jobs passed.
+The remaining Forge 26.1 job failed during Forge's preliminary graphics-window
+initialization and stayed at an interactive help prompt until the readiness
+timeout. The fatal message existed after ten seconds, but the harness previously
+did not recognize it and waited about fourteen additional minutes.
+
+Commit `f6c1350` adds immediate recognition of these fatal graphics messages.
+A controlled execution of the actual shell harness with a failing launcher stub
+exited nonzero in three seconds, before its readiness timeout. Ordinary GL-version
+negotiation is not treated as a fatal error.
+
+Modern Forge CI cells set `earlyWindowControl = false` in their isolated FML
+configuration. This uses Forge's supported no-splash window path; the real
+Minecraft window, initialization, and resource reload checks still run. See
+[Forge's ImmediateWindowHandler](https://github.com/MinecraftForge/MinecraftForge/blob/26.1.2/fmlloader/src/main/java/net/minecraftforge/fml/loading/ImmediateWindowHandler.java).
+The setting is confined to CI, not player configuration or production artifacts.
+Modern Forge's separately downloaded `~/.minecraft/assets` directory is also
+cached; it was absent from the previous cache paths.
+
+[Final optimized workflow](https://github.com/Teenkung123/packforge/actions/runs/34333093321)
+passed all 35 jobs on `f6c135000a26c7fdab12aba7081322eea41a92dc`: six target builds,
+aggregate artifact verification, the benchmark, and all 27 smoke cells. Both the
+legacy Forge override and modern Forge no-splash window paths passed. All 17
+final JARs were compared against the original successful CI bundle and remain
+byte-identical.
+
+| Observed CI elapsed time | Original successful run | Final successful run | Reduction |
+| --- | ---: | ---: | ---: |
+| Artifact preparation | 27m 36s | 7m 20s | 73.43% |
+| Whole runtime workflow | 36m 22s | 15m 7s | 58.43% |
+
+Times span the earliest relevant job start through the latest job completion,
+including setup, verification, artifact transfers, and cleanup. They are actual
+run comparisons with different cache availability, not controlled cold-cache
+benchmarks. The asset cache's future warm-run benefit is not separately measured.
+
+The daily schedule was removed on `1.4` in `61ca8e2`. With explicit approval, the
+same two-line removal was made on default branch `master` in `26d5a22`, where
+GitHub evaluates schedules. The default-branch commit used `[skip ci]` and started
+no extra run. Manual and pull-request/push triggers remain available.
 
 Local checks do not establish every supported loader/version combination's runtime
 behavior, every 26.x point release, optional integrations, large-pack behavior,
