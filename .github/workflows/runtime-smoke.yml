@@ -194,9 +194,10 @@ jobs:
             ~/.gradle/wrapper
             build/nodes/forge/*/minecraftforge/forgegradle/mavenizer
           key: packforge-nodes-v1-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
+          # Override cells must not reuse registry-version transformed game classes.
           restore-keys: |
             packforge-nodes-v1-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
-            packforge-nodes-v1-${{ runner.os }}-${{ matrix.target }}-
+            ${{ !matrix.minecraft_version && !matrix.forge_version && !matrix.neoforge_version && format('packforge-nodes-v1-{0}-{1}-', runner.os, matrix.target) || '' }}
 
       - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
         env:
