@@ -29,6 +29,8 @@ public final class PackArchiveState implements AutoCloseable {
 	/**
 	 * Builds at most once for a particular ZipFile identity. A RuntimeException
 	 * is cached and reported once; Error is deliberately allowed to propagate.
+	 * Duplicate-name archives deliberately return null: even unique indexed lookups
+	 * omit Java ZipFile's lookup/enumeration state changes that affect pending duplicate reads.
 	 */
 	public PackIndex index(
 		ZipFile zipFile,
@@ -58,7 +60,13 @@ public final class PackArchiveState implements AutoCloseable {
 			staleIndex = snapshot.index;
 			try {
 				result = indexBuilder.build(zipFile);
-				indexSnapshot = IndexSnapshot.ready(zipFile, result);
+				if (result.duplicatePathCount() > 0) {
+					result.invalidateCaches();
+					result = null;
+					indexSnapshot = IndexSnapshot.bypassedDuplicates(zipFile);
+				} else {
+					indexSnapshot = IndexSnapshot.ready(zipFile, result);
+				}
 			} catch (RuntimeException exception) {
 				result = null;
 				indexSnapshot = IndexSnapshot.failed(zipFile, exception);
@@ -172,6 +180,7 @@ public final class PackArchiveState implements AutoCloseable {
 	public enum IndexStatus {
 		UNINITIALIZED,
 		READY,
+		BYPASSED_DUPLICATES,
 		FAILED
 	}
 
@@ -210,6 +219,10 @@ public final class PackArchiveState implements AutoCloseable {
 
 		private static IndexSnapshot failed(ZipFile zipFile, RuntimeException failure) {
 			return new IndexSnapshot(IndexStatus.FAILED, zipFile, null, failure);
+		}
+
+		private static IndexSnapshot bypassedDuplicates(ZipFile zipFile) {
+			return new IndexSnapshot(IndexStatus.BYPASSED_DUPLICATES, zipFile, null, null);
 		}
 	}
 }

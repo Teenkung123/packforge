@@ -4,14 +4,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Enumeration;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -129,6 +133,100 @@ class PackArchiveStateTest {
 		assertEquals(0, oldIndex.prefixCacheSize());
 		try (ZipFile zipFile = new ZipFile(archive.toFile())) {
 			assertNull(state.index(zipFile, "closed.zip", failure -> {}));
+		}
+	}
+
+	@Test
+	void duplicateArchivesCacheDeliberateBypassWithoutWarningsOrRetainedIndexCaches() throws Exception {
+		Path archive = DeterministicZipFixture.createWithDuplicateEntry(temporaryDirectory.resolve("duplicates.zip"));
+		AtomicInteger builds = new AtomicInteger();
+		AtomicInteger reports = new AtomicInteger();
+		AtomicReference<PackIndex> discarded = new AtomicReference<>();
+		try (PackArchiveState state = new PackArchiveState(zip -> {
+			builds.incrementAndGet();
+			PackIndex index = PackIndex.build(zip);
+			index.entriesWithPrefix("assets/");
+			discarded.set(index);
+			return index;
+		}); ZipFile zip = new ZipFile(archive.toFile())) {
+			for (int i = 0; i < 12; i++) assertNull(state.index(zip, "duplicates.zip", failure -> reports.incrementAndGet()));
+			assertEquals(1, builds.get());
+			assertEquals(0, reports.get());
+			assertEquals(PackArchiveState.IndexStatus.BYPASSED_DUPLICATES, state.status());
+			assertNull(state.indexFailure());
+			assertSame(zip, state.indexedZipFile());
+			assertFalse(discarded.get().cachesEnabled());
+			assertEquals(0, discarded.get().prefixCacheSize());
+			state.invalidate();
+			assertEquals(PackArchiveState.IndexStatus.UNINITIALIZED, state.status());
+			assertNull(state.index(zip, "duplicates.zip", failure -> reports.incrementAndGet()));
+			assertEquals(2, builds.get());
+			assertEquals(0, reports.get());
+		}
+	}
+
+	@Test
+	void duplicateBypassPreservesDirectEnumerationAndUniqueLookupZipSideEffects() throws Exception {
+		Path archive = DeterministicZipFixture.createWithDuplicateEntry(temporaryDirectory.resolve("side-effects.zip"));
+		String duplicate = "assets/minecraft/textures/duplicate.txt";
+		String unique = "assets/minecraft/textures/other.txt";
+		try (PackArchiveState state = new PackArchiveState(); ZipFile zip = new ZipFile(archive.toFile())) {
+			assertNull(state.index(zip, "side-effects.zip", failure -> { throw new AssertionError(failure); }));
+
+			zip.entries().nextElement();
+			assertEquals("second", read(zip, lookup(state, zip, duplicate)),
+				"Direct fallback must restore the same canonical lookup state as vanilla");
+
+			zip.getEntry(duplicate);
+			assertEquals("first", read(zip, enumerate(state, zip).nextElement()),
+				"Enumeration fallback must advance Java's state to the first duplicate");
+
+			ZipEntry pending = zip.getEntry(duplicate);
+			zip.entries().nextElement();
+			lookup(state, zip, unique);
+			assertEquals("second", read(zip, pending),
+				"Even unique lookups must preserve their side effect on pending duplicate reads");
+		}
+	}
+
+	@Test
+	void duplicateBypassIsPerHandleAndDoesNotDisableAReopenedSafeArchive() throws Exception {
+		Path duplicateArchive = DeterministicZipFixture.createWithDuplicateEntry(temporaryDirectory.resolve("duplicate-reopen.zip"));
+		Path safeArchive = DeterministicZipFixture.create(temporaryDirectory.resolve("safe.zip"), 3);
+		AtomicInteger builds = new AtomicInteger();
+		try (PackArchiveState state = new PackArchiveState(zip -> { builds.incrementAndGet(); return PackIndex.build(zip); })) {
+			try (ZipFile first = new ZipFile(duplicateArchive.toFile())) {
+				assertNull(state.index(first, "duplicate-reopen.zip", failure -> {}));
+				assertEquals(PackArchiveState.IndexStatus.BYPASSED_DUPLICATES, state.status());
+			}
+			try (ZipFile reopened = new ZipFile(duplicateArchive.toFile())) {
+				assertNull(state.index(reopened, "duplicate-reopen.zip", failure -> {}));
+				assertEquals(2, builds.get(), "A new ZIP handle gets its own classification");
+			}
+			try (ZipFile safe = new ZipFile(safeArchive.toFile())) {
+				PackIndex index = state.index(safe, "safe.zip", failure -> {});
+				assertNotNull(index);
+				assertTrue(index.cachesEnabled());
+				assertEquals(PackArchiveState.IndexStatus.READY, state.status());
+				assertSame(index, state.index(safe, "safe.zip", failure -> {}));
+				assertEquals(3, builds.get());
+			}
+		}
+	}
+
+	private static ZipEntry lookup(PackArchiveState state, ZipFile zip, String path) {
+		PackIndex index = state.index(zip, zip.getName(), failure -> { throw new AssertionError(failure); });
+		return index == null ? zip.getEntry(path) : index.entryFor(path);
+	}
+
+	private static Enumeration<? extends ZipEntry> enumerate(PackArchiveState state, ZipFile zip) {
+		PackIndex index = state.index(zip, zip.getName(), failure -> { throw new AssertionError(failure); });
+		return index == null ? zip.entries() : index.entriesWithPrefix("");
+	}
+
+	private static String read(ZipFile zip, ZipEntry entry) throws IOException {
+		try (var input = zip.getInputStream(entry)) {
+			return new String(input.readAllBytes(), StandardCharsets.UTF_8);
 		}
 	}
 }
