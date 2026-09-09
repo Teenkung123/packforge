@@ -14,8 +14,7 @@ import net.minecraft.client.gui.font.glyphs.SpecialGlyphs;
 import net.minecraft.util.Mth;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IdentityHashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -38,32 +37,32 @@ public record FontPreparedSelection(
 	public static FontPreparedSelection compute(List<GlyphProvider.Conditional> providers, Set<FontOption> options) {
 		long startNs = System.nanoTime();
 		ArrayList<GlyphProvider> selectedProviders = new ArrayList<>();
+		IntOpenHashSet supportedGlyphs = new IntOpenHashSet();
 		for (GlyphProvider.Conditional conditionalProvider : providers) {
 			if (!conditionalProvider.filter().apply(options)) continue;
 			GlyphProvider provider = conditionalProvider.provider();
 			selectedProviders.add(provider);
+			supportedGlyphs.addAll((IntCollection) provider.getSupportedGlyphs());
 		}
 
-		IntOpenHashSet seenGlyphs = new IntOpenHashSet();
-		Set<GlyphProvider> usedProviders = Collections.newSetFromMap(new IdentityHashMap<>());
+		Set<GlyphProvider> usedProviders = new HashSet<>();
 		Int2ObjectOpenHashMap<IntList> glyphsByWidth = new Int2ObjectOpenHashMap<>();
-		for (GlyphProvider provider : selectedProviders) {
-			IntCollection supportedGlyphs = (IntCollection)provider.getSupportedGlyphs();
-			supportedGlyphs.forEach(codepoint -> {
-				if (!seenGlyphs.add(codepoint)) {
-					return;
-				}
+		// Match FontSet.selectProviders: advertised codepoints form a union, but every
+		// selected provider can supply them. Only a non-null glyph claims priority.
+		supportedGlyphs.forEach(codepoint -> {
+			for (GlyphProvider provider : selectedProviders) {
 				var glyph = provider.getGlyph(codepoint);
 				if (glyph == null) {
-					return;
+					continue;
 				}
 				usedProviders.add(provider);
 				if (glyph.info() == SpecialGlyphs.MISSING) {
-					return;
+					break;
 				}
 				glyphsByWidth.computeIfAbsent(Mth.ceil(glyph.info().getAdvance(false)), ignored -> new IntArrayList()).add(codepoint);
-			});
-		}
+				break;
+			}
+		});
 
 		List<GlyphProvider> activeProviders = selectedProviders.stream().filter(usedProviders::contains).toList();
 		return new FontPreparedSelection(providers, activeProviders, glyphsByWidth, System.nanoTime() - startNs);

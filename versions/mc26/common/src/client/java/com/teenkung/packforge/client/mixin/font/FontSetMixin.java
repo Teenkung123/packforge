@@ -1,5 +1,7 @@
 package com.teenkung.packforge.client.mixin.font;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.teenkung.packforge.client.font.FontPreparedSelection;
 import com.teenkung.packforge.client.font.FontReloadDiagnostics;
@@ -14,9 +16,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.gen.Invoker;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
 import java.util.Set;
@@ -30,8 +29,8 @@ public abstract class FontSetMixin implements PackForgeFontSetAccess {
 	@Invoker("resetTextures")
 	protected abstract void packforge$resetTextures();
 
-	@Inject(method = "reload(Ljava/util/List;Ljava/util/Set;)V", at = @At("HEAD"), cancellable = true)
-	private void packforge$reloadPreselectedIfAvailable(List<GlyphProvider.Conditional> providers, Set<FontOption> options, CallbackInfo ci) {
+	@WrapMethod(method = "reload(Ljava/util/List;Ljava/util/Set;)V")
+	private void packforge$reloadPreselectedIfAvailable(List<GlyphProvider.Conditional> providers, Set<FontOption> options, Operation<Void> original) {
 		long startNs = System.nanoTime();
 		boolean optimized = false;
 		try {
@@ -40,11 +39,11 @@ public abstract class FontSetMixin implements PackForgeFontSetAccess {
 				selection = FontSelectionRegistry.currentSelection(providers, options);
 			}
 			if (selection == null) {
+				original.call(providers, options);
 				return;
 			}
 			this.packforge$reloadPreselected(providers, selection);
 			optimized = true;
-			ci.cancel();
 		} finally {
 			FontReloadDiagnostics.recordFontSetCreate(System.nanoTime() - startNs, optimized);
 		}

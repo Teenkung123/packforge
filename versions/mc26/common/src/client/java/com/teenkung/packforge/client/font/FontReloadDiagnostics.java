@@ -2,12 +2,11 @@ package com.teenkung.packforge.client.font;
 
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.teenkung.packforge.PackForge;
+import com.teenkung.packforge.client.diagnostics.AsyncDiagnosticCsv;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import net.minecraft.resources.Identifier;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
@@ -76,24 +75,14 @@ public final class FontReloadDiagnostics {
 	}
 
 	private static void writeCsv(long totalNs, ApplyStats stats, Snapshot snapshot) {
-		try {
-			Path csv = Path.of("logs", "packforge-font-timings.csv");
-			Files.createDirectories(csv.getParent());
-			boolean exists = Files.exists(csv);
-			try (var w = Files.newBufferedWriter(csv, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
-				if (!exists) {
-					w.write("timestamp,apply_ms,font_set_create_ms,font_sets,optimized_font_sets,fonts,providers,selection_prepare_ms,memo_hits,memo_misses,unique_stacks,provider_types\n");
-				}
-				w.write(System.currentTimeMillis() + "," + ms(totalNs) + "," + ms(stats.fontSetCreateNs) + "," +
-					stats.fontSets + "," + stats.optimizedFontSets + "," + snapshot.fonts + "," + snapshot.providers + "," +
-					ms(snapshot.selectionPrepareNs) + "," + snapshot.memoHits + "," + snapshot.memoMisses + "," + snapshot.uniqueStacks + "," +
-					csv(snapshot.providerTypes.toString()) + "\n");
-			}
-		} catch (IOException e) {
-			PackForge.LOGGER.warn("Failed to write font timings CSV", e);
-		}
+		String row = System.currentTimeMillis() + "," + ms(totalNs) + "," + ms(stats.fontSetCreateNs) + "," +
+			stats.fontSets + "," + stats.optimizedFontSets + "," + snapshot.fonts + "," + snapshot.providers + "," +
+			ms(snapshot.selectionPrepareNs) + "," + snapshot.memoHits + "," + snapshot.memoMisses + "," + snapshot.uniqueStacks + "," +
+			csv(snapshot.providerTypes.toString());
+		AsyncDiagnosticCsv.append(Path.of("logs", "packforge-font-timings.csv"),
+			"timestamp,apply_ms,font_set_create_ms,font_sets,optimized_font_sets,fonts,providers,selection_prepare_ms,memo_hits,memo_misses,unique_stacks,provider_types",
+			List.of(row));
 	}
-
 	private static long ms(long ns) {
 		return ns / 1_000_000L;
 	}
