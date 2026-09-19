@@ -10,20 +10,36 @@ permissions:
   contents: read
 
 jobs:
+  registry_matrix:
+    name: Derive registry runtime matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    outputs:
+      target_matrix: ${{ steps.matrix.outputs.target_matrix }}
+      runtime_matrix: ${{ steps.matrix.outputs.runtime_matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive canonical target and runtime checks
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_matrix="$(python scripts/prepare-modrinth-release.py --matrix targets)"
+          runtime_matrix="$(python scripts/prepare-modrinth-release.py --matrix runtime)"
+          printf 'target_matrix=%s\n' "$target_matrix" >> "$GITHUB_OUTPUT"
+          printf 'runtime_matrix=%s\n' "$runtime_matrix" >> "$GITHUB_OUTPUT"
+
   build-targets:
     name: Build smoke artifacts / ${{ matrix.target }}
+    needs: registry_matrix
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix:
-        target:
-          - mc26_1_to_26_2
-          - mc1_21_1
-          - mc1_21_4
-          - mc1_21_8
-          - mc1_21_11
-          - mc1_20_1
+      matrix: ${{ fromJSON(needs.registry_matrix.outputs.target_matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -46,9 +62,11 @@ jobs:
             packforge-nodes-v1-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Build, test, and verify target artifacts
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
           chmod +x gradlew
-          ./gradlew :buildTarget -Ppackforge_target=${{ matrix.target }} --configure-on-demand --no-daemon --stacktrace
+          ./gradlew :buildTarget -Ppackforge_target="$TARGET" --configure-on-demand --no-daemon --stacktrace
 
       - name: Upload verified target artifacts
         uses: actions/upload-artifact@v4
@@ -90,8 +108,9 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 release artifacts, found ${#artifacts[@]}."
+          expected_count="$(python scripts/prepare-modrinth-release.py --count-only)"
+          if [[ "${#artifacts[@]}" -ne "$expected_count" ]]; then
+            echo "Expected exactly $expected_count registry-derived release artifacts, found ${#artifacts[@]}."
             printf '%s\n' "${artifacts[@]}"
             exit 1
           fi
@@ -100,8 +119,8 @@ jobs:
             sha256sum "${artifacts[@]}" > SHA256SUMS
           )
           checksum_count="$(wc -l < build/libs/SHA256SUMS)"
-          if [[ "$checksum_count" -ne 17 ]]; then
-            echo "Expected 17 checksum rows, found $checksum_count."
+          if [[ "$checksum_count" -ne "$expected_count" ]]; then
+            echo "Expected $expected_count checksum rows, found $checksum_count."
             exit 1
           fi
 
@@ -116,41 +135,13 @@ jobs:
           if-no-files-found: error
 
   smoke:
-    name: ${{ matrix.target }} / ${{ matrix.platform }} / ${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
-    needs: build
+    name: ${{ matrix.target }} / ${{ matrix.platform }} / ${{ matrix.runtime_label }}
+    needs: [build, registry_matrix]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { target: mc26_1_to_26_2, platform: fabric }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.1" }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.2" }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.2" }
-          - { target: mc26_1_to_26_2, platform: forge }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.1-63.0.2" }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.2-64.1.0" }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.2-65.1.0" }
-          - { target: mc26_1_to_26_2, platform: neoforge }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.1.15-beta" }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.2.94" }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.2.0.48-beta" }
-          - { target: mc1_21_1, platform: fabric }
-          - { target: mc1_21_1, platform: forge }
-          - { target: mc1_21_1, platform: neoforge }
-          - { target: mc1_21_4, platform: fabric }
-          - { target: mc1_21_4, platform: forge }
-          - { target: mc1_21_4, platform: neoforge }
-          - { target: mc1_21_8, platform: fabric }
-          - { target: mc1_21_8, platform: forge }
-          - { target: mc1_21_8, platform: neoforge }
-          - { target: mc1_21_11, platform: fabric }
-          - { target: mc1_21_11, platform: forge }
-          - { target: mc1_21_11, platform: neoforge }
-          - { target: mc1_20_1, platform: fabric }
-          - { target: mc1_20_1, platform: forge }
-          - { target: mc1_20_1, platform: forge, forge_version: "1.20.1-47.4.22" }
+      matrix: ${{ fromJSON(needs.registry_matrix.outputs.runtime_matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -167,8 +158,9 @@ jobs:
           set -euo pipefail
           test -f build/libs/SHA256SUMS
           mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 downloaded artifacts, found ${#artifacts[@]}."
+          expected_count="$(python scripts/prepare-modrinth-release.py --count-only)"
+          if [[ "${#artifacts[@]}" -ne "$expected_count" ]]; then
+            echo "Expected exactly $expected_count registry-derived downloaded artifacts, found ${#artifacts[@]}."
             printf '%s\n' "${artifacts[@]}"
             exit 1
           fi
@@ -202,37 +194,42 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             build/nodes/forge/*/minecraftforge/forgegradle/mavenizer
-          key: packforge-nodes-v1-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
+          key: packforge-nodes-v1-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.runtime_label }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
           # Override cells must not reuse registry-version transformed game classes.
           restore-keys: |
-            packforge-nodes-v1-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
+            packforge-nodes-v1-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.runtime_label }}-
             ${{ !matrix.minecraft_version && !matrix.forge_version && !matrix.neoforge_version && format('packforge-nodes-v1-{0}-{1}-', runner.os, matrix.target) || '' }}
 
       - name: Configure headless Forge launch
         if: matrix.platform == 'forge' && matrix.target != 'mc1_20_1'
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
-          mkdir -p "platform/forge/run/${{ matrix.target }}/config"
-          printf 'earlyWindowControl = false\n' > "platform/forge/run/${{ matrix.target }}/config/fml.toml"
+          mkdir -p "platform/forge/run/$TARGET/config"
+          printf 'earlyWindowControl = false\n' > "platform/forge/run/$TARGET/config/fml.toml"
 
       - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
         env:
+          RUNTIME_PLATFORM: ${{ matrix.platform }}
+          RUNTIME_TARGET: ${{ matrix.target }}
+          RUNTIME_TIMEOUT: "900"
           PACKFORGE_FORGE_VERSION_OVERRIDE: ${{ matrix.forge_version }}
           PACKFORGE_MINECRAFT_VERSION_OVERRIDE: ${{ matrix.minecraft_version }}
           PACKFORGE_NEOFORGE_VERSION_OVERRIDE: ${{ matrix.neoforge_version }}
-          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.platform == 'neoforge' || (matrix.platform == 'fabric' && matrix.target == 'mc26_1_to_26_2') }}
+          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.artifact_smoke }}
           PACKFORGE_ARTIFACT_INPUT_DIR: build/libs
         run: |
           # Packaged smoke is limited to official-mapped NeoForge and mc26 Fabric.
           # Legacy Fabric and all Forge use source mode here; exact legacy Fabric
           # final-JAR acceptance uses the production harness.
           chmod +x gradlew scripts/smoke-client.sh
-          ./scripts/smoke-client.sh "${{ matrix.platform }}" "${{ matrix.target }}" 900
+          ./scripts/smoke-client.sh "$RUNTIME_PLATFORM" "$RUNTIME_TARGET" "$RUNTIME_TIMEOUT"
 
       - name: Upload client logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
+          name: smoke-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.runtime_label }}
           path: |
             platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/latest.log
             platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/packforge-smoke-gradle.log

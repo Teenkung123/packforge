@@ -69,7 +69,7 @@ The feature can be configured through `config/packforge.json` or PackForge's in-
 
 | Minecraft | Java | Fabric | Forge | NeoForge | Feature level |
 |---|---:|---|---|---|---|
-| 26.1-26.2 | 25 | Yes | Yes | Yes | Stable, full feature set |
+| 26.1-26.3 | 25 | Yes | 26.1-26.2 only | Yes | Stable, full feature set |
 | 1.21.1 | 21 | Yes | Yes | Yes | Beta, full Reload feature tab |
 | 1.21.4 | 21 | Yes | Yes | Yes | Beta, full Reload feature tab |
 | 1.21.8 | 21 | Yes | Yes | Yes | Beta, full Reload feature tab |
@@ -80,16 +80,16 @@ Choose the JAR whose filename matches both your mod loader and Minecraft version
 
 ### Minimum Loader Versions
 
-PackForge is compiled and tested against the lower bound shown here. Newer loader builds in the same Minecraft line remain supported, but users do not need the latest patch release just for PackForge.
+PackForge requires the minimum loader versions shown below. Fabric and NeoForge provide MixinExtras through the loader; Forge includes its required library inside PackForge. No separate library mod installation is needed.
 
 | Minecraft | Fabric Loader | Forge | NeoForge |
 |---|---:|---:|---:|
-| 26.1-26.2 | 0.18.4 | 62.0.0 | 26.1.0.1-beta |
-| 1.21.1 | 0.15.11 | 52.0.0 | 21.1.1 |
-| 1.21.4 | 0.16.9 | 54.0.0 | 21.4.0-beta |
-| 1.21.8 | 0.16.14 | 58.0.0 | 21.8.0-beta |
-| 1.21.11 | 0.18.1 | 61.0.1 | 21.11.0-beta |
-| 1.20.1 | 0.14.25 | 47.0.0 | Not available |
+| 26.1-26.3 | 0.19.5 | 62.0.0 for 26.1-26.2 | 26.1.0.1-beta |
+| 1.21.1 | 0.19.2 | 52.0.0 | 21.1.250 |
+| 1.21.4 | 0.19.2 | 54.0.0 | 21.4.157 |
+| 1.21.8 | 0.19.2 | 58.0.0 | 21.8.54 |
+| 1.21.11 | 0.19.2 | 61.0.1 | 21.11.45 |
+| 1.20.1 | 0.19.2 | 47.0.0 | Not available |
 
 PackForge is client-side only and does not need to be installed on the server.
 
@@ -100,7 +100,7 @@ PackForge is client-side only and does not need to be installed on the server.
 3. Place the PackForge JAR in the instance's `mods` folder.
 4. Launch Minecraft once to generate the configuration file.
 
-PackForge's Fabric build uses Fabric Loader directly and does not require Fabric API. Mod Menu is an optional configuration-screen integration. Required internal libraries are embedded in the PackForge JAR.
+PackForge's Fabric build uses Fabric Loader directly and does not require Fabric API. Mod Menu is an optional configuration-screen integration. MixinExtras is supplied by the required Fabric/NeoForge loader or embedded in the Forge JAR.
 
 ## Configuration
 
@@ -115,6 +115,26 @@ Most players can use the defaults. Individual optimizations and diagnostic featu
 Every supported PackForge build exposes its configuration screen through the white cog button beside the bottom resource-pack screen actions. The button finds a free slot instead of assuming a fixed position, so it can coexist with configuration buttons added by mods such as Entity Texture Features. Fabric users can also open the same screen through Mod Menu when it is installed; Forge and NeoForge expose it through their normal mod-list configuration entry.
 
 The screen only shows features implemented for the selected Minecraft version. Cancel or Escape discards the draft, while Done saves the complete configuration atomically and preserves settings that are unavailable on older versions.
+
+**Use recommended settings** opens a preview of the exact changes. Apply them to
+the draft, then use Done to save. The recommendation enables font preparation,
+safe archive indexing and CPU mip preparation, and disables detailed profiling,
+global executor tuning and unadmitted reuse experiments. Existing texture-size,
+shader and fade preferences are preserved.
+
+Config v15 separates `cpuMipPreparationEnabled` from atlas resizing and keeps
+original sprite dimensions preserved while the atlas cap is not admitted. The old
+`atlasMipParallelEnabled` key remains a migration alias. Migration backs up the
+original file and preserves its previous effective behavior; the recommendation
+preview makes enabling previously inactive CPU preparation explicit. Unknown
+fields and explicit choices survive, while malformed or future-version files
+remain untouched.
+
+On Minecraft 26.x, completed bitmap retention is withdrawn. When Quick Pack is
+installed, PackForge omits overlapping font, atlas, ZIP and model-scheduling
+hooks before transformation. RRLS retains control of its overlay. Configuration
+tooltips show requested settings, effective behavior, ownership and disabling
+reasons. Changing the installed optimizer set requires restarting Minecraft.
 
 Notable options include:
 
@@ -182,7 +202,7 @@ Run these commands from the repository root:
 |---|---|
 | `.\gradlew.bat build` | Build, test, and verify all 17 supported artifacts. |
 | `.\gradlew.bat buildAllSupported` | Same full build as `build`. |
-| `.\gradlew.bat :buildTarget -Ppackforge_target=mc26_1_to_26_2 --configure-on-demand` | Build, test, and verify only the selected target's loaders. |
+| `.\gradlew.bat :buildTarget -Ppackforge_target=mc26_1_to_26_3 --configure-on-demand` | Build, test, and verify the combined 26.1-26.3 Fabric and NeoForge target. |
 | `.\gradlew.bat :verifyExistingArtifacts --configure-on-demand` | Verify existing final JARs without configuring loader builds. |
 
 Final JARs are collected in `build/libs`. The full build includes verification of filenames, Java class versions, mixin compatibility, loader ranges, Minecraft ranges, generated pack metadata, and target capability metadata.

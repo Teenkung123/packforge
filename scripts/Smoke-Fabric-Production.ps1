@@ -31,13 +31,29 @@ param(
     [ValidateRange(0, 100)]
     [int] $ReloadCount = 2,
 
-    [switch] $AllowControlledTermination
+    [switch] $UseRuntimeController,
+
+    [switch] $AllowControlledTermination,
+
+    [string] $ConfigOverridePath,
+
+    [string] $OptionsOverridePath,
+
+    [string] $ResourcePackPath,
+
+    [string[]] $AdditionalModPaths,
+
+    [switch] $ObserveOnly
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
-if (-not ('PackForgeFabricProductionSmokeNative' -as [type])) {
+if ($ObserveOnly -and $UseRuntimeController) {
+    throw '-ObserveOnly and -UseRuntimeController are mutually exclusive. Observe-only reloads must be requested through the external UI.'
+}
+
+if (-not $ObserveOnly -and -not $UseRuntimeController -and -not ('PackForgeFabricProductionSmokeNative' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -548,6 +564,70 @@ function Write-Utf8NoBom {
     [IO.File]::WriteAllText($Path, $Contents, $encoding)
 }
 
+function Resolve-ExistingInputPath {
+    param(
+        [string] $Path,
+        [string] $Description
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        throw "$Description must not be empty."
+    }
+    try {
+        $resolved = [IO.Path]::GetFullPath($Path)
+    } catch {
+        throw "$Description is not a valid path: $Path"
+    }
+    if (-not (Test-Path -LiteralPath $resolved)) {
+        throw "$Description is missing: $resolved"
+    }
+    $item = Get-Item -LiteralPath $resolved -Force
+    if (-not ($item -is [IO.FileInfo] -or $item -is [IO.DirectoryInfo])) {
+        throw "$Description is neither a file nor a directory: $resolved"
+    }
+    return $resolved
+}
+
+function Copy-IsolatedInput {
+    param(
+        [string] $Path,
+        [string] $DestinationRoot,
+        [string] $Description
+    )
+
+    $source = Resolve-ExistingInputPath -Path $Path -Description $Description
+    $leaf = Split-Path -Leaf $source
+    if ([string]::IsNullOrWhiteSpace($leaf) -or $leaf -in @('.', '..')) {
+        throw "$Description has no usable leaf name: $source"
+    }
+    $destination = Join-Path $DestinationRoot $leaf
+    if ([IO.Path]::GetFullPath($source).TrimEnd([IO.Path]::DirectorySeparatorChar) -ieq
+        [IO.Path]::GetFullPath($destination).TrimEnd([IO.Path]::DirectorySeparatorChar)) {
+        throw "$Description would copy onto itself: $source"
+    }
+    if (Test-Path -LiteralPath $destination) {
+        throw "The isolated profile destination already exists for ${Description}: $destination"
+    }
+
+    $sourceItem = Get-Item -LiteralPath $source -Force
+    if ($sourceItem -is [IO.DirectoryInfo]) {
+        Copy-Item -LiteralPath $source -Destination $destination -Recurse -Force
+        $kind = 'directory'
+        $sha256 = $null
+    } else {
+        Copy-Item -LiteralPath $source -Destination $destination -Force
+        $kind = 'file'
+        $sha256 = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToUpperInvariant()
+    }
+
+    return [ordered]@{
+        sourcePath = $source
+        stagedPath = [IO.Path]::GetFullPath($destination)
+        kind = $kind
+        sha256 = $sha256
+    }
+}
+
 function Get-ExpectedTargetMarker {
     param([string] $ArtifactMinecraft)
 
@@ -718,10 +798,11 @@ if ($null -eq $runRoot) {
 
 $modsRoot = Join-Path $runRoot 'mods'
 $configRoot = Join-Path $runRoot 'config'
+$resourcePacksRoot = Join-Path $runRoot 'resourcepacks'
 $logsRoot = Join-Path $runRoot 'logs'
 $tempRoot = Join-Path $runRoot 'tmp'
 $homeRoot = Join-Path $runRoot 'home'
-New-Item -ItemType Directory -Path $modsRoot, $configRoot, $logsRoot, $tempRoot, $homeRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $modsRoot, $configRoot, $resourcePacksRoot, $logsRoot, $tempRoot, $homeRoot -Force | Out-Null
 
 $stagedArtifact = Join-Path $modsRoot $artifactName
 $sourceHash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToUpperInvariant()
@@ -729,6 +810,64 @@ Copy-Item -LiteralPath $artifact -Destination $stagedArtifact -Force
 $stagedHash = (Get-FileHash -LiteralPath $stagedArtifact -Algorithm SHA256).Hash.ToUpperInvariant()
 if ($sourceHash -ne $stagedHash) {
     throw "Staged production artifact SHA-256 mismatch: source=$sourceHash staged=$stagedHash"
+}
+
+$configPath = Join-Path $configRoot 'packforge.json'
+Write-Utf8NoBom -Path $configPath -Contents @'
+{
+  "configVersion": 12,
+  "reloadOptimizerEnabled": true,
+  "loaderIndexEnabled": true,
+  "loaderTimingsEnabled": true,
+  "fontReloadDiagnosticsEnabled": true,
+  "reloadListenerTimingsEnabled": false,
+  "startupTimingsEnabled": true,
+  "startupStatusOverlayEnabled": false
+}
+'@
+
+$configOverrideProvenance = $null
+if (-not [string]::IsNullOrWhiteSpace($ConfigOverridePath)) {
+    $configOverride = Resolve-RequiredPath -Path $ConfigOverridePath -Description 'PackForge config override'
+    Copy-Item -LiteralPath $configOverride -Destination $configPath -Force
+    $configOverrideProvenance = [ordered]@{
+        sourcePath = $configOverride
+        stagedPath = $configPath
+        sha256 = (Get-FileHash -LiteralPath $configOverride -Algorithm SHA256).Hash.ToUpperInvariant()
+    }
+}
+
+$optionsOverrideProvenance = $null
+if (-not [string]::IsNullOrWhiteSpace($OptionsOverridePath)) {
+    $optionsOverride = Resolve-RequiredPath -Path $OptionsOverridePath -Description 'Minecraft options override'
+    $optionsPath = Join-Path $runRoot 'options.txt'
+    Copy-Item -LiteralPath $optionsOverride -Destination $optionsPath -Force
+    $optionsOverrideProvenance = [ordered]@{
+        sourcePath = $optionsOverride
+        stagedPath = $optionsPath
+        sha256 = (Get-FileHash -LiteralPath $optionsOverride -Algorithm SHA256).Hash.ToUpperInvariant()
+    }
+}
+
+$resourcePackProvenance = $null
+if (-not [string]::IsNullOrWhiteSpace($ResourcePackPath)) {
+    $resourcePackProvenance = Copy-IsolatedInput `
+        -Path $ResourcePackPath `
+        -DestinationRoot $resourcePacksRoot `
+        -Description 'Additional resource pack'
+}
+
+$additionalModProvenance = [Collections.Generic.List[object]]::new()
+if ($null -ne $AdditionalModPaths) {
+    foreach ($additionalModPath in $AdditionalModPaths) {
+        if ([string]::IsNullOrWhiteSpace($additionalModPath)) {
+            throw 'AdditionalModPaths cannot contain an empty path.'
+        }
+        [void] $additionalModProvenance.Add((Copy-IsolatedInput `
+            -Path $additionalModPath `
+            -DestinationRoot $modsRoot `
+            -Description "Additional Fabric mod '$additionalModPath'"))
+    }
 }
 
 $provenancePath = Join-Path $runRoot 'artifact-provenance.json'
@@ -740,21 +879,12 @@ $provenance = [ordered]@{
     minecraftVersion = $MinecraftVersion
     fabricVersion = $VersionName
     target = $targetMarker
+    configOverride = $configOverrideProvenance
+    optionsOverride = $optionsOverrideProvenance
+    resourcePack = $resourcePackProvenance
+    additionalMods = @($additionalModProvenance)
 }
-Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 4)
-
-$configPath = Join-Path $configRoot 'packforge.json'
-Write-Utf8NoBom -Path $configPath -Contents @'
-{
-  "configVersion": 12,
-  "reloadOptimizerEnabled": true,
-  "loaderIndexEnabled": true,
-  "loaderTimingsEnabled": true,
-  "reloadListenerTimingsEnabled": false,
-  "startupTimingsEnabled": true,
-  "startupStatusOverlayEnabled": false
-}
-'@
+Write-Utf8NoBom -Path $provenancePath -Contents ($provenance | ConvertTo-Json -Depth 6)
 
 $nativeJavaPath = Get-NativeSubdirectory -Root $natives -Name 'java'
 $nativeJnaPath = Get-NativeSubdirectory -Root $natives -Name 'jna'
@@ -804,6 +934,9 @@ $metadataJvmArguments = @(Expand-LauncherArguments `
     -FeatureValues $featureValues)
 foreach ($argument in $metadataJvmArguments) {
     [void] $javaArguments.Add((Expand-LauncherToken -Value ([string] $argument) -Replacements $replacements))
+}
+if ($UseRuntimeController -and -not $ObserveOnly) {
+    [void] $javaArguments.Add("-Dpackforge.runtimeSmokeReloadCount=$ReloadCount")
 }
 
 if ($null -ne $clientLogging) {
@@ -857,6 +990,14 @@ $startInfo.CreateNoWindow = $true
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
 $startInfo.Arguments = [string]::Join(' ', @($javaArguments | ForEach-Object { ConvertTo-WindowsCommandLineArgument -Value ([string] $_) }))
+$launcherArgumentsPath = Join-Path $runRoot 'launcher-arguments.json'
+$launcherArguments = [ordered]@{
+    executable = $java
+    workingDirectory = $runRoot
+    arguments = @($javaArguments)
+    commandLine = $startInfo.Arguments
+}
+Write-Utf8NoBom -Path $launcherArgumentsPath -Contents ($launcherArguments | ConvertTo-Json -Depth 4)
 foreach ($environmentOption in @('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS')) {
     if ($startInfo.EnvironmentVariables.ContainsKey($environmentOption)) {
         $startInfo.EnvironmentVariables[$environmentOption] = ''
@@ -875,7 +1016,13 @@ $passed = $false
 $cleanExit = $false
 $controlledTermination = $false
 $minecraftWindow = [IntPtr]::Zero
+$observeBaselineReloads = $null
+$observeExpectedReloads = $null
+$observeReloadsVerified = $false
 $deadline = [datetime]::UtcNow.AddSeconds($TimeoutSeconds)
+
+$mode = if ($ObserveOnly) { 'observe-only' } elseif ($UseRuntimeController) { 'runtime-controller' } else { 'manual-native' }
+Write-Output "Fabric production smoke prepared: mode=$mode minecraft=$MinecraftVersion version=$VersionName target=$targetMarker run=$runRoot latestLog=$latestLog stdout=$stdoutPath stderr=$stderrPath launcherArgs=$launcherArgumentsPath provenance=$provenancePath"
 
 try {
     $started = $process.Start()
@@ -887,15 +1034,23 @@ try {
     while ([datetime]::UtcNow -lt $deadline) {
         $logText = Get-LogText -Path $latestLog
         Assert-NoFatalLog -Text $logText -Context 'Fabric production startup'
-        $minecraftWindow = [PackForgeFabricProductionSmokeNative]::FindMinecraftWindow($process.Id)
+        if (-not $UseRuntimeController -and -not $ObserveOnly) {
+            $minecraftWindow = [PackForgeFabricProductionSmokeNative]::FindMinecraftWindow($process.Id)
+        }
         $hasCapabilities = $logText -match $capabilityPattern
         $hasReload = $logText.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasArtifact = $logText -match $artifactSourcePattern
         if ($process.HasExited) {
             $process.Refresh()
-            throw "Fabric production client exited before readiness with code $($process.ExitCode)."
+            $completed = Get-LogMarkerCount -Text $logText -Marker $reloadMarker
+            $controllerFinished = $logText -match "PackForge runtime smoke complete: reloads=$ReloadCount(?:\s|$)"
+            if (-not ($UseRuntimeController -and $process.ExitCode -eq 0 -and $hasCapabilities -and $hasReload -and
+                    $hasArtifact -and $completed -eq (1 + $ReloadCount) -and $controllerFinished)) {
+                throw "Fabric production client exited before readiness with code $($process.ExitCode)."
+            }
         }
-        if ($hasCapabilities -and $hasReload -and $hasArtifact -and ($ReloadCount -eq 0 -or $minecraftWindow -ne [IntPtr]::Zero)) {
+        if ($hasCapabilities -and $hasReload -and $hasArtifact -and
+            ($UseRuntimeController -or $ObserveOnly -or $ReloadCount -eq 0 -or $minecraftWindow -ne [IntPtr]::Zero)) {
             $ready = $true
             break
         }
@@ -904,10 +1059,87 @@ try {
     if (-not $ready) {
         throw 'Fabric production client did not reach capability, reload, and exact-artifact markers before timeout.'
     }
-    if ($ReloadCount -gt 0 -and $minecraftWindow -eq [IntPtr]::Zero) {
+    if (-not $UseRuntimeController -and -not $ObserveOnly -and $ReloadCount -gt 0 -and $minecraftWindow -eq [IntPtr]::Zero) {
         throw 'A visible Minecraft window is required for the requested F3+T reload validation.'
     }
 
+    if ($ObserveOnly) {
+        $observeReadyText = Get-LogText -Path $latestLog
+        $observeBaselineReloads = Get-LogMarkerCount -Text $observeReadyText -Marker $reloadMarker
+        $observeExpectedReloads = $observeBaselineReloads + $ReloadCount
+        Write-Output "Fabric observe-only ready: baselineReloadMarkers=$observeBaselineReloads expectedManualReloads=$ReloadCount expectedFinalReloadMarkers=$observeExpectedReloads latestLog=$latestLog"
+
+        while ([datetime]::UtcNow -lt $deadline) {
+            $observeText = Get-LogText -Path $latestLog
+            Assert-NoFatalLog -Text $observeText -Context 'Fabric observe-only reloads'
+            $observedReloads = Get-LogMarkerCount -Text $observeText -Marker $reloadMarker
+            if ($observedReloads -gt $observeExpectedReloads) {
+                throw "Fabric observe-only recorded too many reload markers: expected exactly $observeExpectedReloads, observed $observedReloads."
+            }
+            if ($observedReloads -eq $observeExpectedReloads) {
+                $observeReloadsVerified = $true
+                Write-Output "Fabric observe-only reloads verified: baselineReloadMarkers=$observeBaselineReloads manualReloads=$ReloadCount finalReloadMarkers=$observedReloads"
+                break
+            }
+            if ($process.HasExited) {
+                $process.Refresh()
+                throw "Fabric production client exited before observe-only reload verification with code $($process.ExitCode)."
+            }
+            Start-Sleep -Seconds 2
+        }
+        if (-not $observeReloadsVerified) {
+            throw "Fabric observe-only did not record exactly $ReloadCount requested reloads before timeout."
+        }
+
+        while ([datetime]::UtcNow -lt $deadline) {
+            $observeText = Get-LogText -Path $latestLog
+            Assert-NoFatalLog -Text $observeText -Context 'Fabric observe-only shutdown'
+            if ($process.HasExited) {
+                $process.Refresh()
+                if ($process.ExitCode -ne 0) {
+                    throw "Fabric observe-only client exited after reload verification with code $($process.ExitCode)."
+                }
+                $cleanExit = $true
+                break
+            }
+            Start-Sleep -Seconds 2
+        }
+        if (-not $cleanExit) {
+            throw 'Fabric observe-only client did not complete a clean exit before timeout.'
+        }
+    } elseif ($UseRuntimeController) {
+        $expectedReloads = 1 + $ReloadCount
+        $controllerDeadline = [datetime]::UtcNow.AddSeconds(180 * [Math]::Max(1, $ReloadCount))
+        if ($controllerDeadline -gt $deadline) { $controllerDeadline = $deadline }
+        $controllerComplete = $false
+        while ([datetime]::UtcNow -lt $controllerDeadline) {
+            $controllerText = Get-LogText -Path $latestLog
+            Assert-NoFatalLog -Text $controllerText -Context 'Fabric runtime-controller reloads'
+            $completedReloads = Get-LogMarkerCount -Text $controllerText -Marker $reloadMarker
+            if ($completedReloads -eq $expectedReloads -and
+                $controllerText -match "PackForge runtime smoke complete: reloads=$ReloadCount(?:\s|$)") {
+                $controllerComplete = $true
+                break
+            }
+            if ($process.HasExited) {
+                $process.Refresh()
+                throw "Fabric runtime controller exited before completing $ReloadCount reloads with code $($process.ExitCode)."
+            }
+            Start-Sleep -Seconds 2
+        }
+        if (-not $controllerComplete) {
+            throw "Fabric runtime controller did not complete $ReloadCount reloads before timeout."
+        }
+        $process.Refresh()
+        if (-not $process.HasExited) {
+            try { [void] $process.WaitForExit(30000) } catch { }
+            $process.Refresh()
+        }
+        if (-not $process.HasExited -or $process.ExitCode -ne 0) {
+            throw "Fabric runtime controller did not produce a clean exit (exitCode=$($process.ExitCode))."
+        }
+        $cleanExit = $true
+    } else {
     for ($reload = 1; $reload -le $ReloadCount; $reload++) {
         $minecraftWindow = [PackForgeFabricProductionSmokeNative]::FindMinecraftWindow($process.Id)
         if ($minecraftWindow -eq [IntPtr]::Zero) {
@@ -983,6 +1215,7 @@ try {
     } else {
         throw 'No visible Minecraft window was available for clean shutdown; rerun with -AllowControlledTermination for marker-only startup smoke.'
     }
+    }
 
     $passed = $true
 } finally {
@@ -1013,5 +1246,12 @@ $finalLog = Get-LogText -Path $latestLog
 if ($finalLog -notmatch $capabilityPattern) { throw 'Final Fabric log is missing the PackForge capability marker.' }
 if ($finalLog.IndexOf($reloadMarker, [StringComparison]::OrdinalIgnoreCase) -lt 0) { throw 'Final Fabric log is missing the PackForge reload marker.' }
 if ($finalLog -notmatch $artifactSourcePattern) { throw 'Final Fabric log is missing the exact PackForge artifact source marker.' }
+if ($ObserveOnly) {
+    $finalReloadCount = Get-LogMarkerCount -Text $finalLog -Marker $reloadMarker
+    if (-not $observeReloadsVerified -or $null -eq $observeExpectedReloads -or $finalReloadCount -ne $observeExpectedReloads) {
+        throw "Final Fabric observe-only log did not verify exactly $ReloadCount manually requested reloads (expected total markers=$observeExpectedReloads, observed=$finalReloadCount)."
+    }
+}
 
-Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant()) run=$runRoot provenance=$provenancePath"
+$manualReloadSummary = if ($ObserveOnly) { " manualReloadsVerified=$ReloadCount finalReloadMarkers=$finalReloadCount" } else { '' }
+Write-Output "PASS Fabric production smoke: minecraft=$MinecraftVersion version=$VersionName target=$targetMarker artifact=$artifactName sha256=$sourceHash reloads=$ReloadCount cleanExit=$($cleanExit.ToString().ToLowerInvariant()) controlledTermination=$($controlledTermination.ToString().ToLowerInvariant())$manualReloadSummary run=$runRoot provenance=$provenancePath launcherArgs=$launcherArgumentsPath"

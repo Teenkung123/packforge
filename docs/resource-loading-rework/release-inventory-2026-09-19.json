@@ -1,0 +1,200 @@
+{
+  "review": "Only reviewed selector bridge additions and withdrawn bitmap cache removals. Combined target inherits prior mc26 source inventory.",
+  "artifacts": [
+    {
+      "key": "mc26_1_to_26_2/forge",
+      "name": "packforge-forge-1.4-mc26.1-26.2.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache$Loader.class",
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache$Statistics.class",
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 798585,
+      "maxBytes": 800000,
+      "sha256": "d4466c04a52b864062b3d1036638a2d986d724ef584cbd4cc2187abf50443603"
+    },
+    {
+      "key": "mc26_1_to_26_3/fabric",
+      "name": "packforge-fabric-1.4-mc26.1-26.3.jar",
+      "added": [
+        "com/teenkung/packforge/internal/loader/ResourceManagerSelectorBridge.class",
+        "com/teenkung/packforge/loader/RuntimeResourceHash$SelectorBridgeHolder.class"
+      ],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache$Loader.class",
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache$Statistics.class",
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 486321,
+      "maxBytes": 500000,
+      "sha256": "731f98ec5b63b2961c7d77e20555fa33ef5ccb90c056a68ed58c5c63fda98fd1"
+    },
+    {
+      "key": "mc26_1_to_26_3/neoforge",
+      "name": "packforge-neoforge-1.4-mc26.1-26.3.jar",
+      "added": [
+        "com/teenkung/packforge/internal/loader/ResourceManagerSelectorBridge.class",
+        "com/teenkung/packforge/loader/RuntimeResourceHash$SelectorBridgeHolder.class"
+      ],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache$Loader.class",
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache$Statistics.class",
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 478677,
+      "maxBytes": 500000,
+      "sha256": "9487bfa181c8da96829c048ec47d1fdadcbdc0c602db4807cd64917c835e7ca5"
+    },
+    {
+      "key": "mc1_21_1/fabric",
+      "name": "packforge-fabric-1.4-beta.1-mc1.21.1.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 383925,
+      "maxBytes": 400000,
+      "sha256": "e0198055c883816335ed228dd239e4af6b9a87a02cf6fbfaa6f8d6ec62944e08"
+    },
+    {
+      "key": "mc1_21_1/forge",
+      "name": "packforge-forge-1.4-beta.1-mc1.21.1.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 695201,
+      "maxBytes": 720000,
+      "sha256": "292b5ff7fc308f724ae97ecde6a286d0c48ac926e10b5cafd3ee4460bfe70856"
+    },
+    {
+      "key": "mc1_21_1/neoforge",
+      "name": "packforge-neoforge-1.4-beta.1-mc1.21.1.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 371937,
+      "maxBytes": 400000,
+      "sha256": "05d95ccb1357e8fcbb25825042fe6318c94eac5026d62567d730b3d9efdedb48"
+    },
+    {
+      "key": "mc1_21_4/fabric",
+      "name": "packforge-fabric-1.4-beta.1-mc1.21.4.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 384091,
+      "maxBytes": 400000,
+      "sha256": "096bb5fbfaf455319d3c45670ef8519188bd05f3fbe09e2491d30406139fcf4b"
+    },
+    {
+      "key": "mc1_21_4/forge",
+      "name": "packforge-forge-1.4-beta.1-mc1.21.4.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 695366,
+      "maxBytes": 720000,
+      "sha256": "cb91e23373e27e6cb80323db0a747d7ce5e4cc1cfb910a48b28d4216eef9bb36"
+    },
+    {
+      "key": "mc1_21_4/neoforge",
+      "name": "packforge-neoforge-1.4-beta.1-mc1.21.4.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 372106,
+      "maxBytes": 400000,
+      "sha256": "a7f0e4a4d564ef79cd9eba23b9e00a6aa450d32fd41b20d2b631b0288a1da689"
+    },
+    {
+      "key": "mc1_21_8/fabric",
+      "name": "packforge-fabric-1.4-beta.1-mc1.21.8.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 383254,
+      "maxBytes": 400000,
+      "sha256": "f55ab34a899205c6b31d9fbe97f5dce5e4dd2b96e3cd4f65beda3b2edd7b5690"
+    },
+    {
+      "key": "mc1_21_8/forge",
+      "name": "packforge-forge-1.4-beta.1-mc1.21.8.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 694470,
+      "maxBytes": 720000,
+      "sha256": "9a4f8badab799ca7788682d772dafd1839925dd56789f74842282039eda8b7df"
+    },
+    {
+      "key": "mc1_21_8/neoforge",
+      "name": "packforge-neoforge-1.4-beta.1-mc1.21.8.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 371205,
+      "maxBytes": 400000,
+      "sha256": "114ae829b4f653333eb24c698ed00685ec1daa69046b83e5dbb811a5af19b491"
+    },
+    {
+      "key": "mc1_21_11/fabric",
+      "name": "packforge-fabric-1.4-beta.1-mc1.21.11.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 386367,
+      "maxBytes": 400000,
+      "sha256": "10b1250dad353f95844c73d9fa4c29133962146c1007bed0165c0b8541aeb450"
+    },
+    {
+      "key": "mc1_21_11/forge",
+      "name": "packforge-forge-1.4-beta.1-mc1.21.11.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 697372,
+      "maxBytes": 720000,
+      "sha256": "cb6c77215e2fd30bb7f844ffc53d0245a025107854db0857e39647a4282a4dd3"
+    },
+    {
+      "key": "mc1_21_11/neoforge",
+      "name": "packforge-neoforge-1.4-beta.1-mc1.21.11.jar",
+      "added": [],
+      "removed": [
+        "com/teenkung/packforge/client/font/FontBitmapProviderCache.class"
+      ],
+      "bytes": 374133,
+      "maxBytes": 400000,
+      "sha256": "a0eb527fad5d28209a77b80d17e59db7bb8ccd339656288cb384b93309a3ec41"
+    },
+    {
+      "key": "mc1_20_1/fabric",
+      "name": "packforge-fabric-1.4-beta.1-mc1.20.1.jar",
+      "added": [],
+      "removed": [],
+      "bytes": 345048,
+      "maxBytes": 400000,
+      "sha256": "55f351646f81ee9c76c19b71f27987787d89832c206c02b5e9eb01c9f9387c19"
+    },
+    {
+      "key": "mc1_20_1/forge",
+      "name": "packforge-forge-1.4-beta.1-mc1.20.1.jar",
+      "added": [],
+      "removed": [],
+      "bytes": 662675,
+      "maxBytes": 720000,
+      "sha256": "eb5ab4f14b69d821078f28c8052aea3470dc8d99ff09056eddd5b7953c77eca0"
+    }
+  ]
+}

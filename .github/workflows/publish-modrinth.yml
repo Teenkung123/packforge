@@ -6,18 +6,53 @@ on:
       release_version:
         description: Base PackForge version from gradle.properties
         required: true
-        default: "1.3.4"
+        default: "1.4"
       changelog:
         description: Release notes shown on Modrinth
         required: true
         type: string
+      publish_confirmation:
+        description: Set true only after reviewing the generated release manifest and approving publication
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
+  release_matrix:
+    name: Derive registry release matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    outputs:
+      publish_matrix: ${{ steps.matrix.outputs.publish_matrix }}
+      runtime_matrix: ${{ steps.matrix.outputs.runtime_matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read canonical registry matrix
+        id: matrix
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          configured_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          if [[ "$configured_version" != "$RELEASE_VERSION" ]]; then
+            echo "Requested version $RELEASE_VERSION does not match gradle.properties ($configured_version)."
+            exit 1
+          fi
+          publish_matrix="$(python scripts/prepare-modrinth-release.py --release-version "$RELEASE_VERSION" --matrix publish)"
+          runtime_matrix="$(python scripts/prepare-modrinth-release.py --release-version "$RELEASE_VERSION" --matrix runtime)"
+          printf 'publish_matrix=%s\n' "$publish_matrix" >> "$GITHUB_OUTPUT"
+          printf 'runtime_matrix=%s\n' "$runtime_matrix" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build all supported artifacts
+    needs: release_matrix
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -32,10 +67,13 @@ jobs:
 
       - name: Validate requested version
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
+          set -euo pipefail
           configured_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
-          if [[ "$configured_version" != "${{ inputs.release_version }}" ]]; then
-            echo "Requested version ${{ inputs.release_version }} does not match gradle.properties ($configured_version)."
+          if [[ "$configured_version" != "$RELEASE_VERSION" ]]; then
+            echo "Requested version $RELEASE_VERSION does not match gradle.properties ($configured_version)."
             exit 1
           fi
 
@@ -52,6 +90,7 @@ jobs:
 
       - name: Build, test, and verify all artifacts
         run: |
+          python -m unittest discover -s scripts -p 'test_prepare_modrinth_release.py' -v
           chmod +x gradlew
           for attempt in 1 2 3; do
             if ./gradlew buildAllSupported --no-daemon --stacktrace; then
@@ -66,13 +105,23 @@ jobs:
             sleep "$delay"
           done
 
+      - name: Validate registry-derived release manifest and size gates
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          CHANGELOG: ${{ inputs.changelog }}
+        run: python scripts/prepare-modrinth-release.py --check --release-version "$RELEASE_VERSION" --changelog "$CHANGELOG" --write-preview build/release-preview
+
       - name: Write exact release SHA256SUMS
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -euo pipefail
           mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 release artifacts, found ${#artifacts[@]}."
+          expected_count="$(python scripts/prepare-modrinth-release.py --release-version "$RELEASE_VERSION" --count-only)"
+          if [[ "${#artifacts[@]}" -ne "$expected_count" ]]; then
+            echo "Expected exactly $expected_count registry-derived release artifacts, found ${#artifacts[@]}."
             printf '%s\n' "${artifacts[@]}"
             exit 1
           fi
@@ -81,8 +130,8 @@ jobs:
             sha256sum "${artifacts[@]}" > SHA256SUMS
           )
           checksum_count="$(wc -l < build/libs/SHA256SUMS)"
-          if [[ "$checksum_count" -ne 17 ]]; then
-            echo "Expected 17 checksum rows, found $checksum_count."
+          if [[ "$checksum_count" -ne "$expected_count" ]]; then
+            echo "Expected $expected_count registry-derived checksum rows, found $checksum_count."
             exit 1
           fi
 
@@ -95,42 +144,23 @@ jobs:
             build/libs/SHA256SUMS
           if-no-files-found: error
 
+      - name: Upload release preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: packforge-release-preview
+          path: |
+            build/release-preview/modrinth-release-manifest.json
+            build/release-preview/modrinth-release-plan.md
+          if-no-files-found: error
+
   runtime-smoke:
-    name: Runtime smoke ${{ matrix.target }} / ${{ matrix.platform }} / ${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
-    needs: build
+    name: Runtime smoke ${{ matrix.target }} / ${{ matrix.platform }} / ${{ matrix.runtime_label }}
+    needs: [release_matrix, build]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { target: mc26_1_to_26_2, platform: fabric }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.1" }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.1.2" }
-          - { target: mc26_1_to_26_2, platform: fabric, minecraft_version: "26.2" }
-          - { target: mc26_1_to_26_2, platform: forge }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.1-63.0.2" }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.1.2-64.1.0" }
-          - { target: mc26_1_to_26_2, platform: forge, forge_version: "26.2-65.1.0" }
-          - { target: mc26_1_to_26_2, platform: neoforge }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.1.15-beta" }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.1.2.94" }
-          - { target: mc26_1_to_26_2, platform: neoforge, neoforge_version: "26.2.0.48-beta" }
-          - { target: mc1_21_1, platform: fabric }
-          - { target: mc1_21_1, platform: forge }
-          - { target: mc1_21_1, platform: neoforge }
-          - { target: mc1_21_4, platform: fabric }
-          - { target: mc1_21_4, platform: forge }
-          - { target: mc1_21_4, platform: neoforge }
-          - { target: mc1_21_8, platform: fabric }
-          - { target: mc1_21_8, platform: forge }
-          - { target: mc1_21_8, platform: neoforge }
-          - { target: mc1_21_11, platform: fabric }
-          - { target: mc1_21_11, platform: forge }
-          - { target: mc1_21_11, platform: neoforge }
-          - { target: mc1_20_1, platform: fabric }
-          - { target: mc1_20_1, platform: forge }
-          - { target: mc1_20_1, platform: forge, forge_version: "1.20.1-47.4.22" }
+      matrix: ${{ fromJSON(needs.release_matrix.outputs.runtime_matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -143,12 +173,15 @@ jobs:
 
       - name: Verify exact release SHA256SUMS
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -euo pipefail
           test -f build/libs/SHA256SUMS
           mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 downloaded artifacts, found ${#artifacts[@]}."
+          expected_count="$(python scripts/prepare-modrinth-release.py --release-version "$RELEASE_VERSION" --count-only)"
+          if [[ "${#artifacts[@]}" -ne "$expected_count" ]]; then
+            echo "Expected exactly $expected_count registry-derived downloaded artifacts, found ${#artifacts[@]}."
             printf '%s\n' "${artifacts[@]}"
             exit 1
           fi
@@ -173,29 +206,32 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             build/nodes/forge/*/minecraftforge/forgegradle/mavenizer
-          key: packforge-nodes-v1-publish-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
+          key: packforge-nodes-v1-publish-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.runtime_label }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
           restore-keys: |
-            packforge-nodes-v1-publish-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}-
+            packforge-nodes-v1-publish-smoke-${{ runner.os }}-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.runtime_label }}-
 
       - name: Run loader smoke (packaged official-mapped NeoForge/mc26 Fabric; source legacy Fabric/all Forge; exact legacy Fabric final-JAR acceptance via production harness)
         env:
+          RUNTIME_PLATFORM: ${{ matrix.platform }}
+          RUNTIME_TARGET: ${{ matrix.target }}
+          RUNTIME_TIMEOUT: "900"
           PACKFORGE_FORGE_VERSION_OVERRIDE: ${{ matrix.forge_version }}
           PACKFORGE_MINECRAFT_VERSION_OVERRIDE: ${{ matrix.minecraft_version }}
           PACKFORGE_NEOFORGE_VERSION_OVERRIDE: ${{ matrix.neoforge_version }}
-          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.platform == 'neoforge' || (matrix.platform == 'fabric' && matrix.target == 'mc26_1_to_26_2') }}
+          PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.artifact_smoke }}
           PACKFORGE_ARTIFACT_INPUT_DIR: build/libs
         run: |
           # Packaged smoke is limited to official-mapped NeoForge and mc26 Fabric.
           # Legacy Fabric and all Forge use source mode here; exact legacy Fabric
           # final-JAR acceptance uses the production harness.
           chmod +x gradlew scripts/smoke-client.sh
-          ./scripts/smoke-client.sh "${{ matrix.platform }}" "${{ matrix.target }}" 900
+          ./scripts/smoke-client.sh "$RUNTIME_PLATFORM" "$RUNTIME_TARGET" "$RUNTIME_TIMEOUT"
 
       - name: Upload client logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: publish-smoke-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.minecraft_version || matrix.forge_version || matrix.neoforge_version || 'registry' }}
+          name: publish-smoke-${{ matrix.target }}-${{ matrix.platform }}-${{ matrix.runtime_label }}
           path: |
             platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/latest.log
             platform/${{ matrix.platform }}/run/${{ matrix.target }}/logs/packforge-smoke-gradle.log
@@ -247,33 +283,18 @@ jobs:
 
   publish:
     name: Publish ${{ matrix.loader }} ${{ matrix.minecraft }} (${{ matrix.release_type }})
-    needs: [build, runtime-smoke, benchmark]
+    if: ${{ inputs.publish_confirmation == true }}
+    needs: [release_matrix, build, runtime-smoke, benchmark]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: true
       max-parallel: 1
-      matrix:
-        include:
-          - { loader: fabric, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", version_suffix: "", release_type: release, featured: "true" }
-          - { loader: forge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", version_suffix: "", release_type: release, featured: "true" }
-          - { loader: neoforge, minecraft: 26.1-26.2, versions: "26.1\n26.1.1\n26.1.2\n26.2", version_suffix: "", release_type: release, featured: "true" }
-          - { loader: fabric, minecraft: 1.21.11, versions: "1.21.11", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.21.11, versions: "1.21.11", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: neoforge, minecraft: 1.21.11, versions: "1.21.11", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: fabric, minecraft: 1.21.8, versions: "1.21.8", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.21.8, versions: "1.21.8", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: neoforge, minecraft: 1.21.8, versions: "1.21.8", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: fabric, minecraft: 1.21.4, versions: "1.21.4", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.21.4, versions: "1.21.4", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: neoforge, minecraft: 1.21.4, versions: "1.21.4", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: fabric, minecraft: 1.21.1, versions: "1.21.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.21.1, versions: "1.21.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: neoforge, minecraft: 1.21.1, versions: "1.21.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: fabric, minecraft: 1.20.1, versions: "1.20.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
-          - { loader: forge, minecraft: 1.20.1, versions: "1.20.1", version_suffix: "-beta.2", release_type: beta, featured: "false" }
+      matrix: ${{ fromJSON(needs.release_matrix.outputs.publish_matrix) }}
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download verified artifacts
         uses: actions/download-artifact@v4
         with:
@@ -282,12 +303,15 @@ jobs:
 
       - name: Verify downloaded release SHA256SUMS
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -euo pipefail
           test -f build/libs/SHA256SUMS
           mapfile -t artifacts < <(find build/libs -maxdepth 1 -type f -name 'packforge-*.jar' -printf '%f\n' | sort)
-          if [[ "${#artifacts[@]}" -ne 17 ]]; then
-            echo "Expected exactly 17 downloaded artifacts, found ${#artifacts[@]}."
+          expected_count="$(python scripts/prepare-modrinth-release.py --release-version "$RELEASE_VERSION" --count-only)"
+          if [[ "${#artifacts[@]}" -ne "$expected_count" ]]; then
+            echo "Expected exactly $expected_count registry-derived downloaded artifacts, found ${#artifacts[@]}."
             printf '%s\n' "${artifacts[@]}"
             exit 1
           fi
@@ -302,13 +326,11 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
           VERSION_SUFFIX: ${{ matrix.version_suffix }}
-          RELEASE_TYPE: ${{ matrix.release_type }}
-          FEATURED: ${{ matrix.featured }}
           LOADER: ${{ matrix.loader }}
           MINECRAFT_ARTIFACT: ${{ matrix.minecraft }}
-          GAME_VERSIONS: ${{ matrix.versions }}
           CHANGELOG: ${{ inputs.changelog }}
         run: |
+          set -euo pipefail
           version="${RELEASE_VERSION}${VERSION_SUFFIX}"
           file="build/libs/packforge-${LOADER}-${version}-mc${MINECRAFT_ARTIFACT}.jar"
           if [[ ! -f "$file" ]]; then
@@ -317,67 +339,11 @@ jobs:
             exit 1
           fi
 
-          export PUBLISH_VERSION="$version"
-          export PUBLISH_ARTIFACT="$file"
-          python - <<'PY'
-          import json
-          import os
-          import zipfile
-
-          version = os.environ["PUBLISH_VERSION"]
-          dependencies = []
-          if os.environ["LOADER"] == "fabric":
-              with zipfile.ZipFile(os.environ["PUBLISH_ARTIFACT"]) as artifact:
-                  fabric_metadata = json.loads(artifact.read("fabric.mod.json"))
-
-              required_mods = set(fabric_metadata.get("depends", {})) - {
-                  "fabricloader",
-                  "minecraft",
-                  "java",
-              }
-              unsupported_required = required_mods - {"fabric-api"}
-              if unsupported_required:
-                  raise SystemExit(
-                      "Unmapped required Fabric dependencies: "
-                      + ", ".join(sorted(unsupported_required))
-                  )
-              if "fabric-api" in required_mods:
-                  dependencies.append({
-                      "project_id": "P7dR8mSH",
-                      "dependency_type": "required",
-                  })
-
-              suggested_mods = set(fabric_metadata.get("suggests", {}))
-              unsupported_suggested = suggested_mods - {"modmenu"}
-              if unsupported_suggested:
-                  raise SystemExit(
-                      "Unmapped optional Fabric dependencies: "
-                      + ", ".join(sorted(unsupported_suggested))
-                  )
-              if "modmenu" in suggested_mods:
-                  dependencies.append({
-                      "project_id": "mOgUt4GM",
-                      "dependency_type": "optional",
-                  })
-
-          metadata = {
-              "name": f"PackForge - Optimized Resource Pack Loading Time {version}",
-              "version_number": version,
-              "changelog": os.environ["CHANGELOG"],
-              "dependencies": dependencies,
-              "game_versions": os.environ["GAME_VERSIONS"].splitlines(),
-              "version_type": os.environ["RELEASE_TYPE"],
-              "loaders": [os.environ["LOADER"]],
-              "featured": os.environ["FEATURED"] == "true",
-              "status": "listed",
-              "project_id": "NimDX7iQ",
-              "file_parts": ["artifact"],
-              "primary_file": "artifact",
-              "environment": "client_only",
-          }
-          with open("modrinth-version.json", "w", encoding="utf-8") as output:
-              json.dump(metadata, output, ensure_ascii=False)
-          PY
+          python scripts/prepare-modrinth-release.py \
+            --release-version "$RELEASE_VERSION" \
+            --artifact "$file" \
+            --write-payload modrinth-version.json \
+            --changelog "$CHANGELOG"
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "file=$file" >> "$GITHUB_OUTPUT"
@@ -387,13 +353,9 @@ jobs:
         shell: bash
         env:
           ARTIFACT_FILE: ${{ steps.release.outputs.file }}
-          PUBLISH_VERSION: ${{ steps.release.outputs.version }}
-          RELEASE_TYPE: ${{ matrix.release_type }}
-          FEATURED: ${{ matrix.featured }}
-          LOADER: ${{ matrix.loader }}
-          GAME_VERSIONS: ${{ matrix.versions }}
-          CHANGELOG: ${{ inputs.changelog }}
+          PAYLOAD_FILE: modrinth-version.json
         run: |
+          set -euo pipefail
           python - <<'PY'
           import hashlib
           import json
@@ -402,6 +364,8 @@ jobs:
           import urllib.request
 
           artifact = pathlib.Path(os.environ["ARTIFACT_FILE"])
+          with open(os.environ["PAYLOAD_FILE"], encoding="utf-8") as payload_file:
+              expected = json.load(payload_file)
           request = urllib.request.Request(
               "https://api.modrinth.com/v2/project/NimDX7iQ/version",
               headers={"User-Agent": "Teenkung123/PackForge-GitHub-Actions/1.0"},
@@ -421,18 +385,26 @@ jobs:
           found = bool(matches)
           if found:
               version, remote_file = matches[0]
-              digest = hashlib.sha512(artifact.read_bytes()).hexdigest()
-              expected_games = set(os.environ["GAME_VERSIONS"].splitlines())
-              expected_changelog = os.environ["CHANGELOG"].replace("\r\n", "\n").strip()
+              artifact_bytes = artifact.read_bytes()
+              expected_changelog = (expected.get("changelog") or "").replace("\r\n", "\n").strip()
               actual_changelog = (version.get("changelog") or "").replace("\r\n", "\n").strip()
               checks = {
-                  "SHA-512": remote_file.get("hashes", {}).get("sha512") == digest,
-                  "version number": version.get("version_number") == os.environ["PUBLISH_VERSION"],
-                  "release type": version.get("version_type") == os.environ["RELEASE_TYPE"],
-                  "featured flag": version.get("featured") == (os.environ["FEATURED"] == "true"),
-                  "loader": set(version.get("loaders", [])) == {os.environ["LOADER"]},
-                  "game versions": set(version.get("game_versions", [])) == expected_games,
+                  "name": version.get("name") == expected.get("name"),
+                  "version number": version.get("version_number") == expected.get("version_number"),
+                  "dependencies": version.get("dependencies", []) == expected.get("dependencies", []),
+                  "release type": version.get("version_type") == expected.get("version_type"),
+                  "featured flag": version.get("featured") == expected.get("featured"),
+                  "loader": version.get("loaders", []) == expected.get("loaders", []),
+                  "game versions": set(version.get("game_versions", [])) == set(expected.get("game_versions", [])),
+                  "status": version.get("status") == expected.get("status"),
+                  "project": version.get("project_id") == expected.get("project_id"),
+                  "environment": version.get("environment") == expected.get("environment"),
+                  "primary file": version.get("primary_file") == expected.get("primary_file"),
                   "changelog": actual_changelog == expected_changelog,
+                  "filename": remote_file.get("filename") == artifact.name,
+                  "size": remote_file.get("size") == len(artifact_bytes),
+                  "SHA-1": remote_file.get("hashes", {}).get("sha1") == hashlib.sha1(artifact_bytes).hexdigest(),
+                  "SHA-512": remote_file.get("hashes", {}).get("sha512") == hashlib.sha512(artifact_bytes).hexdigest(),
               }
               failures = [name for name, passed in checks.items() if not passed]
               if failures:
