@@ -135,20 +135,6 @@ public final class ArtifactVerifier {
                     if (platform.equals("forge")) lower = lower.substring(lower.lastIndexOf('-') + 1);
                     require(string(loader, "versionRange").startsWith("[" + lower + ","), "Loader compile version differs from range lower bound");
                 }
-                if (loader.has("runtimeChecks")) {
-                    List<String> gameVersions = strings(target, "gameVersions");
-                    require(!gameVersions.isEmpty(), "Runtime checks require explicit game versions");
-                    Set<String> checkedVersions = new HashSet<>();
-                    for (JsonElement runtimeElement : loader.getAsJsonArray("runtimeChecks")) {
-                        JsonObject check = runtimeElement.getAsJsonObject();
-                        String minecraftVersion = string(check, "minecraftVersion");
-                        require(gameVersions.contains(minecraftVersion) && checkedVersions.add(minecraftVersion),
-                                "Runtime check must name one explicit game version exactly once");
-                        string(check, "mixinExtrasVersion");
-                        if (platform.equals("fabric")) require(!check.has("version"), "Fabric runtime checks inherit the target loader version");
-                        else string(check, "version");
-                    }
-                }
             }
         }
         require(keys.contains(string(registry, "defaultTarget")), "Unknown defaultTarget");

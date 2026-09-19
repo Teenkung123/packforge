@@ -56,8 +56,3 @@ tasks.named('jar', Jar) {
 }
 tasks.named('reobfJar') { archiveFileName = packforgeArtifactName }
 ext.packforgeArtifact = tasks.named('reobfJar').flatMap { it.archiveFile }
-if (packforgeArtifactSmoke) {
-	tasks.named('runClient') {
-		doFirst { throw new GradleException('Install the final JAR in a separate Forge client for production SRG-namespace validation.') }
-	}
-}

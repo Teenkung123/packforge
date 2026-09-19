@@ -11,8 +11,6 @@ def runtimeSelected = target.key == rootProject.packforgeSelectedTarget
 def defaultRunDirectory = "platform/${loaderId}/run/${target.key}"
 ext.packforgeRunDirectory = rootProject.file(runtimeSelected
 	? providers.gradleProperty('packforge_run_directory').getOrElse(defaultRunDirectory) : defaultRunDirectory)
-def artifactSmoke = runtimeSelected && providers.gradleProperty('packforge_artifact_smoke').map(Boolean::parseBoolean).getOrElse(false)
-ext.packforgeArtifactSmoke = artifactSmoke
 ext.packforgeRuntimeVersion = { String property, String defaultVersion ->
 	runtimeSelected ? providers.gradleProperty(property).getOrElse(defaultVersion) : defaultVersion
 }
@@ -62,8 +60,7 @@ sourceSets {
 }
 repositories { mavenCentral() }
 dependencies {
-	// Packaged smoke must load these classes only from the final mod JAR.
-	add(artifactSmoke ? 'compileOnly' : 'implementation', project(':common'))
+	implementation project(':common')
 	testImplementation platform(libs.junit.bom)
 	testImplementation libs.junit.jupiter
 	testRuntimeOnly libs.junit.launcher
@@ -81,11 +78,7 @@ tasks.withType(Jar).configureEach {
 }
 tasks.named('jar', Jar) {
 	archiveFileName = packforgeArtifactName
-	from(common.sourceSets.main.output) {
-		if (target.key != 'mc26_1_to_26_3') {
-			exclude 'com/teenkung/packforge/internal/loader/ResourceManagerSelectorBridge.class'
-		}
-	}
+	from(common.sourceSets.main.output)
 }
 
 def properties = [version: version.toString(), minecraft_version_range: loader.minecraftVersionRange,

@@ -11,8 +11,6 @@ if (!(adapter in ['mc1_20_1', 'mc1_21_1', 'mc1_21_4', 'mc1_21_8', 'mc1_21_11', '
 	throw new GradleException("Unsupported template node ${project.path}")
 }
 def cutter = extensions.getByType(StonecutterBuildExtension)
-// mc26 is an adapter constant shared by the 26.1-26.2 and 26.3 nodes.
-cutter.constants.put('resource_selector_compat', target.key == 'mc26_1_to_26_3')
 def unbaked = adapter in ['mc1_21_4', 'mc1_21_8', 'mc1_21_11']
 [
 	['ResourceLocation', 'Identifier', adapter in ['mc1_21_11', 'mc26']],

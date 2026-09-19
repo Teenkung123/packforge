@@ -4,7 +4,6 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import com.teenkung.packforge.loader.ReloadLifecycle;
-import com.teenkung.packforge.loader.RuntimeResourceHash;
 import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
@@ -26,16 +25,12 @@ public abstract class ReloadableResourceManagerMixin {
 		Operation<ReloadInstance> original
 	) {
 		ReloadExecutionContext context = ReloadLifecycle.startReload();
-		ReloadableResourceManager manager = (ReloadableResourceManager) (Object) this;
 		try {
 			ReloadInstance instance;
 			try (ReloadExecutionContext.Scope ignored = ReloadExecutionContext.bind(context)) {
 				instance = original.call(preparationExecutor, reloadExecutor, initialStage, packs);
 			}
 			instance.done().whenComplete((result, error) -> {
-				if (error == null && ReloadExecutionContext.isCurrent(context)) {
-					RuntimeResourceHash.report(manager, context.reloadId());
-				}
 				ReloadLifecycle.finishReload(context, error);
 			});
 			return instance;

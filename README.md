@@ -213,7 +213,7 @@ The build compiles the Java 17 `common` module and runs its tests once. Stonecut
 
 The daemon and local build cache are enabled, with two workers by default. Configuration cache remains off because Loom's shared mappings artifact currently invalidates it between full builds.
 
-Client runs can use `-Ppackforge_run_directory=<directory>` to keep a smoke test or development instance separate from the default run folder. This applies only to the selected `packforge_target`.
+Client runs can use `-Ppackforge_run_directory=<directory>` to keep a development instance separate from the default run folder. This applies only to the selected `packforge_target`.
 
 ## License
 

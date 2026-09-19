@@ -63,11 +63,7 @@
           "versionSuffix": "",
           "version": "26.1-62.0.0",
           "versionRange": "[62.0.0,66.0.0)",
-          "minecraftVersionRange": "[26.1,26.3)",
-          "runtimeChecks": [
-            {"minecraftVersion": "26.1.2", "version": "26.1.2-64.1.0", "mixinExtrasVersion": "0.5.4"},
-            {"minecraftVersion": "26.2", "version": "26.2-65.1.0", "mixinExtrasVersion": "0.5.4"}
-          ]
+          "minecraftVersionRange": "[26.1,26.3)"
         }
       }
     },
@@ -132,12 +128,7 @@
           "fabricMixinVersion": "0.17.4+mixin.0.8.7",
           "mixinExtras": {"provider": "loader", "version": "0.5.5"},
           "modMenuVersion": "18.0.0-alpha.8",
-          "modMenuEntrypoint": true,
-          "runtimeChecks": [
-            {"minecraftVersion": "26.1.2", "mixinExtrasVersion": "0.5.5"},
-            {"minecraftVersion": "26.2", "mixinExtrasVersion": "0.5.5"},
-            {"minecraftVersion": "26.3", "mixinExtrasVersion": "0.5.5"}
-          ]
+          "modMenuEntrypoint": true
         },
         "neoforge": {
           "maxArtifactBytes": 500000,
@@ -145,12 +136,7 @@
           "versionSuffix": "",
           "version": "26.1.0.1-beta",
           "versionRange": "[26.1.0.1-beta,26.4)",
-          "minecraftVersionRange": "[26.1,26.3]",
-          "runtimeChecks": [
-            {"minecraftVersion": "26.1.2", "version": "26.1.2.94", "mixinExtrasVersion": "0.5.4"},
-            {"minecraftVersion": "26.2", "version": "26.2.0.48-beta", "mixinExtrasVersion": "0.5.4"},
-            {"minecraftVersion": "26.3", "version": "26.3.0.6-beta", "mixinExtrasVersion": "0.5.4"}
-          ]
+          "minecraftVersionRange": "[26.1,26.3]"
         }
       }
     },

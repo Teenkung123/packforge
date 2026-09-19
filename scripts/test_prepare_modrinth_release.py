@@ -215,30 +215,6 @@ class ReleasePreparationTests(unittest.TestCase):
             {key: matrix[0][key] for key in ("version_suffix", "release_type", "featured", "game_versions")},
         )
 
-    def test_runtime_checks_drive_pinned_loader_overrides(self) -> None:
-        registry = fixture_registry(loader="forge")
-        registry["targets"][0]["platforms"]["forge"]["runtimeChecks"] = [
-            {"minecraftVersion": "26.1.2", "version": "26.1.2-64.1.0"},
-            {"minecraftVersion": "26.2", "version": "26.2-65.1.0"},
-        ]
-        rows = release.matrix(registry, "1.4", "runtime")["include"]
-        self.assertEqual(
-            [
-                ("26.1.2", "26.1.2-64.1.0"),
-                ("26.2", "26.2-65.1.0"),
-            ],
-            [(row["runtime_label"], row["forge_version"]) for row in rows],
-        )
-        self.assertTrue(all(row["minecraft_version"] == "" for row in rows))
-
-    def test_runtime_check_cannot_add_undeclared_game_version(self) -> None:
-        registry = fixture_registry(loader="forge")
-        registry["targets"][0]["platforms"]["forge"]["runtimeChecks"] = [
-            {"minecraftVersion": "26.3", "version": "26.3-66.0.0"},
-        ]
-        with self.assertRaisesRegex(ValueError, "outside gameVersions"):
-            release.matrix(registry, "1.4", "runtime")
-
     def test_forge_loader_classifiers_are_checked(self) -> None:
         registry = fixture_registry(loader="forge")
         with tempfile.TemporaryDirectory() as temporary:
@@ -298,37 +274,13 @@ class ReleasePreparationTests(unittest.TestCase):
         self.assertIn("build/release-preview/modrinth-release-manifest.json", preview)
         self.assertIn("build/release-preview/modrinth-release-plan.md", preview)
 
-    def test_current_registry_matrix_contract_has_seven_targets_and_22_runtime_rows(self) -> None:
+    def test_current_registry_target_matrix_contract_has_seven_targets(self) -> None:
         registry = release.load_registry(SCRIPT.parents[1] / "gradle" / "minecraft-targets.json")
         target_rows = release.matrix(registry, "1.4", "targets")["include"]
-        runtime_rows = release.matrix(registry, "1.4", "runtime")["include"]
         self.assertEqual(7, len(target_rows))
-        self.assertEqual(22, len(runtime_rows))
         self.assertEqual(
             {target["key"] for target in registry["targets"]},
             {row["target"] for row in target_rows},
-        )
-        self.assertIn(
-            ("mc26_1_to_26_2", "forge", "26.1.2", "26.1.2-64.1.0"),
-            {
-                (row["target"], row["platform"], row["runtime_label"], row["forge_version"])
-                for row in runtime_rows
-            },
-        )
-        self.assertIn(
-            ("mc26_1_to_26_3", "neoforge", "26.3", "26.3.0.6-beta"),
-            {
-                (row["target"], row["platform"], row["runtime_label"], row["neoforge_version"])
-                for row in runtime_rows
-            },
-        )
-        self.assertFalse(
-            any(
-                row["target"] == "mc26_1_to_26_2"
-                and row["platform"] == "forge"
-                and row["runtime_label"] == "26.3"
-                for row in runtime_rows
-            )
         )
 
     def test_push_workflows_consume_registry_matrices(self) -> None:

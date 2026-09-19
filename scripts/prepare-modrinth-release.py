@@ -435,108 +435,27 @@ def inspect(
     return expected, errors
 
 
-def _runtime_rows(
-    item: dict[str, Any], target: dict[str, Any], platform: dict[str, Any]
-) -> list[dict[str, Any]]:
-    """Expand only registry-declared runtime checks for a loader."""
-
-    declared = platform.get("runtimeChecks")
-    if declared is None:
-        runtime_versions = (
-            item["game_versions"]
-            if item["loader"] == "fabric"
-            else [target.get("minecraftVersion", item["minecraft"])]
-        )
-        checks = [{"minecraftVersion": value} for value in runtime_versions]
-    else:
-        if not isinstance(declared, list) or not declared:
-            raise ValueError(
-                f"runtimeChecks must be a non-empty list: {target['key']}/{item['loader']}"
-            )
-        checks = declared
-
-    artifact_smoke = item["loader"] == "neoforge" or platform.get("mappingMode") == "official"
-    rows: list[dict[str, Any]] = []
-    seen_versions: set[str] = set()
-    for check in checks:
-        if not isinstance(check, dict):
-            raise ValueError(
-                f"runtimeChecks entries must be objects: {target['key']}/{item['loader']}"
-            )
-        runtime_version = check.get("minecraftVersion")
-        if not isinstance(runtime_version, str) or runtime_version not in item["game_versions"]:
-            raise ValueError(
-                f"runtimeChecks version is outside gameVersions: "
-                f"{target['key']}/{item['loader']}/{runtime_version}"
-            )
-        if runtime_version in seen_versions:
-            raise ValueError(
-                f"duplicate runtimeChecks version: {target['key']}/{item['loader']}/{runtime_version}"
-            )
-        seen_versions.add(runtime_version)
-
-        forge_version = ""
-        neoforge_version = ""
-        minecraft_version = ""
-        if item["loader"] == "fabric":
-            minecraft_version = runtime_version
-        elif item["loader"] == "forge":
-            forge_version = check.get("version", "")
-            if declared is not None and (not isinstance(forge_version, str) or not forge_version):
-                raise ValueError(
-                    f"Forge runtimeChecks entry lacks version: {target['key']}/{runtime_version}"
-                )
-        elif item["loader"] == "neoforge":
-            neoforge_version = check.get("version", "")
-            if declared is not None and (not isinstance(neoforge_version, str) or not neoforge_version):
-                raise ValueError(
-                    f"NeoForge runtimeChecks entry lacks version: {target['key']}/{runtime_version}"
-                )
-        rows.append(
-            {
-                "target": item["target"],
-                "platform": item["loader"],
-                "runtime_label": runtime_version,
-                "minecraft_version": minecraft_version,
-                "forge_version": forge_version,
-                "neoforge_version": neoforge_version,
-                "artifact_smoke": artifact_smoke,
-            }
-        )
-    return rows
-
-
 def matrix(registry: dict[str, Any], version: str, kind: str) -> dict[str, Any]:
     if kind == "targets":
         return {"include": [{"target": target["key"]} for target in registry["targets"]]}
-
-    items = expected_artifacts(registry, version)
-    targets = {target["key"]: target for target in registry["targets"]}
-    if kind == "publish":
-        return {
-            "include": [
-                {
-                    "target": item["target"],
-                    "platform": item["loader"],
-                    "loader": item["loader"],
-                    "minecraft": item["minecraft"],
-                    "game_versions": item["game_versions"],
-                    "version_suffix": item["version_suffix"],
-                    "release_type": item["version_type"],
-                    "featured": item["featured"],
-                }
-                for item in items
-            ]
-        }
-    if kind != "runtime":
+    if kind != "publish":
         raise ValueError(f"unsupported matrix kind: {kind}")
-
-    rows: list[dict[str, Any]] = []
-    for item in items:
-        target = targets[item["target"]]
-        platform = target["platforms"][item["loader"]]
-        rows.extend(_runtime_rows(item, target, platform))
-    return {"include": rows}
+    items = expected_artifacts(registry, version)
+    return {
+        "include": [
+            {
+                "target": item["target"],
+                "platform": item["loader"],
+                "loader": item["loader"],
+                "minecraft": item["minecraft"],
+                "game_versions": item["game_versions"],
+                "version_suffix": item["version_suffix"],
+                "release_type": item["version_type"],
+                "featured": item["featured"],
+            }
+            for item in items
+        ]
+    }
 
 
 def write_preview(
@@ -684,7 +603,7 @@ def main() -> int:
     parser.add_argument("--changelog-file", type=pathlib.Path, default=None)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--count-only", action="store_true")
-    parser.add_argument("--matrix", choices=("publish", "runtime", "targets"), default=None)
+    parser.add_argument("--matrix", choices=("publish", "targets"), default=None)
     args = parser.parse_args()
     registry = load_registry(args.registry)
     version = _release_version(args)

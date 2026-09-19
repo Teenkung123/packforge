@@ -7,9 +7,6 @@ def target = packforgeTarget
 def loader = packforgePlatform
 def extras = packforgeMixinExtras
 def mixinExtras = extras.version
-def smoke = packforgeArtifactSmoke
-def runtimeClassProvenance = providers.gradleProperty('packforge_runtime_class_provenance')
-	.map { it.toBoolean() }.getOrElse(false)
 neoForge {
 	version = packforgeRuntimeVersion('packforge_neoforge_version_override', loader.version)
 	// Plain adapter tests need the same patched Minecraft API as production compilation.
@@ -20,16 +17,13 @@ neoForge {
 			client()
 			gameDirectory = packforgeRunDirectory
 			systemProperty 'forge.logging.console.level', 'debug'
-			if (smoke && runtimeClassProvenance) jvmArgument '-Xlog:class+load=info:stderr'
 			ideName = "NeoForge ${target.minecraftVersion} Client"
 		}
 	}
-	if (!smoke) {
-		mods {
-			packforge {
-				sourceSet sourceSets.main
-				sourceSet project(':common').sourceSets.main
-			}
+	mods {
+		packforge {
+			sourceSet sourceSets.main
+			sourceSet project(':common').sourceSets.main
 		}
 	}
 }

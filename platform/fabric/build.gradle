@@ -1,5 +1,3 @@
-import org.gradle.api.file.ConfigurableFileCollection
-
 plugins {
 	alias(libs.plugins.loom.legacy) apply false
 	alias(libs.plugins.loom.modern) apply false
@@ -15,25 +13,19 @@ def target = packforgeTarget
 def loader = packforgePlatform
 def registry = rootProject.packforgeRegistry
 def extras = packforgeMixinExtras
-def smoke = packforgeArtifactSmoke
-def runtimeClassProvenance = providers.gradleProperty('packforge_runtime_class_provenance')
-	.map { it.toBoolean() }.getOrElse(false)
 def fabricMixinVersion = loader.fabricMixinVersion ?: registry.fabricMixinVersion
 def fabricApiVersion = packforgeRuntimeVersion('packforge_fabric_api_version_override', loader.fabricApiVersion)
 def accessWidener = rootProject.file(loader.accessWidener)
 repositories { maven { url = 'https://api.modrinth.com/maven' } }
 loom {
 	accessWidenerPath = accessWidener
-	if (!smoke) {
-		mods {
-			packforge {
-				sourceSet sourceSets.main
-				sourceSet sourceSets.client
-			}
+	mods {
+		packforge {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
 		}
 	}
 	runs.client.runDir(packforgeRunDirectory.absolutePath)
-	if (smoke && runtimeClassProvenance) runs.client.vmArg('-Xlog:class+load=info:stderr')
 }
 dependencies {
 	minecraft "com.mojang:minecraft:${packforgeRuntimeVersion('packforge_minecraft_version_override', target.minecraftVersion)}"
@@ -50,26 +42,14 @@ dependencies {
 		runtimeOnly "net.fabricmc:sponge-mixin:${fabricMixinVersion}"
 		if (loader.modMenuEntrypoint) {
 			compileOnly "maven.modrinth:modmenu:${loader.modMenuVersion}"
-			if (!smoke) {
-				add('localRuntime', "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}")
-				add('localRuntime', "maven.modrinth:modmenu:${loader.modMenuVersion}")
-			}
+			add('localRuntime', "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}")
+			add('localRuntime', "maven.modrinth:modmenu:${loader.modMenuVersion}")
 		}
 	}
-	if (!smoke && fabricApiVersion) compileOnly "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
+	if (fabricApiVersion) compileOnly "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
 	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${extras.version}"))
 	if (extras.provider == 'bundled') {
 		include "io.github.llamalad7:mixinextras-fabric:${extras.version}:${extras.classifier}"
-	}
-}
-if (smoke) {
-	def commonOutput = project(':common').sourceSets.main.output
-	def commonJarName = project(':common').tasks.named('jar').get().archiveFileName.get()
-	tasks.named('runClient') {
-		// Copy the declared inputs, not the mutable classpath collection itself.
-		def launchClasspath = files(new ArrayList((classpath as ConfigurableFileCollection).from))
-		classpath = launchClasspath.minus(sourceSets.main.output).minus(sourceSets.client.output).minus(commonOutput)
-			.filter { it.name != commonJarName }
 	}
 }
 tasks.named('jar', Jar) {

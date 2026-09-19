@@ -4,7 +4,6 @@ import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.PackForgeCore;
 import com.teenkung.packforge.client.PackForgeClient;
 import com.teenkung.packforge.client.config.PackForgeConfigScreen;
-import com.teenkung.packforge.client.RuntimeSmokeController;
 import com.teenkung.packforge.platform.PackForgeServices;
 import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -16,7 +15,6 @@ public final class PackForgeForge {
 		PackForgeServices.init(new ForgePackForgePlatform());
 		PackForgeCore.init();
 		PackForgeClient.initClient();
-		RuntimeSmokeController.init();
 		ModLoadingContext.get().registerExtensionPoint(
 			ConfigScreenHandler.ConfigScreenFactory.class,
 			() -> new ConfigScreenHandler.ConfigScreenFactory(

@@ -70,6 +70,3 @@ tasks.named('jar', Jar) {
 tasks.named('jarJar', Jar) { archiveFileName = packforgeArtifactName }
 tasks.named('assemble') { dependsOn tasks.named('jarJar') }
 ext.packforgeArtifact = tasks.named('jarJar').flatMap { it.archiveFile }
-if (packforgeArtifactSmoke) {
-	throw new GradleException('Install the final JAR in a separate Forge client for production-namespace validation.')
-}
