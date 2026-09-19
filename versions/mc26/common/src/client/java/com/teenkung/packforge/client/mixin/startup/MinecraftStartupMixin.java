@@ -2,6 +2,7 @@ package com.teenkung.packforge.client.mixin.startup;
 
 import com.teenkung.packforge.startup.StartupStatus;
 import com.teenkung.packforge.startup.StartupTimings;
+import com.teenkung.packforge.client.ui.ReloadSummaryToast;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.main.GameConfig;
 import org.spongepowered.asm.mixin.Mixin;
@@ -60,6 +61,7 @@ public abstract class MinecraftStartupMixin {
 
 	@Inject(method = "runTick", at = @At("HEAD"))
 	private void packforge$tickStart(boolean renderLevel, CallbackInfo ci) {
+		ReloadSummaryToast.pump();
 		this.packforge$sampleStart("tick");
 	}
 

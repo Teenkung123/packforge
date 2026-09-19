@@ -3,6 +3,7 @@ package com.teenkung.packforge.client.font;
 import com.mojang.blaze3d.font.GlyphInfo;
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.mojang.blaze3d.font.UnbakedGlyph;
+import com.teenkung.packforge.concurrent.PreparationBudget;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
@@ -12,10 +13,12 @@ import net.minecraft.client.gui.font.FontSet;
 import net.minecraft.client.gui.font.glyphs.BakedGlyph;
 import net.minecraft.client.gui.font.glyphs.SpecialGlyphs;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 
@@ -24,6 +27,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FontPreparedSelectionTest {
+	private final PreparationBudget memory = new PreparationBudget();
+	private final PreparationBudget.Scope scope = memory.openScope();
+	private final List<FontPreparedSelection> owned = new ArrayList<>();
+	@AfterEach void close() {
+		owned.forEach(FontPreparedSelection::close);
+		scope.retire();
+		assertEquals(0, memory.used());
+	}
 	@Test
 	void advertisedNullDoesNotClaimCodepoint() throws Exception {
 		TestProvider empty = provider(new int[]{65}, Map.of());
@@ -82,7 +93,7 @@ class FontPreparedSelectionTest {
 	// Invoke the actual game's selection method, without reset/baking or a GPU.
 	// This checks the supplied 26.1 source contract against the compile target too.
 	@SuppressWarnings("unchecked")
-	private static FontPreparedSelection checkVanilla(List<GlyphProvider.Conditional> providers, Set<FontOption> options) throws Exception {
+	private FontPreparedSelection checkVanilla(List<GlyphProvider.Conditional> providers, Set<FontOption> options) throws Exception {
 		FontSet vanilla = new FontSet(null);
 		Method select = FontSet.class.getDeclaredMethod("selectProviders", List.class, Set.class);
 		select.setAccessible(true);
@@ -90,7 +101,12 @@ class FontPreparedSelectionTest {
 		Field widths = FontSet.class.getDeclaredField("glyphsByWidth");
 		widths.setAccessible(true);
 		Int2ObjectMap<IntList> expected = (Int2ObjectMap<IntList>) widths.get(vanilla);
-		FontPreparedSelection result = FontPreparedSelection.compute(providers, options);
+		// Fixture providers have explicit bounded sets; production first validates ownership/counts.
+		long count = 0;
+		for (GlyphProvider.Conditional provider : providers) count += provider.provider().getSupportedGlyphs().size();
+		FontPreparedSelection result = FontPreparedSelection.compute(providers, options,
+			scope.tryReserve(8192L + providers.size() * 512L + count * 256L));
+		owned.add(result);
 		assertEquals(active, result.activeProviders());
 		assertEquals(expected, result.glyphsByWidth());
 		return result;

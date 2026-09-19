@@ -2,7 +2,9 @@ package com.teenkung.packforge.loader;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,6 +23,13 @@ public final class ReloadMetrics {
 	private final LongAdder listResourcesCalls = new LongAdder();
 	private final LongAdder fullScansAvoided = new LongAdder();
 	private final ConcurrentHashMap<String, ListenerTiming> listenerTimings = new ConcurrentHashMap<>();
+	private final Object statusLock = new Object();
+	private final Map<String, String> listenerLabels = new LinkedHashMap<>();
+	private final Map<String, Integer> pendingListeners = new LinkedHashMap<>();
+	private final Map<String, Integer> preparing = new LinkedHashMap<>();
+	private final Map<String, Integer> applying = new LinkedHashMap<>();
+	private int completedListeners;
+	private boolean workObserved;
 	private volatile boolean active;
 	private volatile String phase = "Starting";
 	private volatile String detail = "resource reload";
@@ -35,15 +44,19 @@ public final class ReloadMetrics {
 	}
 
 	void finishStatus(String finalPhase, String finalDetail) {
-		if (!complete.compareAndSet(false, true)) {
-			return;
+		synchronized (statusLock) {
+			if (!complete.compareAndSet(false, true)) return;
+			active = false;
+			phase = finalPhase;
+			detail = finalDetail;
+			activeListeners.set(0);
+			activePrepareTasks.set(0);
+			activeApplyTasks.set(0);
+			listenerLabels.clear();
+			pendingListeners.clear();
+			preparing.clear();
+			applying.clear();
 		}
-		active = false;
-		phase = finalPhase;
-		detail = finalDetail;
-		activeListeners.set(0);
-		activePrepareTasks.set(0);
-		activeApplyTasks.set(0);
 	}
 
 	void finishStatus() {
@@ -67,11 +80,11 @@ public final class ReloadMetrics {
 	}
 
 	String phase() {
-		return phase;
+		return statusSnapshot().phase();
 	}
 
 	String detail() {
-		return detail;
+		return statusSnapshot().detail();
 	}
 
 	int activeListeners() {
@@ -86,44 +99,99 @@ public final class ReloadMetrics {
 		return activeApplyTasks.get();
 	}
 
-	void listenerStarted(String listenerName) {
-		if (complete.get()) {
-			return;
+	String readableListener(String name) {
+		synchronized (statusLock) {
+			if (complete.get()) return "resources";
+			return listenerLabels.computeIfAbsent(name, ReloadStatus::readableListener);
 		}
-		activeListeners.incrementAndGet();
-		phase = "Loading";
-		detail = listenerName;
+	}
+
+	void listenerStarted(String listenerName) {
+		started(pendingListeners, activeListeners, listenerName);
 	}
 
 	void listenerFinished() {
-		decrement(activeListeners);
+		listenerFinished(null);
+	}
+
+	void listenerFinished(String listenerName) {
+		synchronized (statusLock) {
+			if (finished(pendingListeners, activeListeners, listenerName)) completedListeners++;
+		}
 	}
 
 	void prepareStarted(String listenerName) {
-		if (complete.get()) {
-			return;
-		}
-		activePrepareTasks.incrementAndGet();
-		phase = "Preparing";
-		detail = listenerName;
+		started(preparing, activePrepareTasks, listenerName);
 	}
 
 	void prepareFinished() {
-		decrement(activePrepareTasks);
+		prepareFinished(null);
+	}
+
+	void prepareFinished(String listenerName) {
+		finished(preparing, activePrepareTasks, listenerName);
 	}
 
 	void applyStarted(String listenerName) {
-		if (complete.get()) {
-			return;
-		}
-		activeApplyTasks.incrementAndGet();
-		phase = "Applying";
-		detail = listenerName;
+		started(applying, activeApplyTasks, listenerName);
 	}
 
 	void applyFinished() {
-		decrement(activeApplyTasks);
+		applyFinished(null);
 	}
+
+	void applyFinished(String listenerName) {
+		finished(applying, activeApplyTasks, listenerName);
+	}
+
+	private void started(Map<String, Integer> names, AtomicInteger count, String name) {
+		synchronized (statusLock) {
+			if (complete.get()) return;
+			workObserved = true;
+			names.merge(name, 1, Integer::sum);
+			count.incrementAndGet();
+		}
+	}
+
+	private boolean finished(Map<String, Integer> names, AtomicInteger count, String name) {
+		synchronized (statusLock) {
+			if (complete.get() || names.isEmpty()) return false;
+			// Legacy no-argument callers finish the oldest matching phase; internal
+			// task/future observers always supply their captured listener name.
+			String key = name == null ? names.keySet().iterator().next() : name;
+			Integer outstanding = names.get(key);
+			if (outstanding == null) return false;
+			if (outstanding == 1) names.remove(key);
+			else names.put(key, outstanding - 1);
+			decrement(count);
+			return true;
+		}
+	}
+
+	/** Bounded snapshot: at most three names, regardless of task count. */
+	StatusSnapshot statusSnapshot() {
+		synchronized (statusLock) {
+			if (complete.get()) return new StatusSnapshot(phase, detail, 0, completedListeners, true);
+			if (!applying.isEmpty()) return snapshot("Applying", applying, activeApplyTasks.get());
+			if (!preparing.isEmpty()) return snapshot("Preparing", preparing, activePrepareTasks.get());
+			if (!pendingListeners.isEmpty()) return snapshot("Loading", pendingListeners, activeListeners.get());
+			return new StatusSnapshot(workObserved ? "Finishing" : "Starting", "resource reload", 0, completedListeners, false);
+		}
+	}
+
+	private StatusSnapshot snapshot(String currentPhase, Map<String, Integer> names, int count) {
+		StringBuilder text = new StringBuilder();
+		int shown = 0;
+		for (String name : names.keySet()) {
+			if (shown == 3) break;
+			if (shown++ != 0) text.append(", ");
+			text.append(name);
+		}
+		if (names.size() > shown) text.append(" +").append(names.size() - shown).append(" more");
+		return new StatusSnapshot(currentPhase, text.toString(), count, completedListeners, false);
+	}
+
+	record StatusSnapshot(String phase, String detail, int activeCount, int completedListeners, boolean complete) {}
 
 	void recordGetResource() {
 		if (!complete.get()) {

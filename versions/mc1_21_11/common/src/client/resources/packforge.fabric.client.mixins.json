@@ -1,18 +1,24 @@
 {
 	"required": true,
 	"package": "com.teenkung.packforge.client.mixin",
+	"plugin": "com.teenkung.packforge.mixin.compat.OptimizationMixinPlugin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"atlas.SpriteLoaderMixin",
 		"atlas.TextureAtlasMixin",
+		"atlas.TextureUtilMixin",
 		"config.PackSelectionScreenMixin",
-		"font.BitmapProviderDefinitionMixin",
+		"font.BitmapProviderGlyphMapAccessor",
+		"font.UnihexProviderGlyphMapAccessor",
+		"font.TrueTypeGlyphMapAccessor",
 		"font.FontManagerMixin",
 		"font.FontManagerPreparationAccessor",
 		"font.FontSetMixin",
+		"font.SpaceProviderDefinitionCodecMixin",
 		"model.ModelManagerMixin",
 		"options.OptionsMixin",
-		"ui.LoadingOverlayMixin"
+		"ui.LoadingOverlayMixin",
+		"ui.MinecraftReloadFeedbackMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

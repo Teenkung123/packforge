@@ -19,6 +19,7 @@ ext.packforgeRuntimeVersion = { String property, String defaultVersion ->
 ext.packforgeTarget = target
 ext.packforgePlatform = loader
 ext.packforgeLoader = loaderId
+ext.packforgeMixinExtras = loader.mixinExtras ?: registry.mixinExtrasPolicies[loaderId]
 ext.packforgeArtifactName = "packforge-${loaderId}-${rootProject.version}${loader.versionSuffix}-mc${target.artifactMinecraft}.jar"
 version = "${rootProject.version}${loader.versionSuffix}"
 group = rootProject.group
@@ -49,6 +50,9 @@ sourceSets {
 		client {
 			java.setSrcDirs(dirs(clientRoots, 'client', 'java'))
 			resources.setSrcDirs(dirs(clientRoots, 'client', 'resources'))
+			if (!loader.modMenuEntrypoint) {
+				java.exclude('com/teenkung/packforge/client/config/PackForgeModMenuApi.java')
+			}
 		}
 	}
 	test {
@@ -90,7 +94,11 @@ tasks.withType(Jar).configureEach {
 }
 tasks.named('jar', Jar) {
 	archiveFileName = packforgeArtifactName
-	from(common.sourceSets.main.output)
+	from(common.sourceSets.main.output) {
+		if (target.key != 'mc26_1_to_26_3') {
+			exclude 'com/teenkung/packforge/internal/loader/ResourceManagerSelectorBridge.class'
+		}
+	}
 }
 
 def properties = [version: version.toString(), minecraft_version_range: loader.minecraftVersionRange,
@@ -108,11 +116,13 @@ def generated = [
 	'packforge-capabilities.properties': "target=${target.key}\nminecraft=${target.artifactMinecraft}\nmaturity=${loader.maturity}\nbeta=${loader.maturity == 'beta'}\ncapabilities=${target.capabilities.join(',')}\n"
 ]
 def fixture = [pack: pack]
-def formats = target.packMetadata.schema == 'range'
-	? [min_inclusive: target.packMetadata.minFormat, max_inclusive: target.packMetadata.maxFormat]
-	: ((target.packMetadata.packFormat as int) >= 18
-		? [min_inclusive: target.packMetadata.packFormat, max_inclusive: target.packMetadata.packFormat] : null)
-if (formats != null) fixture.overlays = [entries: [[formats: formats, directory: 'overlay']]]
+if (target.packMetadata.schema == 'range') {
+	fixture.overlays = [entries: [[min_format: target.packMetadata.minFormat,
+		max_format: target.packMetadata.maxFormat, directory: 'overlay']]]
+} else if ((target.packMetadata.packFormat as int) >= 18) {
+	fixture.overlays = [entries: [[formats: [min_inclusive: target.packMetadata.packFormat,
+		max_inclusive: target.packMetadata.packFormat], directory: 'overlay']]]
+}
 tasks.register('benchmarkPackIndex', JavaExec) {
 	group = 'verification'
 	description = 'Runs the deterministic, non-gating PackIndex microbenchmark.'
@@ -126,7 +136,7 @@ if (loaderId == 'fabric') {
 	if (loader.modMenuEntrypoint) entrypoints.modmenu = ['com.teenkung.packforge.client.config.PackForgeModMenuApi']
 	def metadata = [schemaVersion: 1, id: 'packforge', version: version.toString(), name: 'PackForge',
 		description: 'Faster pack reloads and atlas overflow recovery for large resource packs.', authors: ['Teenkung123'],
-		contact: [homepage: 'https://github.com/Teenkung/PackForge', sources: 'https://github.com/Teenkung/PackForge'],
+		contact: [homepage: 'https://github.com/Teenkung123/packforge', sources: 'https://github.com/Teenkung123/packforge'],
 		license: 'MIT', icon: 'assets/packforge/icon.png', environment: 'client', entrypoints: entrypoints,
 		mixins: [target.mixinConfigs.main, [config: target.mixinConfigs.client, environment: 'client']],
 		accessWidener: 'packforge.accesswidener',
@@ -153,3 +163,7 @@ if (loaderId == 'fabric') {
 }
 
 apply from: rootProject.file('gradle/stonecutter-sources.gradle')
+apply from: rootProject.file('gradle/benchmark-observer.gradle')
+if (providers.gradleProperty('packforge_texture_correctness').map(Boolean::parseBoolean).getOrElse(false)) {
+	apply from: rootProject.file('benchmarks/correctness/build-helper.gradle')
+}

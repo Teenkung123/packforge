@@ -1,0 +1,76 @@
+import groovy.json.JsonOutput
+
+// Opt-in, build-only observer. Apply after a node's loader dependencies are configured.
+// No production task depends on these tasks or includes their output.
+if (project.name != 'mc26_1_to_26_3') return
+def observerLoader = project.parent.name
+def observerVersion = packforgeRuntimeVersion('packforge_minecraft_version_override', packforgeTarget.minecraftVersion)
+def observerRoot = rootProject.file('benchmarks/observer')
+def observerOutput = rootProject.layout.buildDirectory.dir("benchmarks/observer/${observerLoader}/${observerVersion}")
+def observerCompile = tasks.register('compileBenchmarkObserver', JavaCompile) {
+    source fileTree(new File(observerRoot, 'src/main/java')) { include '**/*.java' }
+    // 26.2 and 26.3 share the post-26.1 GUI observer adapter.
+    def observerAdapter = observerVersion in ['26.2', '26.3'] ? 'mc26_2' : 'mc26_1'
+    source fileTree(new File(observerRoot, "src/${observerAdapter}/java")) { include '**/*.java' }
+    if (observerLoader != 'fabric') source fileTree(new File(observerRoot, "src/${observerLoader}/java")) { include '**/*.java' }
+    classpath = sourceSets.main.compileClasspath
+    if (sourceSets.findByName('client') != null) classpath += sourceSets.client.compileClasspath
+    destinationDirectory = observerOutput.map { it.dir('classes') }
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(25) }
+    options.release = 25
+    options.compilerArgs += ['-proc:none']
+    options.encoding = 'UTF-8'
+}
+def observerMetadata = tasks.register('generateBenchmarkObserverMetadata') {
+    inputs.property('loader', observerLoader)
+    inputs.property('minecraftVersion', observerVersion)
+    outputs.dir(observerOutput.map { it.dir('metadata') })
+    doLast {
+        def directory = observerOutput.get().dir('metadata').asFile
+        directory.mkdirs()
+        def packRange = observerVersion == '26.3' ? [min_format: [97, 1], max_format: [97, 1]] : [min_format: [84, 0], max_format: [88, 0]]
+        new File(directory, 'pack.mcmeta').text = JsonOutput.prettyPrint(JsonOutput.toJson([
+            pack: [description: 'Resource Load Benchmark Observer'] + packRange
+        ]))
+        if (observerLoader == 'fabric') {
+            new File(directory, 'fabric.mod.json').text = JsonOutput.prettyPrint(JsonOutput.toJson([
+                schemaVersion: 1, id: 'benchmark_observer', version: '1.0.0',
+                name: 'Resource Load Benchmark Observer', environment: 'client', license: 'MIT',
+                mixins: ['benchmark-observer.mixins.json'],
+                depends: [fabricloader: packforgeTarget.platforms.fabric.loaderDependency, minecraft: observerVersion, java: '>=25']
+            ]))
+        } else {
+            def meta = new File(directory, 'META-INF')
+            meta.mkdirs()
+            def filename = observerLoader == 'forge' ? 'mods.toml' : 'neoforge.mods.toml'
+            def dependency = observerLoader == 'forge' ? 'mandatory=true' : 'type="required"'
+            new File(meta, filename).text = """modLoader="javafml"
+loaderVersion="[1,)"
+license="MIT"
+[[mods]]
+modId="benchmark_observer"
+version="1.0.0"
+displayName="Resource Load Benchmark Observer"
+description="Standalone test-only reload measurement controller."
+[[dependencies.benchmark_observer]]
+modId="minecraft"
+${dependency}
+versionRange="[${observerVersion}]"
+ordering="NONE"
+side="CLIENT"
+""" + (observerLoader == 'neoforge' ? '\n[[mixins]]\nconfig="benchmark-observer.mixins.json"\n' : '')
+        }
+    }
+}
+tasks.register('benchmarkObserverJar', Jar) {
+    group = 'verification'
+    description = 'Build the independent exact-version benchmark observer (not a release artifact).'
+    archiveFileName = "benchmark-observer-${observerLoader}-${observerVersion}.jar"
+    destinationDirectory = observerOutput
+    from(observerCompile.flatMap { it.destinationDirectory })
+    from(observerMetadata)
+    from(new File(observerRoot, 'src/main/resources'))
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    if (observerLoader == 'forge') manifest.attributes('MixinConfigs': 'benchmark-observer.mixins.json')
+}

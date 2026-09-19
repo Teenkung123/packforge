@@ -22,11 +22,12 @@ public final class FontReloadDiagnostics {
 		APPLY_STATS.set(new ApplyStats(System.nanoTime(), providers.size(), providerCount));
 	}
 
-	public static void recordFontSet(long elapsedNs) {
+	public static void recordFontSet(long elapsedNs, boolean reusedPreparedSelection) {
 		ApplyStats stats = APPLY_STATS.get();
 		if (stats != null) {
 			stats.fontSetNs += elapsedNs;
 			stats.fontSets++;
+			if (reusedPreparedSelection) stats.preparedFontSets++;
 		}
 	}
 
@@ -38,18 +39,21 @@ public final class FontReloadDiagnostics {
 		}
 		long applyNs = System.nanoTime() - stats.startNs;
 		PackForge.LOGGER.info(
-			"PackForge font reload: apply={}ms fontSetCreate={}ms fontSets={} fonts={} providers={}",
+			"PackForge font reload: apply={}ms fontSetCreate={}ms fontSets={} prepared={} fallback={} fonts={} providers={}",
 			ms(applyNs),
 			ms(stats.fontSetNs),
 			stats.fontSets,
+			stats.preparedFontSets,
+			stats.fontSets - stats.preparedFontSets,
 			stats.fonts,
 			stats.providers
 		);
 		String row = System.currentTimeMillis() + "," + ms(applyNs) + "," + ms(stats.fontSetNs) + ","
-			+ stats.fontSets + "," + stats.fonts + "," + stats.providers;
+			+ stats.fontSets + "," + stats.preparedFontSets + "," + (stats.fontSets - stats.preparedFontSets)
+			+ "," + stats.fonts + "," + stats.providers;
 		AsyncDiagnosticCsv.append(
 			Path.of("logs", "packforge-font-timings.csv"),
-			"timestamp,apply_ms,font_set_create_ms,font_sets,fonts,providers",
+			"timestamp,apply_ms,font_set_create_ms,font_sets,prepared_font_sets,fallback_font_sets,fonts,providers",
 			List.of(row)
 		);
 	}
@@ -71,6 +75,7 @@ public final class FontReloadDiagnostics {
 		private final int providers;
 		private long fontSetNs;
 		private int fontSets;
+		private int preparedFontSets;
 
 		private ApplyStats(long startNs, int fonts, int providers) {
 			this.startNs = startNs;

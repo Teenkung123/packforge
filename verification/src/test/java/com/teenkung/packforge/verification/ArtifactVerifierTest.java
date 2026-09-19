@@ -1,6 +1,7 @@
 package com.teenkung.packforge.verification;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ArtifactVerifierTest {
     @TempDir Path directory;
+    private static final String MODERN_TARGET = "mc26_1_to_26_3";
 
     private JsonObject registry() throws IOException {
         try (var input = getClass().getResourceAsStream("/registry.json")) {
@@ -56,8 +59,12 @@ class ArtifactVerifierTest {
         });
     }
 
-    @Test void completeSeventeenArtifactSetAndCli() throws Exception {
+    @Test void completeRegistryArtifactSetAndCli() throws Exception {
         JsonObject registry = registry();
+        int expectedCount = registry.getAsJsonArray("targets").asList().stream()
+                .map(JsonElement::getAsJsonObject)
+                .mapToInt(target -> target.getAsJsonObject("platforms").size())
+                .sum();
         int count = 0;
         for (var element : registry.getAsJsonArray("targets")) {
             JsonObject target = element.getAsJsonObject();
@@ -66,7 +73,7 @@ class ArtifactVerifierTest {
                 count++;
             }
         }
-        assertEquals(17, count);
+        assertEquals(expectedCount, count);
         Path path = directory.resolve("registry.json");
         Files.writeString(path, registry.toString());
         verify(path, directory, "1.4", null);
@@ -79,6 +86,54 @@ class ArtifactVerifierTest {
         assertThrows(IllegalStateException.class, () -> verify(path, directory, "1.4", "unknown"));
         Files.delete(directory.resolve(artifactName(target(registry, "mc1_20_1"), "forge", "1.4")));
         assertThrows(IllegalStateException.class, () -> verify(path, directory, "1.4", "mc1_20_1"));
+    }
+
+    @TestFactory Stream<DynamicTest> rejectsBenchmarkEntriesEvenWithMatchingInventory() {
+        return Stream.of("dev/packbench/observer/BenchmarkObserver.class",
+                "dev/packbench/fixture.json", "META-INF/versions/25/dev/packbench/observer/Observer.class",
+                "benchmark-observer.mixins.json", "META-INF/benchmark-observer.json", "capture.jfr",
+                "org/openjdk/jmh/Runner.class", "one/profiler/AsyncProfiler.class",
+                "org/asyncprofiler/AsyncProfiler.class", "jdk/jfr/Event.class", "org/openjdk/jmc/Recorder.class",
+                "org/junit/Test.class").map(path -> DynamicTest.dynamicTest(path, () -> {
+            JsonObject registry = registry();
+            JsonObject target = target(registry, MODERN_TARGET);
+            Map<String, byte[]> files = fixture(registry, target, "fabric");
+            files.put(path, path.endsWith(".class") ? clazz(path, 61) : new byte[0]);
+            Path jar = directory.resolve("contaminated.jar");
+            write(jar, files);
+            var failure = assertThrows(IllegalStateException.class, () -> ArtifactVerifier.verifyArtifact(
+                    registry, target, "fabric", jar, ClassInventory.of(files.keySet())));
+            assertTrue(failure.getMessage().startsWith("Forbidden"), failure.getMessage());
+        }));
+    }
+
+    @Test void mc26RegistryDoesNotAdvertiseUnadmittedAtlasCap() throws Exception {
+        JsonObject registry = registry();
+        for (String key : List.of("mc26_1_to_26_2", MODERN_TARGET)) {
+            JsonObject target = target(registry, key);
+            List<String> capabilities = target.getAsJsonArray("capabilities").asList().stream()
+                    .map(JsonElement::getAsString).toList();
+            assertFalse(capabilities.contains("ATLAS_CAP"), key);
+            assertTrue(capabilities.contains("ATLAS_RETRY"), key);
+        }
+    }
+
+    @Test void readReuseRequiresItsImplementationAndAdapter() throws Exception {
+        JsonObject registry = registry();
+        JsonObject target = target(registry, MODERN_TARGET);
+        target.getAsJsonArray("capabilities").add("RESOURCE_READ_REUSE");
+        Map<String, byte[]> complete = fixture(registry, target, "fabric");
+        Path jar = directory.resolve("reuse.jar");
+        write(jar, complete);
+        verifyArtifact(registry, target, "fabric", jar);
+        for (String name : List.of("loader/ReloadReadCache", "loader/ZipResourceReadReuse",
+                "concurrent/PreparationBudget", "mixin/loader/ZipIoSupplierReadReuseMixin")) {
+            Map<String, byte[]> missing = new LinkedHashMap<>(complete);
+            missing.remove(BASE + name + ".class");
+            write(jar, missing);
+            assertThrows(IllegalStateException.class, () -> ArtifactVerifier.verifyArtifact(
+                    registry, target, "fabric", jar, ClassInventory.of(missing.keySet())), name);
+        }
     }
 
     @TestFactory Stream<DynamicTest> rejectsArtifactMutations() {
@@ -105,7 +160,7 @@ class ArtifactVerifierTest {
         mutations.put("removed composite", f -> f.put(BASE + "mixin/loader/CompositePackResourcesMixin.class", clazz(BASE + "mixin/loader/CompositePackResourcesMixin.class", 61)));
         mutations.put("nested atlas class", f -> f.put(BASE + "client/mixin/atlas/SpriteLoaderMixin$State.class", clazz(BASE + "client/mixin/atlas/SpriteLoaderMixin$State.class", 61)));
         mutations.put("missing atlas state", f -> f.remove(BASE + "client/atlas/AtlasLoadInvocation.class"));
-        mutations.put("missing extras", f -> f.keySet().removeIf(n -> n.contains("mixinextras-")));
+        mutations.put("unexpected extras", f -> f.put("META-INF/jars/mixinextras-fabric-0.5.4.jar", new byte[0]));
         mutations.put("nested common", f -> f.put("META-INF/jars/packforge-common.jar", new byte[0]));
         mutations.put("build tool", f -> f.put("org/gradle/api/Plugin.class", clazz("org/gradle/api/Plugin.class", 61)));
         mutations.put("multi-release build tool", f -> f.put("META-INF/versions/17/org/objectweb/asm/ClassReader.class", clazz("org/objectweb/asm/ClassReader.class", 61)));
@@ -115,7 +170,7 @@ class ArtifactVerifierTest {
         mutations.put("wrong operations", f -> f.put(FILE_PACK, operations(69, Map.of("wrong", 5), false)));
         return mutations.entrySet().stream().map(e -> DynamicTest.dynamicTest(e.getKey(), () -> {
             JsonObject registry = registry();
-            JsonObject target = target(registry, "mc26_1_to_26_2");
+            JsonObject target = target(registry, MODERN_TARGET);
             Map<String, byte[]> fixture = fixture(registry, target, "fabric");
             e.getValue().accept(fixture);
             Path jar = directory.resolve("mutated.jar");
@@ -127,7 +182,7 @@ class ArtifactVerifierTest {
     @TestFactory Stream<DynamicTest> everyCapabilityRequirementIsEnforced() {
         return CapabilityContracts.ALL.entrySet().stream().flatMap(e -> {
             List<DynamicTest> tests = new ArrayList<>();
-            var c = e.getValue();
+            var c = CapabilityContracts.forAdapter(e.getKey(), "mc26");
             for (String path : c.classes()) tests.add(capabilityFailure(e.getKey(), path, f -> f.remove(path)));
             if (!c.anyClasses().isEmpty()) tests.add(capabilityFailure(e.getKey(), "alternatives", f -> c.anyClasses().forEach(f::remove)));
             for (String name : c.mainMixins()) tests.add(capabilityFailure(e.getKey(), name, f -> removeMixin(f, "packforge.fabric.mixins.json", "mixins", Set.of(name))));
@@ -137,10 +192,54 @@ class ArtifactVerifierTest {
         });
     }
 
+    @TestFactory Stream<DynamicTest> modelContractsUseTheActiveAdapterImplementation() {
+        return Stream.of(MODERN_TARGET, "mc1_21_1").map(key -> DynamicTest.dynamicTest(key, () -> {
+            JsonObject registry = registry();
+            JsonObject target = target(registry, key);
+            JsonArray capabilities = new JsonArray();
+            capabilities.add("MODEL_PARSE_BATCHING");
+            capabilities.add("MODEL_PARSE_TIMINGS");
+            target.add("capabilities", capabilities);
+            Map<String, byte[]> files = fixture(registry, target, "fabric");
+            boolean modern = key.equals(MODERN_TARGET);
+            assertEquals(!modern, files.containsKey(BASE + "client/model/ModelParseOptimizer.class"));
+            Path jar = directory.resolve("model-contract.jar");
+            write(jar, files);
+            verifyArtifact(registry, target, "fabric", jar);
+            List<String> required = modern
+                    ? List.of("concurrent/ModelSchedulingPlan", "concurrent/CoalescingExecutor", "client/model/ModelSourceDiagnostics")
+                    : List.of("client/model/ModelBatchPlan", "client/model/ModelParseOptimizer", "client/model/ModelParseTimings");
+            for (String name : required) {
+                Map<String, byte[]> missing = new LinkedHashMap<>(files);
+                missing.remove(BASE + name + ".class");
+                write(jar, missing);
+                assertThrows(IllegalStateException.class, () -> ArtifactVerifier.verifyArtifact(
+                        registry, target, "fabric", jar, ClassInventory.of(missing.keySet())), name);
+            }
+        }));
+    }
+
+    @Test
+    void mc120RawFontPreselectionContractRejectsMissingImplementation() throws Exception {
+        JsonObject registry = registry();
+        JsonObject target = target(registry, "mc1_20_1");
+        JsonArray capabilities = new JsonArray();
+        capabilities.add("FONT_PROVIDER_PRESELECTION");
+        target.add("capabilities", capabilities);
+        Map<String, byte[]> fixture = fixture(registry, target, "fabric");
+        Path jar = directory.resolve("mc120-raw-font-contract.jar");
+        write(jar, fixture);
+        assertDoesNotThrow(() -> verifyArtifact(registry, target, "fabric", jar));
+
+        fixture.remove(BASE + "client/font/RawFontSelectionRegistry.class");
+        write(jar, fixture);
+        assertThrows(IllegalStateException.class, () -> verifyArtifact(registry, target, "fabric", jar));
+    }
+
     private DynamicTest capabilityFailure(String capability, String label, Consumer<Map<String, byte[]>> mutate) {
         return DynamicTest.dynamicTest(capability + ": " + label, () -> {
             JsonObject registry = registry();
-            JsonObject target = target(registry, "mc26_1_to_26_2");
+            JsonObject target = target(registry, MODERN_TARGET);
             JsonArray capabilities = new JsonArray();
             capabilities.add(capability);
             target.add("capabilities", capabilities);
@@ -231,14 +330,14 @@ class ArtifactVerifierTest {
         JsonObject target = target(registry, "mc1_20_1");
         var files = fixture(registry, target, "forge");
         edit(files, "META-INF/jarjar/metadata.json", j -> j.getAsJsonArray("jars").get(0).getAsJsonObject()
-                .getAsJsonObject("version").addProperty("range", "[" + string(registry, "mixinExtrasVersion") + "]"));
+                .getAsJsonObject("version").addProperty("range", "[" + string(MixinExtrasContract.policy(registry, target, "forge"), "version") + "]"));
         Path jar = directory.resolve("legacy-mdg.jar");
         write(jar, files);
         assertDoesNotThrow(() -> verifyArtifact(registry, target, "forge", jar));
     }
 
     @TestFactory Stream<DynamicTest> nestedJarRegistrationMutations() {
-        return Stream.of("fabric", "forge", "neoforge").flatMap(platform -> {
+        return Stream.of("forge").flatMap(platform -> {
             String metadata = platform.equals("fabric") ? "fabric.mod.json" : "META-INF/jarjar/metadata.json";
             String pathKey = platform.equals("fabric") ? "file" : "path";
             Map<String, Consumer<Map<String, byte[]>>> mutations = new LinkedHashMap<>();
@@ -266,13 +365,153 @@ class ArtifactVerifierTest {
         });
     }
 
+    @TestFactory Stream<DynamicTest> loaderProvidedRejectsLibrariesAndRegistrations() {
+        return Stream.of("fabric", "neoforge").flatMap(platform -> Stream.of("library", "registration", "flattened").map(mutation ->
+                DynamicTest.dynamicTest(platform + ": " + mutation, () -> {
+                    JsonObject registry = registry();
+                    JsonObject target = target(registry, MODERN_TARGET);
+                    var files = fixture(registry, target, platform);
+                    switch (mutation) {
+                        case "library" -> files.put("META-INF/jars/unexpected.jar", new byte[0]);
+                        case "flattened" -> files.put("com/llamalad7/mixinextras/MixinExtrasBootstrap.class", clazz("Bootstrap.class", 61));
+                        case "registration" -> {
+                            JsonArray jars = new JsonArray();
+                            jars.add(new JsonObject());
+                            if (platform.equals("fabric")) edit(files, "fabric.mod.json", j -> j.add("jars", jars));
+                            else put(files, "META-INF/jarjar/metadata.json", "{\"jars\":[{}]}");
+                        }
+                    }
+                    Path jar = directory.resolve("provided.jar");
+                    write(jar, files);
+                    var failure = assertThrows(IllegalStateException.class, () -> ArtifactVerifier.verifyArtifact(
+                            registry, target, platform, jar, ClassInventory.of(files.keySet())));
+                    assertTrue(failure.getMessage().contains("Loader-provided"), failure.getMessage());
+                })));
+    }
+
+    @Test void sizeCeilingIsEnforced() throws Exception {
+        JsonObject registry = registry();
+        JsonObject target = target(registry, "mc1_20_1");
+        Path jar = directory.resolve("oversize.jar");
+        write(jar, fixture(registry, target, "fabric"));
+        target.getAsJsonObject("platforms").getAsJsonObject("fabric").addProperty("maxArtifactBytes", Files.size(jar) - 1);
+        var failure = assertThrows(IllegalStateException.class, () -> verifyArtifact(registry, target, "fabric", jar));
+        assertTrue(failure.getMessage().contains("size ceiling"));
+    }
+
+    @Test void fallbackPoliciesAndMinimumLoaders() throws Exception {
+        for (String platform : List.of("fabric", "neoforge")) {
+            JsonObject registry = registry();
+            JsonObject target = target(registry, MODERN_TARGET);
+            JsonObject loader = target.getAsJsonObject("platforms").getAsJsonObject(platform);
+            loader.add("mixinExtras", registry.getAsJsonObject("mixinExtrasPolicies").getAsJsonObject("forge").deepCopy());
+            loader.addProperty("maxArtifactBytes", 800000);
+            validateRegistry(registry);
+            Path jar = directory.resolve("fallback.jar");
+            write(jar, fixture(registry, target, platform));
+            verifyArtifact(registry, target, platform, jar);
+        }
+        JsonObject oldFabric = registry();
+        JsonObject fabric = target(oldFabric, "mc1_20_1").getAsJsonObject("platforms").getAsJsonObject("fabric");
+        fabric.addProperty("loaderVersion", "0.19.1");
+        fabric.addProperty("loaderDependency", ">=0.19.1");
+        assertThrows(IllegalStateException.class, () -> validateRegistry(oldFabric));
+        JsonObject oldNeo = registry();
+        JsonObject neo = target(oldNeo, "mc1_21_1").getAsJsonObject("platforms").getAsJsonObject("neoforge");
+        neo.addProperty("version", "21.1.249");
+        neo.addProperty("versionRange", "[21.1.249,)");
+        assertThrows(IllegalStateException.class, () -> validateRegistry(oldNeo));
+    }
+
+    @Test void combinedMc26RequiresFabricMixinExtras055() throws Exception {
+        JsonObject registry = registry();
+        JsonObject target = target(registry, MODERN_TARGET);
+        assertDoesNotThrow(() -> validateRegistry(registry));
+        target.getAsJsonObject("platforms").getAsJsonObject("fabric").remove("mixinExtras");
+        assertThrows(IllegalStateException.class, () -> validateRegistry(registry));
+    }
+
+    @Test void combinedMc26RetainsItsBaselineModMenuIntegration() throws Exception {
+        JsonObject registry = registry();
+        JsonObject target = target(registry, MODERN_TARGET);
+        Map<String, byte[]> files = fixture(registry, target, "fabric");
+        assertTrue(files.containsKey(BASE + "client/config/PackForgeModMenuApi.class"));
+        Path jar = directory.resolve("combined-mc26-fabric.jar");
+        write(jar, files);
+        assertDoesNotThrow(() -> verifyArtifact(registry, target, "fabric", jar));
+        files.remove(BASE + "client/config/PackForgeModMenuApi.class");
+        write(jar, files);
+        assertThrows(IllegalStateException.class, () -> verifyArtifact(registry, target, "fabric", jar));
+    }
+
+    @TestFactory Stream<DynamicTest> rejectsBrokenSlimBootstrap() {
+        return Stream.of("missing plugin", "wrong plugin", "wrong version", "missing internal registration", "missing service", "missing operation", "full library", "invalid inner jar")
+                .map(mutation -> DynamicTest.dynamicTest(mutation, () -> {
+                    Map<String, byte[]> bundle = MixinExtrasContract.unzip(slimFixture("forge", "0.5.4"));
+                    String innerPath = "META-INF/jars/MixinExtras-0.5.4.jar";
+                    switch (mutation) {
+                        case "missing plugin" -> bundle.remove("com/llamalad7/mixinextras/platform/forge/MixinExtrasConfigPlugin.class");
+                        case "wrong plugin" -> edit(bundle, "mixinextras.init.mixins.json", j -> j.addProperty("plugin", "Wrong"));
+                        case "wrong version" -> put(bundle, "META-INF/MANIFEST.MF", "Manifest-Version: 1.0\nMixinConfigs: mixinextras.init.mixins.json\nFMLModType: GAMELIBRARY\nImplementation-Version: 0.0.0\n\n");
+                        case "missing internal registration" -> bundle.remove("META-INF/jarjar/metadata.json");
+                        case "invalid inner jar" -> bundle.put(innerPath, new byte[0]);
+                        default -> {
+                            var core = MixinExtrasContract.unzip(bundle.get(innerPath));
+                            if (mutation.equals("missing service")) core.remove("META-INF/services/javax.annotation.processing.Processor");
+                            else if (mutation.equals("missing operation")) core.remove("com/llamalad7/mixinextras/injector/wrapoperation/Operation.class");
+                            else core.put("com/llamalad7/mixinextras/lib/antlr/runtime/Parser.class", new byte[0]);
+                            bundle.put(innerPath, zipBytes(core));
+                        }
+                    }
+                    assertThrows(IllegalStateException.class, () -> MixinExtrasContract.verifyBundle(bundle, "forge", "0.5.4"));
+                }));
+    }
+
+    private static byte[] slimFixture(String platform, String version) {
+        Map<String, byte[]> core = new LinkedHashMap<>();
+        for (String name : List.of("MixinExtrasBootstrap", "injector/wrapoperation/WrapOperation", "injector/wrapoperation/Operation", "sugar/Local", "ap/MixinExtrasAP")) {
+            String path = "com/llamalad7/mixinextras/" + name + ".class";
+            core.put(path, clazz(path, 52));
+        }
+        put(core, "META-INF/MANIFEST.MF", "Manifest-Version: 1.0\nImplementation-Version: " + version + "\n\n");
+        put(core, "META-INF/services/javax.annotation.processing.Processor", "com.llamalad7.mixinextras.ap.MixinExtrasAP\n");
+        Map<String, byte[]> bundle = platform.equals("forge") ? new LinkedHashMap<>() : core;
+        String plugin = "com.llamalad7.mixinextras.platform." + platform + ".MixinExtrasConfigPlugin";
+        bundle.put(plugin.replace('.', '/') + ".class", clazz(plugin.replace('.', '/') + ".class", 52));
+        put(bundle, "mixinextras.init.mixins.json", "{\"plugin\":\"" + plugin + "\"}");
+        if (platform.equals("fabric")) {
+            put(bundle, "fabric.mod.json", "{\"id\":\"mixinextras\",\"version\":\"" + version + "\",\"mixins\":[\"mixinextras.init.mixins.json\"]}");
+        } else {
+            put(bundle, "META-INF/MANIFEST.MF", "Manifest-Version: 1.0\nMixinConfigs: mixinextras.init.mixins.json\nFMLModType: GAMELIBRARY\nImplementation-Version: " + version + "\n\n");
+            if (platform.equals("forge")) {
+                bundle.put("META-INF/jars/MixinExtras-" + version + ".jar", zipBytes(core));
+                put(bundle, "META-INF/jarjar/metadata.json", "{\"jars\":[{\"identifier\":{\"group\":\"com.github.LlamaLad7\",\"artifact\":\"MixinExtras\"},\"version\":{\"artifactVersion\":\"" + version + "\",\"range\":\"[" + version + ",)\"},\"path\":\"META-INF/jars/MixinExtras-" + version + ".jar\"}]}");
+            }
+        }
+        return zipBytes(bundle);
+    }
+
+    private static byte[] zipBytes(Map<String, byte[]> files) {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
+                for (var entry : files.entrySet()) {
+                    zip.putNextEntry(new ZipEntry(entry.getKey()));
+                    zip.write(entry.getValue());
+                    zip.closeEntry();
+                }
+            }
+            return bytes.toByteArray();
+        } catch (IOException failure) { throw new IllegalStateException(failure); }
+    }
+
     private static Map<String, byte[]> fixture(JsonObject registry, JsonObject target, String platform) {
         Map<String, byte[]> files = new LinkedHashMap<>();
         String unchecked = BASE + "platform/PackForgeServices.class";
         files.put(unchecked, clazz(unchecked, 61));
         Set<String> main = new LinkedHashSet<>(List.of("loader.FilePackResourcesMixin"));
         Set<String> client = new LinkedHashSet<>(List.of("config.PackSelectionScreenMixin"));
-        for (String path : List.of(BASE + "PackForgeCore.class", BASE + "client/config/PackForgeConfigScreen.class", BASE + "client/config/PackForgeModMenuApi.class")) files.put(path, clazz(path, 61));
+        for (String path : List.of(BASE + "PackForgeCore.class", BASE + "client/config/PackForgeConfigScreen.class")) files.put(path, clazz(path, 61));
         if (!string(target, "key").equals("mc1_20_1")) {
             main.add("loader.SharedZipFileAccessMixin");
             String bridge = BASE + "internal/loader/SharedZipFileAccessBridge.class";
@@ -283,7 +522,7 @@ class ArtifactVerifierTest {
             files.put(atlas, clazz(atlas, 61));
         }
         for (String name : strings(target, "capabilities")) {
-            var c = CapabilityContracts.ALL.get(name);
+            var c = CapabilityContracts.forAdapter(name, string(target, "apiAdapter"));
             Stream.concat(c.classes().stream(), c.anyClasses().stream()).forEach(p -> files.put(p, clazz(p, 61)));
             main.addAll(c.mainMixins());
             client.addAll(c.clientMixins());
@@ -302,9 +541,11 @@ class ArtifactVerifierTest {
         put(files, "client.refmap.json", "{\"mappings\":{\"com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin\":{\"loadAndStitch\":\"Lowner;m_2()V\"}}}");
         put(files, "assets/packforge/lang/en_us.json", "{}");
         files.put("assets/packforge/textures/gui/sprites/config_cog.png", new byte[0]);
-        String extrasVersion = string(registry, "mixinExtrasVersion");
-        String extrasPath = "META-INF/" + (platform.equals("fabric") ? "jars/" : "jarjar/") + "mixinextras-" + platform + "-" + extrasVersion + ".jar";
-        files.put(extrasPath, new byte[0]);
+        JsonObject extrasPolicy = MixinExtrasContract.policy(registry, target, platform);
+        String extrasVersion = string(extrasPolicy, "version");
+        String extrasPath = "META-INF/" + (platform.equals("fabric") ? "jars/" : "jarjar/") + "mixinextras-" + platform + "-" + extrasVersion + "-slim.jar";
+        boolean bundled = string(extrasPolicy, "provider").equals("bundled");
+        if (bundled) files.put(extrasPath, slimFixture(platform, extrasVersion));
         JsonObject pack = new JsonObject();
         JsonObject packSpec = target.getAsJsonObject("packMetadata");
         if (string(packSpec, "schema").equals("single")) pack.add("pack_format", packSpec.get("packFormat"));
@@ -319,7 +560,16 @@ class ArtifactVerifierTest {
         put(files, "packforge-capabilities.properties", "target=" + string(target, "key") + "\nminecraft=" + string(target, "artifactMinecraft")
                 + "\nmaturity=" + string(loader, "maturity") + "\nbeta=" + string(loader, "maturity").equals("beta") + "\ncapabilities=" + String.join(",", strings(target, "capabilities")));
         if (platform.equals("fabric")) {
-            JsonObject fabric = JsonParser.parseString("{\"entrypoints\":{\"modmenu\":[\"com.teenkung.packforge.client.config.PackForgeModMenuApi\"]},\"suggests\":{\"modmenu\":\"*\"}}").getAsJsonObject();
+            JsonObject fabric = JsonParser.parseString("{\"entrypoints\":{}}").getAsJsonObject();
+            if (loader.get("modMenuEntrypoint").getAsBoolean()) {
+                files.put(BASE + "client/config/PackForgeModMenuApi.class", clazz(BASE + "client/config/PackForgeModMenuApi.class", 61));
+                JsonArray modmenu = new JsonArray();
+                modmenu.add("com.teenkung.packforge.client.config.PackForgeModMenuApi");
+                fabric.getAsJsonObject("entrypoints").add("modmenu", modmenu);
+                JsonObject suggests = new JsonObject();
+                suggests.addProperty("modmenu", "*");
+                fabric.add("suggests", suggests);
+            }
             JsonObject depends = new JsonObject();
             depends.addProperty("fabricloader", string(loader, "loaderDependency"));
             depends.addProperty("minecraft", string(loader, "minecraftDependency"));
@@ -329,6 +579,7 @@ class ArtifactVerifierTest {
             put(files, "packforge.accesswidener", "accessWidener v2 " + (target.get("legacyApi").getAsBoolean() ? "intermediary" : "official"));
         } else put(files, platform.equals("forge") ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml",
                 "versionRange=\"" + string(loader, "versionRange") + "\"\nversionRange=\"" + string(loader, "minecraftVersionRange") + "\"");
+        if (!bundled) return files;
         JsonObject registration = new JsonObject();
         registration.addProperty(platform.equals("fabric") ? "file" : "path", extrasPath);
         if (!platform.equals("fabric")) {

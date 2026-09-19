@@ -73,6 +73,17 @@ class RegistryValidatorTest {
         assertThrows(IllegalStateException.class, () -> RegistryValidator.validate(registry, root));
     }
 
+    @Test void atlasBindingMustDecorateTheSuppliedExecutorWithoutDroppingArguments() throws Exception {
+        Path registry = fixture();
+        String bound = MODERN.replace("mipLevel, executor, additional)", "mipLevel, invocation.bind(executor), additional)");
+        write(MODERN_PATH, bound);
+        assertDoesNotThrow(() -> RegistryValidator.validate(registry, root));
+        write(MODERN_PATH, bound.replace("invocation.bind(executor)", "invocation.bind(otherExecutor)"));
+        assertThrows(IllegalStateException.class, () -> RegistryValidator.validate(registry, root));
+        write(MODERN_PATH, bound.replace("invocation.bind(executor), additional)", "invocation.bind(executor))"));
+        assertThrows(IllegalStateException.class, () -> RegistryValidator.validate(registry, root));
+    }
+
     private void write(String relative, String text) throws Exception {
         Path path = root.resolve(relative);
         Files.createDirectories(path.getParent());

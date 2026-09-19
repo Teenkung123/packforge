@@ -59,10 +59,29 @@ public abstract class LoadingOverlayMixin {
 		ReloadSummaryToast.showPending();
 	}
 
+	/** A moving segment indicates activity, never estimated remaining time. */
+	@Inject(method = "extractProgressBar", at = @At("HEAD"), cancellable = true)
+	private void packforge$drawOngoingBar(GuiGraphicsExtractor graphics, int left, int top, int right, int bottom, float opacity, CallbackInfo ci) {
+		if (!FeatureFlags.loadingStatusOverlayEnabled() || this.reload.isDone()) return;
+		int color = ARGB.white(Math.max(0.0F, Math.min(1.0F, opacity)));
+		graphics.fill(left + 1, top, right - 1, top + 1, color);
+		graphics.fill(left + 1, bottom - 1, right - 1, bottom, color);
+		graphics.fill(left, top, left + 1, bottom, color);
+		graphics.fill(right - 1, top, right, bottom, color);
+		int width = Math.max(0, right - left - 4);
+		int segment = Math.max(1, width / 5);
+		int travel = Math.max(0, width - segment);
+		long cycle = Math.floorMod(System.nanoTime() / 1_000_000L, 2_000L);
+		float position = cycle < 1_000L ? cycle / 1_000.0F : (2_000L - cycle) / 1_000.0F;
+		int start = left + 2 + Math.round(travel * position);
+		if (width > 0) graphics.fill(start, top + 2, Math.min(right - 2, start + segment), bottom - 2, color);
+		ci.cancel();
+	}
+
 	@Inject(method = "extractRenderState", at = @At("TAIL"))
 	private void packforge$drawReloadStatus(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float tickProgress, CallbackInfo ci) {
 		boolean drawReload = FeatureFlags.loadingStatusOverlayEnabled() && ReloadStatus.isActive();
-		boolean drawStartup = FeatureFlags.startupStatusOverlayEnabled() && StartupStatus.isActive();
+		boolean drawStartup = !drawReload && FeatureFlags.startupStatusOverlayEnabled() && StartupStatus.isActive();
 		if ((!drawReload && !drawStartup) || !ReloadStatus.isStatusTextReady()) {
 			return;
 		}

@@ -5,7 +5,8 @@ plugins {
 apply from: rootProject.file('gradle/node.gradle')
 def target = packforgeTarget
 def loader = packforgePlatform
-def mixinExtras = rootProject.packforgeRegistry.mixinExtrasVersion
+def extras = packforgeMixinExtras
+def mixinExtras = extras.version
 def refmap = 'packforge.refmap.json'
 legacyForge {
 	enable {
@@ -29,7 +30,8 @@ legacyForge {
 dependencies {
 	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtras}"))
 	annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
-	jarJar(implementation("io.github.llamalad7:mixinextras-forge:${mixinExtras}")) {
+	runtimeOnly "io.github.llamalad7:mixinextras-forge:${mixinExtras}"
+	jarJar("io.github.llamalad7:mixinextras-forge:${mixinExtras}:${extras.classifier}") {
 		version { strictly "[${mixinExtras}]"; prefer mixinExtras }
 	}
 }

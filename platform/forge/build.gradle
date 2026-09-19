@@ -6,7 +6,8 @@ plugins {
 apply from: rootProject.file('gradle/node.gradle')
 def target = packforgeTarget
 def loader = packforgePlatform
-def mixinExtras = rootProject.packforgeRegistry.mixinExtrasVersion
+def extras = packforgeMixinExtras
+def mixinExtras = extras.version
 def needsJopt = target.key in ['mc1_21_1', 'mc1_21_4']
 // Forge discovers a development mod as one module. Merge compiled outputs only
 // for launches, avoiding cross-project classpath resolution and split packages.
@@ -55,7 +56,8 @@ dependencies {
 	implementation minecraft.dependency
 	if (needsJopt) runtimeOnly 'net.sf.jopt-simple:jopt-simple:5.0.4'
 	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtras}"))
-	implementation(jarJar("io.github.llamalad7:mixinextras-forge:${mixinExtras}")) {
+	runtimeOnly "io.github.llamalad7:mixinextras-forge:${mixinExtras}"
+	jarJar("io.github.llamalad7:mixinextras-forge:${mixinExtras}:${extras.classifier}") {
 		transitive = false
 		jarJar.configure(it) { version = mixinExtras }
 	}

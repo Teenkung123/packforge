@@ -60,6 +60,24 @@ def collect = tasks.register('collectPlatformJars', Copy) {
 		from(providers.provider { project(node.path).packforgeArtifact })
 	}
 	into layout.buildDirectory.dir('libs')
+	def expectedNames = nodes.collect { node ->
+		"packforge-${node.loader}-${modVersion}${node.target.platforms[node.loader].versionSuffix}-mc${node.target.artifactMinecraft}.jar".toString()
+	}.toSet()
+	inputs.property('expectedArtifactNames', expectedNames.sort())
+	doFirst {
+		def obsolete = fileTree(artifactDirectory) { include 'packforge-*.jar' }.files.findAll {
+			!expectedNames.contains(it.name)
+		}
+		if (!obsolete.empty) {
+			def archiveBase = layout.buildDirectory.dir('superseded-artifacts').get().asFile.toPath()
+			java.nio.file.Files.createDirectories(archiveBase)
+			def archive = java.nio.file.Files.createTempDirectory(archiveBase, 'release-')
+			obsolete.each { previous ->
+				java.nio.file.Files.move(previous.toPath(), archive.resolve(previous.name))
+			}
+			logger.lifecycle("Preserved ${obsolete.size()} superseded artifacts in ${archive}")
+		}
+	}
 }
 def verifyAll = registerVerification('verifyAllArtifacts', null, collect)
 registerVerification('verifyExistingArtifacts', null, null)

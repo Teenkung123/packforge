@@ -5,16 +5,22 @@ plugins {
 apply from: rootProject.file('gradle/node.gradle')
 def target = packforgeTarget
 def loader = packforgePlatform
-def mixinExtras = rootProject.packforgeRegistry.mixinExtrasVersion
+def extras = packforgeMixinExtras
+def mixinExtras = extras.version
 def smoke = packforgeArtifactSmoke
+def runtimeClassProvenance = providers.gradleProperty('packforge_runtime_class_provenance')
+	.map { it.toBoolean() }.getOrElse(false)
 neoForge {
 	version = packforgeRuntimeVersion('packforge_neoforge_version_override', loader.version)
+	// Plain adapter tests need the same patched Minecraft API as production compilation.
+	if (target.apiAdapter == 'mc26') addModdingDependenciesTo(sourceSets.test)
 	validateAccessTransformers = false
 	runs {
 		client {
 			client()
 			gameDirectory = packforgeRunDirectory
 			systemProperty 'forge.logging.console.level', 'debug'
+			if (smoke && runtimeClassProvenance) jvmArgument '-Xlog:class+load=info:stderr'
 			ideName = "NeoForge ${target.minecraftVersion} Client"
 		}
 	}
@@ -29,8 +35,10 @@ neoForge {
 }
 dependencies {
 	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtras}"))
-	jarJar(implementation("io.github.llamalad7:mixinextras-neoforge:${mixinExtras}")) {
-		version { strictly "[${mixinExtras}]"; prefer mixinExtras }
+	if (extras.provider == 'bundled') {
+		jarJar("io.github.llamalad7:mixinextras-neoforge:${mixinExtras}:${extras.classifier}") {
+			version { strictly "[${mixinExtras}]"; prefer mixinExtras }
+		}
 	}
 }
 ext.packforgeArtifact = tasks.named('jar').flatMap { it.archiveFile }

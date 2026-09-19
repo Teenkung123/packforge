@@ -34,7 +34,8 @@ public final class ArtifactVerifier {
     private static final List<String> BUILD_PREFIXES = List.of("org/gradle/", "groovy/", "org/codehaus/groovy/",
             "org/objectweb/asm/", "com/google/gson/", "org/junit/", "org/opentest4j/", "org/apiguardian/",
             "com/teenkung/packforge/verification/", "dev/kikugie/stonecutter/", "net/fabricmc/loom/",
-            "net/neoforged/moddevgradle/", "net/minecraftforge/gradle/");
+            "net/neoforged/moddevgradle/", "net/minecraftforge/gradle/",
+            "org/openjdk/jmh/", "one/profiler/", "org/asyncprofiler/", "jdk/jfr/", "org/openjdk/jmc/");
 
     private ArtifactVerifier() {}
 
@@ -89,7 +90,7 @@ public final class ArtifactVerifier {
 
     static void validateRegistry(JsonObject registry) {
         require(registry.get("schemaVersion").getAsInt() == 1, "Unsupported registry schema");
-        for (String field : List.of("mixinExtrasVersion", "mixinExtrasFabricLoaderMinimum", "fabricAsmVersion", "fabricMixinVersion")) string(registry, field);
+        for (String field : List.of("fabricAsmVersion", "fabricMixinVersion")) string(registry, field);
         Set<String> keys = new HashSet<>();
         Set<String> suffixes = new HashSet<>();
         for (JsonElement element : registry.getAsJsonArray("targets")) {
@@ -97,7 +98,8 @@ public final class ArtifactVerifier {
             for (String field : List.of("key", "taskSuffix", "minecraftVersion", "artifactMinecraft", "apiAdapter", "javaVersion", "legacyApi", "packMetadata", "mixinConfigs", "capabilities", "platforms")) {
                 require(target.has(field) && !target.get(field).isJsonNull(), "Missing target field: " + field);
             }
-            require(keys.add(string(target, "key")), "Duplicate target key");
+            String key = string(target, "key");
+            require(keys.add(key), "Duplicate target key");
             require(suffixes.add(string(target, "taskSuffix")), "Duplicate task suffix");
             require(CapabilityContracts.ALL.keySet().containsAll(strings(target, "capabilities")), "Capabilities without artifact contracts");
             require(Set.of("single", "range").contains(string(target.getAsJsonObject("packMetadata"), "schema")), "Unsupported pack metadata schema");
@@ -107,6 +109,7 @@ public final class ArtifactVerifier {
             for (String platform : platforms.keySet()) {
                 require(Set.of("fabric", "forge", "neoforge").contains(platform), "Unknown platform: " + platform);
                 JsonObject loader = platforms.getAsJsonObject(platform);
+                MixinExtrasContract.validatePolicy(registry, target, platform);
                 String maturity = string(loader, "maturity");
                 String suffix = string(loader, "versionSuffix");
                 require(maturity.equals("stable") ? suffix.isEmpty() : maturity.equals("beta") && suffix.matches("-beta\\.\\d+"), "Invalid maturity/version suffix");
@@ -117,13 +120,34 @@ public final class ArtifactVerifier {
                 }
                 if (platform.equals("fabric")) {
                     require(string(loader, "loaderDependency").equals(">=" + string(loader, "loaderVersion")), "Fabric minimum differs from compile version");
-                    require(compareVersions(string(loader, "loaderVersion"), string(registry, "mixinExtrasFabricLoaderMinimum")) >= 0, "Fabric Loader below MixinExtras minimum");
-                    require(!string(loader, "modMenuVersion").isBlank() && !string(loader, "fabricApiVersion").isBlank()
-                            && loader.get("modMenuEntrypoint").getAsBoolean(), "Missing optional Mod Menu development integration");
+                    require(compareVersions(string(loader, "loaderVersion"), "0.19.2") >= 0, "Fabric Loader below MixinExtras minimum");
+                    require(!string(loader, "fabricApiVersion").isBlank() && loader.has("modMenuEntrypoint"),
+                            "Missing Fabric development integration metadata");
+                    if (loader.get("modMenuEntrypoint").getAsBoolean()) {
+                        require(!string(loader, "modMenuVersion").isBlank(), "Missing optional Mod Menu development integration");
+                    } else {
+                        require(loader.has("modMenuReason") && !string(loader, "modMenuReason").isBlank(),
+                                "Disabled Mod Menu entrypoint requires a reason");
+                    }
+                    if (loader.has("fabricMixinVersion")) string(loader, "fabricMixinVersion");
                 } else {
                     String lower = string(loader, "version");
                     if (platform.equals("forge")) lower = lower.substring(lower.lastIndexOf('-') + 1);
                     require(string(loader, "versionRange").startsWith("[" + lower + ","), "Loader compile version differs from range lower bound");
+                }
+                if (loader.has("runtimeChecks")) {
+                    List<String> gameVersions = strings(target, "gameVersions");
+                    require(!gameVersions.isEmpty(), "Runtime checks require explicit game versions");
+                    Set<String> checkedVersions = new HashSet<>();
+                    for (JsonElement runtimeElement : loader.getAsJsonArray("runtimeChecks")) {
+                        JsonObject check = runtimeElement.getAsJsonObject();
+                        String minecraftVersion = string(check, "minecraftVersion");
+                        require(gameVersions.contains(minecraftVersion) && checkedVersions.add(minecraftVersion),
+                                "Runtime check must name one explicit game version exactly once");
+                        string(check, "mixinExtrasVersion");
+                        if (platform.equals("fabric")) require(!check.has("version"), "Fabric runtime checks inherit the target loader version");
+                        else string(check, "version");
+                    }
                 }
             }
         }
@@ -141,13 +165,15 @@ public final class ArtifactVerifier {
     }
 
     static void verifyArtifact(JsonObject registry, JsonObject target, String platform, Path artifact) throws IOException {
-        verifyArtifact(registry, target, platform, artifact, ClassInventory.expected(string(target, "key") + "/" + platform));
+        verifyArtifact(registry, target, platform, artifact,
+                ClassInventory.expected(string(target, "key") + "/" + platform));
     }
 
     static void verifyArtifact(JsonObject registry, JsonObject target, String platform, Path artifact,
                                ClassInventory inventory) throws IOException {
         require(Files.isRegularFile(artifact), "Expected artifact was not produced");
         JsonObject loader = target.getAsJsonObject("platforms").getAsJsonObject(platform);
+        require(Files.size(artifact) <= loader.get("maxArtifactBytes").getAsLong(), "Artifact exceeds size ceiling: " + Files.size(artifact));
         try (ZipFile zip = new ZipFile(artifact.toFile())) {
             Set<String> names = new HashSet<>();
             var entries = zip.entries();
@@ -155,8 +181,10 @@ public final class ArtifactVerifier {
                 String name = entries.nextElement().getName();
                 require(names.add(name), "Duplicate entry: " + name);
                 String normalized = name.replaceFirst("^META-INF/versions/[0-9]+/", "");
+                require(!normalized.startsWith("dev/packbench/"), "Forbidden benchmark observer entry: " + name);
                 require(!name.endsWith(".class") || BUILD_PREFIXES.stream().noneMatch(normalized::startsWith), "Forbidden build-tool class: " + name);
                 String leaf = name.substring(name.lastIndexOf('/') + 1).toLowerCase(java.util.Locale.ROOT);
+                require(!leaf.startsWith("benchmark-observer") && !leaf.endsWith(".jfr"), "Forbidden benchmark observer resource: " + name);
                 require(!(leaf.endsWith(".jar") && (leaf.contains("common") || leaf.startsWith("packforge-"))), "Forbidden nested common/runtime jar: " + name);
                 if (name.endsWith(".class")) {
                     int major = classMajor(bytes(zip, name), name);
@@ -168,8 +196,6 @@ public final class ArtifactVerifier {
             if (!string(target, "key").equals("mc1_20_1")) required(names, BASE + "internal/loader/SharedZipFileAccessBridge.class");
             for (String path : List.of(BASE + "PackForgeCore.class", BASE + "client/config/PackForgeConfigScreen.class",
                     BASE + "client/mixin/config/PackSelectionScreenMixin.class", "assets/packforge/lang/en_us.json", "assets/packforge/textures/gui/sprites/config_cog.png")) required(names, path);
-            String extras = "/mixinextras-" + platform + "-" + string(registry, "mixinExtrasVersion") + ".jar";
-            require(names.stream().anyMatch(n -> n.endsWith(extras)), "Missing pinned MixinExtras " + extras);
             JsonObject pack = json(zip, "pack.mcmeta").getAsJsonObject("pack");
             JsonObject expectedPack = target.getAsJsonObject("packMetadata");
             if (string(expectedPack, "schema").equals("single")) {
@@ -206,7 +232,7 @@ public final class ArtifactVerifier {
                 require(names.stream().noneMatch(n -> n.startsWith(BASE + "client/mixin/atlas/SpriteLoaderMixin$") && n.endsWith(".class")), "Nested mc26 SpriteLoader mixin class");
             }
             for (String capability : strings(target, "capabilities")) {
-                var contract = CapabilityContracts.ALL.get(capability);
+                var contract = CapabilityContracts.forAdapter(capability, string(target, "apiAdapter"));
                 require(contract != null, "Capability without contract: " + capability);
                 contract.classes().forEach(path -> required(names, path));
                 require(contract.anyClasses().isEmpty() || contract.anyClasses().stream().anyMatch(names::contains), "Missing implementation alternatives for " + capability);
@@ -215,32 +241,8 @@ public final class ArtifactVerifier {
                 require(contract.anyClientMixins().isEmpty() || contract.anyClientMixins().stream().anyMatch(clientMixins::contains), "Missing client mixin alternatives for " + capability);
             }
             checkLoader(zip, names, target, platform, loader, main, client);
-            checkNestedJars(zip, names, platform, string(registry, "mixinExtrasVersion"));
+            MixinExtrasContract.verify(zip, names, platform, MixinExtrasContract.policy(registry, target, platform));
             inventory.verify(names);
-        }
-    }
-
-    private static void checkNestedJars(ZipFile zip, Set<String> names, String platform, String version) throws IOException {
-        String path = "META-INF/" + (platform.equals("fabric") ? "jars/" : "jarjar/")
-                + "mixinextras-" + platform + "-" + version + ".jar";
-        Set<String> jars = new HashSet<>();
-        names.stream().filter(n -> n.toLowerCase(java.util.Locale.ROOT).endsWith(".jar")).forEach(jars::add);
-        require(jars.equals(Set.of(path)), "Only the pinned loader MixinExtras jar may be nested: " + jars);
-        JsonObject metadata = json(zip, platform.equals("fabric") ? "fabric.mod.json" : "META-INF/jarjar/metadata.json");
-        var registrations = metadata.getAsJsonArray("jars");
-        require(registrations != null && registrations.size() == 1, "Expected exactly one nested jar registration");
-        JsonObject entry = registrations.get(0).getAsJsonObject();
-        require(entry.has(platform.equals("fabric") ? "file" : "path")
-                && path.equals(string(entry, platform.equals("fabric") ? "file" : "path")), "Incorrect nested jar registration path");
-        if (!platform.equals("fabric")) {
-            JsonObject identifier = entry.getAsJsonObject("identifier");
-            JsonObject pin = entry.getAsJsonObject("version");
-            require(identifier != null && "io.github.llamalad7".equals(string(identifier, "group"))
-                    && ("mixinextras-" + platform).equals(string(identifier, "artifact")), "Incorrect nested jar coordinates");
-            require(pin != null && version.equals(string(pin, "artifactVersion"))
-                    && (("[" + version + "]").equals(string(pin, "range"))
-                        || platform.equals("forge") && ("[" + version + ",)").equals(string(pin, "range"))),
-                    "Incorrect nested jar version registration");
         }
     }
 
@@ -265,6 +267,12 @@ public final class ArtifactVerifier {
                 require(strings(fabric.getAsJsonObject("entrypoints"), "modmenu").equals(List.of("com.teenkung.packforge.client.config.PackForgeModMenuApi"))
                         && string(fabric.getAsJsonObject("suggests"), "modmenu").equals("*"), "Incomplete optional Mod Menu integration");
                 required(names, BASE + "client/config/PackForgeModMenuApi.class");
+            } else {
+                require(!fabric.getAsJsonObject("entrypoints").has("modmenu")
+                                && (!fabric.has("suggests") || !fabric.getAsJsonObject("suggests").has("modmenu")),
+                        "Disabled Mod Menu integration must not be registered");
+                require(!names.contains(BASE + "client/config/PackForgeModMenuApi.class"),
+                        "Disabled Mod Menu integration must not include its entrypoint class");
             }
             String namespace = target.get("legacyApi").getAsBoolean() ? "intermediary" : "official";
             String header = text(zip, "packforge.accesswidener").lines().findFirst().orElse("").trim();

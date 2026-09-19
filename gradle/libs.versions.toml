@@ -1,7 +1,7 @@
 [versions]
 loom = "1.17.16"
 forgegradle = "7.0.25"
-moddev = "2.0.141"
+moddev = "2.0.147"
 junit = "5.11.4"
 gson = "2.11.0"
 slf4j = "2.0.17"

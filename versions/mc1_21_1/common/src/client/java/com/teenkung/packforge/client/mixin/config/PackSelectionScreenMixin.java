@@ -31,9 +31,12 @@ public abstract class PackSelectionScreenMixin extends Screen {
 	@Unique
 	private static final ResourceLocation PACKFORGE_CONFIG_COG =
 		ResourceLocation.fromNamespaceAndPath("packforge", "config_cog");
+	@Unique
+	private static final ResourceLocation PACKFORGE_CONFIG_COG_TEXTURE =
+		ResourceLocation.fromNamespaceAndPath("packforge", "textures/gui/sprites/config_cog.png");
 	@Shadow @Final private Path packDir;
 	@Shadow private Button doneButton;
-	@Unique private SpriteIconButton packforge$configButton;
+	@Unique private Button packforge$configButton;
 	@Unique private boolean packforge$loggedNoSpace;
 	@Unique private ResourcePackButtonLayoutTracker packforge$layoutTracker;
 
@@ -46,11 +49,20 @@ public abstract class PackSelectionScreenMixin extends Screen {
 		if (this.minecraft == null || !this.packDir.equals(this.minecraft.getResourcePackDirectory())) {
 			return;
 		}
-		this.packforge$configButton = this.addRenderableWidget(SpriteIconButton.builder(
-			Component.translatable("packforge.config.resource_pack_button"),
-			button -> this.minecraft.setScreen(new PackForgeConfigScreen((Screen) (Object) this)),
-			true
-		).size(20, 20).sprite(PACKFORGE_CONFIG_COG, 16, 16).build());
+		Button configButton;
+		if (this.minecraft.getResourceManager().getResource(PACKFORGE_CONFIG_COG_TEXTURE).isPresent()) {
+			configButton = SpriteIconButton.builder(
+				Component.translatable("packforge.config.resource_pack_button"),
+				button -> this.minecraft.setScreen(new PackForgeConfigScreen((Screen) (Object) this)),
+				true
+			).size(20, 20).sprite(PACKFORGE_CONFIG_COG, 16, 16).build();
+		} else {
+			configButton = Button.builder(
+				Component.literal("PF"),
+				button -> this.minecraft.setScreen(new PackForgeConfigScreen((Screen) (Object) this))
+			).size(20, 20).build();
+		}
+		this.packforge$configButton = this.addRenderableWidget(configButton);
 		this.packforge$configButton.setTooltip(Tooltip.create(
 			Component.translatable("packforge.config.resource_pack_button")
 		));

@@ -12,6 +12,7 @@ import com.teenkung.packforge.loader.PackArchiveState;
 import com.teenkung.packforge.loader.PackIndex;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import com.teenkung.packforge.loader.ZipReadPool;
+import com.teenkung.packforge.loader.ZipResourceReadReuse;
 import net.minecraft.server.packs.FilePackResources;
 import net.minecraft.server.packs.PackLocationInfo;
 import net.minecraft.server.packs.PackType;
@@ -96,7 +97,9 @@ public abstract class FilePackResourcesMixin {
 					failure.cause()
 				)
 			);
-			return index == null || state.isClosed() || index.zipFile() != expectedZip ? null : index;
+			if (index == null || state.isClosed() || index.zipFile() != expectedZip) return null;
+			ZipResourceReadReuse.register(ReloadExecutionContext.current(), index);
+			return index;
 		} catch (RuntimeException ignored) {
 			return null;
 		}

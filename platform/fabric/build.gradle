@@ -14,7 +14,12 @@ apply from: rootProject.file('gradle/node.gradle')
 def target = packforgeTarget
 def loader = packforgePlatform
 def registry = rootProject.packforgeRegistry
+def extras = packforgeMixinExtras
 def smoke = packforgeArtifactSmoke
+def runtimeClassProvenance = providers.gradleProperty('packforge_runtime_class_provenance')
+	.map { it.toBoolean() }.getOrElse(false)
+def fabricMixinVersion = loader.fabricMixinVersion ?: registry.fabricMixinVersion
+def fabricApiVersion = packforgeRuntimeVersion('packforge_fabric_api_version_override', loader.fabricApiVersion)
 def accessWidener = rootProject.file(loader.accessWidener)
 repositories { maven { url = 'https://api.modrinth.com/maven' } }
 loom {
@@ -28,31 +33,34 @@ loom {
 		}
 	}
 	runs.client.runDir(packforgeRunDirectory.absolutePath)
+	if (smoke && runtimeClassProvenance) runs.client.vmArg('-Xlog:class+load=info:stderr')
 }
 dependencies {
 	minecraft "com.mojang:minecraft:${packforgeRuntimeVersion('packforge_minecraft_version_override', target.minecraftVersion)}"
 	if (loader.mappingMode == 'named') {
 		mappings loom.officialMojangMappings()
 		modImplementation "net.fabricmc:fabric-loader:${loader.loaderVersion}"
-		compileOnly "net.fabricmc:sponge-mixin:${registry.fabricMixinVersion}"
+		compileOnly "net.fabricmc:sponge-mixin:${fabricMixinVersion}"
 		if (loader.modMenuEntrypoint) modCompileOnly "maven.modrinth:modmenu:${loader.modMenuVersion}"
 	} else {
 		implementation "net.fabricmc:fabric-loader:${loader.loaderVersion}"
 		['asm', 'asm-analysis', 'asm-commons', 'asm-tree', 'asm-util'].each {
 			runtimeOnly "org.ow2.asm:${it}:${registry.fabricAsmVersion}"
 		}
-		runtimeOnly "net.fabricmc:sponge-mixin:${registry.fabricMixinVersion}"
+		runtimeOnly "net.fabricmc:sponge-mixin:${fabricMixinVersion}"
 		if (loader.modMenuEntrypoint) {
 			compileOnly "maven.modrinth:modmenu:${loader.modMenuVersion}"
 			if (!smoke) {
-				add('localRuntime', "net.fabricmc.fabric-api:fabric-api:${loader.fabricApiVersion}")
+				add('localRuntime', "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}")
 				add('localRuntime', "maven.modrinth:modmenu:${loader.modMenuVersion}")
 			}
 		}
 	}
-	if (!smoke && loader.fabricApiVersion) compileOnly "net.fabricmc.fabric-api:fabric-api:${loader.fabricApiVersion}"
-	implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${registry.mixinExtrasVersion}"))
-	include "io.github.llamalad7:mixinextras-fabric:${registry.mixinExtrasVersion}"
+	if (!smoke && fabricApiVersion) compileOnly "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
+	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${extras.version}"))
+	if (extras.provider == 'bundled') {
+		include "io.github.llamalad7:mixinextras-fabric:${extras.version}:${extras.classifier}"
+	}
 }
 if (smoke) {
 	def commonOutput = project(':common').sourceSets.main.output

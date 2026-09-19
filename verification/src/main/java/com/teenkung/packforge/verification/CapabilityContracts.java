@@ -10,9 +10,32 @@ final class CapabilityContracts {
 
     static final Map<String, Contract> ALL = contracts();
 
+    static Contract forAdapter(String capability, String adapter) {
+        if (adapter.equals("mc1_20_1") && capability.equals("FONT_PROVIDER_PRESELECTION")) {
+            return new Contract(classes("client/font/RawFontPreparedSelection client/font/RawFontSelectionRegistry"),
+                    List.of(), List.of(), words("font.FontManagerMixin font.FontSetMixin"), List.of());
+        }
+        if (adapter.equals("mc1_21_11") && capability.equals("ATLAS_MIP_PARALLEL")) {
+            return new Contract(classes("client/atlas/SolidifyKernel concurrent/PreparationBudget"),
+                    List.of(), List.of(), words("atlas.TextureUtilMixin"), List.of());
+        }
+        if (adapter.equals("mc26")) {
+            if (capability.equals("MODEL_PARSE_BATCHING")) {
+                return new Contract(classes("concurrent/ModelSchedulingPlan concurrent/CoalescingExecutor"),
+                        List.of(), List.of(), words("model.ModelManagerMixin"), List.of());
+            }
+            if (capability.equals("MODEL_PARSE_TIMINGS")) {
+                return new Contract(classes("client/model/ModelSourceDiagnostics"),
+                        List.of(), List.of(), words("model.ModelManagerMixin"), List.of());
+            }
+        }
+        return ALL.get(capability);
+    }
+
     private static Map<String, Contract> contracts() {
         Map<String, Contract> result = new LinkedHashMap<>();
         add(result, "RESOURCE_PACK_INDEX", "loader/PackIndex loader/PackIndexCache", "", "loader.FilePackResourcesMixin", "", "");
+        add(result, "RESOURCE_READ_REUSE", "loader/ReloadReadCache loader/ZipResourceReadReuse concurrent/PreparationBudget", "", "loader.FilePackResourcesMixin loader.ZipIoSupplierReadReuseMixin", "", "");
         add(result, "ZIP_READ_POOL", "loader/ZipFilePools loader/ZipReadPool", "", "loader.FilePackResourcesMixin", "", "");
         add(result, "LOADER_TIMINGS", "loader/LoaderTimings", "", "observe.ReloadableResourceManagerMixin", "", "");
         add(result, "RELOAD_LISTENER_TIMINGS SHADER_STALL_DIAGNOSTICS", "loader/ReloadListenerTelemetry", "", "observe.SimpleReloadInstanceMixin", "", "");

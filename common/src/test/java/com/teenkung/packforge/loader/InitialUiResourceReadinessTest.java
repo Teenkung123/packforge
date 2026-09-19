@@ -48,6 +48,51 @@ class InitialUiResourceReadinessTest {
 	}
 
 	@Test
+	void resourceKeysAloneDoNotProveReadiness() {
+		InitialUiResourceReadiness readiness = new InitialUiResourceReadiness();
+
+		readiness.listenerApplied("minecraft:shaders");
+		assertFalse(readiness.isReady());
+		readiness.listenerApplied("minecraft:fonts");
+		readiness.listenerApplied("minecraft:shadermanager");
+		readiness.listenerApplied("minecraft:fontmanager");
+
+		assertFalse(readiness.isReady());
+	}
+
+	@Test
+	void acceptsIntermediaryVanillaListenerNames() {
+		InitialUiResourceReadiness readiness = new InitialUiResourceReadiness();
+
+		readiness.listenerApplied("class_757");
+		assertFalse(readiness.isReady());
+		readiness.listenerApplied("class_378");
+
+		assertTrue(readiness.isReady());
+	}
+
+	@Test
+	void acceptsModernIntermediaryShaderManagerName() {
+		InitialUiResourceReadiness readiness = new InitialUiResourceReadiness();
+
+		readiness.listenerApplied("class_10151");
+		assertFalse(readiness.isReady());
+		readiness.listenerApplied("class_378");
+
+		assertTrue(readiness.isReady());
+	}
+
+	@Test
+	void ignoresIntermediaryClassPrefixCollisions() {
+		InitialUiResourceReadiness readiness = new InitialUiResourceReadiness();
+
+		readiness.listenerApplied("class_7578");
+		readiness.listenerApplied("class_3780");
+
+		assertFalse(readiness.isReady());
+	}
+
+	@Test
 	void acceptsLegacyAliases() {
 		InitialUiResourceReadiness readiness = new InitialUiResourceReadiness();
 		readiness.listenerApplied("net.minecraft.client.renderer.ShaderManager Reload Listener");

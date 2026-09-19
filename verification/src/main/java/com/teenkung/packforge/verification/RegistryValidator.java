@@ -56,7 +56,9 @@ public final class RegistryValidator {
         }
         String modern = Files.readString(repository.resolve(MODERN_SPRITE));
         require(Pattern.compile(ATLAS_WRAPPER).matcher(modern).find()
-                && modern.contains("original.call(resourceManager, atlasId, mipLevel, executor, additional)"), MODERN_SPRITE + " must mirror and forward five loadAndStitch arguments before Operation");
+                && (modern.contains("original.call(resourceManager, atlasId, mipLevel, executor, additional)")
+                    || modern.contains("original.call(resourceManager, atlasId, mipLevel, invocation.bind(executor), additional)")),
+                MODERN_SPRITE + " must mirror five loadAndStitch arguments and preserve the supplied executor, directly or through invocation binding");
         require(modern.contains("private static CompletableFuture<List<SpriteContents>> packforge$decodeBounded("), MODERN_SPRITE + " runSpriteSuppliers handler must be static");
         String legacy = Files.readString(repository.resolve(LEGACY_SPRITE));
         require(legacy.contains("method = \"loadAndStitch(Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/resources/ResourceLocation;ILjava/util/concurrent/Executor;Ljava/util/Collection;)Ljava/util/concurrent/CompletableFuture;\""), LEGACY_SPRITE + " must target the five-argument overload explicitly");

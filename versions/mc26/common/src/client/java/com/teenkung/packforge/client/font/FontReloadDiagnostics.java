@@ -68,10 +68,12 @@ public final class FontReloadDiagnostics {
 		}
 		long totalNs = System.nanoTime() - stats.startNs;
 		Snapshot snapshot = bundle != null ? bundle.diagnostics() : Snapshot.EMPTY;
-		PackForge.LOGGER.info("PackForge font reload: apply={}ms fontSetCreate={}ms fontSets={} optimized={} fonts={} providers={} selectionPrepare={}ms memoHits={} memoMisses={} uniqueStacks={} providerTypes={}",
+		PackForge.LOGGER.info("PackForge font reload: apply={}ms fontSetCreate={}ms fontSets={} optimized={} fonts={} providers={} selectionPrepare={}ms memoHits={} memoMisses={} uniqueStacks={} providerTypes={} coordinated={} bitmap={}",
 			ms(totalNs), ms(stats.fontSetCreateNs), stats.fontSets, stats.optimizedFontSets,
-			snapshot.fonts, snapshot.providers, ms(snapshot.selectionPrepareNs), snapshot.memoHits, snapshot.memoMisses, snapshot.uniqueStacks, snapshot.providerTypes);
+			snapshot.fonts, snapshot.providers, ms(snapshot.selectionPrepareNs), snapshot.memoHits, snapshot.memoMisses, snapshot.uniqueStacks, snapshot.providerTypes, bundle != null && bundle.coordinator() != null ? bundle.coordinator().diagnostics() : "disabled", "disabled");
 		writeCsv(totalNs, stats, snapshot);
+		AsyncDiagnosticCsv.append(Path.of("logs", "packforge-bitmap-font-timings.csv"),
+			"timestamp,collected,counters", List.of(System.currentTimeMillis() + ",false,{}"));
 	}
 
 	private static void writeCsv(long totalNs, ApplyStats stats, Snapshot snapshot) {
