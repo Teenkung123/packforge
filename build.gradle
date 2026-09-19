@@ -94,11 +94,6 @@ def collectTarget = tasks.register('collectTargetJars', Copy) {
 	into artifactDirectory
 }
 def verifyTarget = registerVerification('verifyTargetArtifacts', selectedKey, collectTarget)
-tasks.register('benchmarkPackIndex') {
-	group = 'verification'
-	description = 'Runs the selected target PackIndex microbenchmark on Fabric.'
-	dependsOn ":fabric:${selectedKey}:benchmarkPackIndex"
-}
 tasks.register('buildTarget') {
 	group = 'build'
 	description = 'Builds every enabled loader for -Ppackforge_target.'

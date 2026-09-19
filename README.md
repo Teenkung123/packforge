@@ -211,7 +211,7 @@ Use the checked-in Gradle 9.5.1 wrapper with Java 25. Java 17/21 target toolchai
 
 The build compiles the Java 17 `common` module and runs its tests once. Stonecutter generates only the small version-dependent templates in `src`; larger implementations stay in `versions`. Loader nodes flatten common classes into their final JARs before remapping. Build plugins and the `verification` module are not shipped.
 
-The daemon and local build cache are enabled, with two workers by default. Configuration cache remains off because Loom's shared mappings artifact currently invalidates it between full builds. `scripts/Measure-GradleBuild.ps1` records repeatable timings under `.gradle/measurements`; it does not change sources or clear caches.
+The daemon and local build cache are enabled, with two workers by default. Configuration cache remains off because Loom's shared mappings artifact currently invalidates it between full builds.
 
 Client runs can use `-Ppackforge_run_directory=<directory>` to keep a smoke test or development instance separate from the default run folder. This applies only to the selected `packforge_target`.
 

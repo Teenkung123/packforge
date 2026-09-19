@@ -48,3 +48,16 @@ replay_*.log
 # generated Python tooling caches
 __pycache__/
 *.py[cod]
+
+# Local reports, benchmark tools, and manual verification (not distributed)
+/docs/
+/benchmarks/
+/.codegraph/
+/gradle/benchmark-observer.gradle
+/.github/workflows/runtime-smoke.yml
+/scripts/Measure-GradleBuild.ps1
+/scripts/Smoke-*.ps1
+/scripts/Test-*.ps1
+/scripts/smoke-client.sh
+/scripts/benchmark-client.sh
+/common/src/test/java/com/teenkung/packforge/loader/PackIndexBenchmark.java

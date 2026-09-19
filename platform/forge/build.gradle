@@ -71,5 +71,5 @@ tasks.named('jarJar', Jar) { archiveFileName = packforgeArtifactName }
 tasks.named('assemble') { dependsOn tasks.named('jarJar') }
 ext.packforgeArtifact = tasks.named('jarJar').flatMap { it.archiveFile }
 if (packforgeArtifactSmoke) {
-	throw new GradleException('Use scripts/Smoke-Forge-Production.ps1 for final-JAR validation in the production namespace.')
+	throw new GradleException('Install the final JAR in a separate Forge client for production-namespace validation.')
 }

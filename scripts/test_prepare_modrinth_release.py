@@ -12,7 +12,6 @@ from pathlib import Path
 SCRIPT = Path(__file__).with_name("prepare-modrinth-release.py")
 WORKFLOW = SCRIPT.parents[1] / ".github" / "workflows" / "publish-modrinth.yml"
 BUILD_WORKFLOW = SCRIPT.parents[1] / ".github" / "workflows" / "build.yml"
-RUNTIME_WORKFLOW = SCRIPT.parents[1] / ".github" / "workflows" / "runtime-smoke.yml"
 SPEC = importlib.util.spec_from_file_location("prepare_modrinth_release", SCRIPT)
 assert SPEC and SPEC.loader
 release = importlib.util.module_from_spec(SPEC)
@@ -288,7 +287,7 @@ class ReleasePreparationTests(unittest.TestCase):
         verified_end = workflow.index("      - name:", verified_start + 1)
         verified = workflow[verified_start:verified_end]
         preview_start = workflow.index("      - name: Upload release preview")
-        preview_end = workflow.index("  runtime-smoke:", preview_start)
+        preview_end = workflow.index("  publish:", preview_start)
         preview = workflow[preview_start:preview_end]
 
         self.assertIn("name: packforge-all-supported", verified)
@@ -334,17 +333,15 @@ class ReleasePreparationTests(unittest.TestCase):
 
     def test_push_workflows_consume_registry_matrices(self) -> None:
         build = BUILD_WORKFLOW.read_text(encoding="utf-8")
-        runtime = RUNTIME_WORKFLOW.read_text(encoding="utf-8")
+        publish = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("registry_matrix:", build)
         self.assertIn("matrix: ${{ fromJSON(needs.registry_matrix.outputs.target_matrix) }}", build)
         self.assertNotIn("- mc26_1_to_26_2", build)
-        self.assertIn("registry_matrix:", runtime)
-        self.assertIn("matrix: ${{ fromJSON(needs.registry_matrix.outputs.target_matrix) }}", runtime)
-        self.assertIn("matrix: ${{ fromJSON(needs.registry_matrix.outputs.runtime_matrix) }}", runtime)
-        self.assertIn("PACKFORGE_ARTIFACT_SMOKE: ${{ matrix.artifact_smoke }}", runtime)
-        self.assertNotIn("matrix.target == 'mc26_1_to_26_2'", runtime)
-        self.assertNotIn("- { target:", runtime)
-        self.assertNotIn("Expected exactly 17", runtime)
+        self.assertIn("release_matrix:", publish)
+        self.assertIn("matrix: ${{ fromJSON(needs.release_matrix.outputs.publish_matrix) }}", publish)
+        self.assertIn("needs: [release_matrix, build]", publish)
+        self.assertNotIn("runtime-smoke:", publish)
+        self.assertNotIn("  benchmark:", publish)
 
 
 if __name__ == "__main__":

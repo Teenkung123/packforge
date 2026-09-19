@@ -58,6 +58,6 @@ tasks.named('reobfJar') { archiveFileName = packforgeArtifactName }
 ext.packforgeArtifact = tasks.named('reobfJar').flatMap { it.archiveFile }
 if (packforgeArtifactSmoke) {
 	tasks.named('runClient') {
-		doFirst { throw new GradleException('Use scripts/Smoke-Forge-Production.ps1 for final-JAR validation in the production SRG namespace.') }
+		doFirst { throw new GradleException('Install the final JAR in a separate Forge client for production SRG-namespace validation.') }
 	}
 }

@@ -1,8 +1,0 @@
-{
-  "required": true,
-  "minVersion": "0.8",
-  "package": "dev.packbench.observer.mixin",
-  "compatibilityLevel": "JAVA_21",
-  "client": ["MinecraftFrameMixin", "TitleScreenAccessor", "WindowFocusMixin", "ResourceGenerationMixin", "RenderGenerationMixin", "KeyboardProbeInvoker", "KeyboardDispatchMixin", "ProbeActivityMixin", "TitleScreenRenderMixin"],
-  "injectors": {"defaultRequire": 1}
-}

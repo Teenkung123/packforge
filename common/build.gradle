@@ -24,14 +24,3 @@ tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 }
 tasks.withType(Test).configureEach { useJUnitPlatform() }
-
-// Consumed as classes/resources before each loader's remap step, never nested.
-configurations {
-	testOutput { canBeConsumed = true; canBeResolved = false }
-}
-artifacts {
-	testOutput(tasks.register('testJar', Jar) {
-		archiveClassifier = 'tests'
-		from sourceSets.test.output
-	})
-}

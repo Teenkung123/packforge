@@ -69,19 +69,6 @@ dependencies {
 	testRuntimeOnly libs.junit.launcher
 	testRuntimeOnly libs.slf4j.simple
 }
-configurations {
-	benchmarkRuntime {
-		canBeConsumed = false
-		canBeResolved = true
-	}
-}
-dependencies {
-	benchmarkRuntime project(':common')
-	benchmarkRuntime project(path: ':common', configuration: 'testOutput')
-	benchmarkRuntime libs.gson
-	benchmarkRuntime libs.slf4j.simple
-	benchmarkRuntime libs.commons.compress
-}
 tasks.withType(JavaCompile).configureEach {
 	options.release = target.javaVersion as int
 	options.encoding = 'UTF-8'
@@ -115,22 +102,6 @@ def generated = [
 	'pack.mcmeta': JsonOutput.prettyPrint(JsonOutput.toJson([pack: pack])) + '\n',
 	'packforge-capabilities.properties': "target=${target.key}\nminecraft=${target.artifactMinecraft}\nmaturity=${loader.maturity}\nbeta=${loader.maturity == 'beta'}\ncapabilities=${target.capabilities.join(',')}\n"
 ]
-def fixture = [pack: pack]
-if (target.packMetadata.schema == 'range') {
-	fixture.overlays = [entries: [[min_format: target.packMetadata.minFormat,
-		max_format: target.packMetadata.maxFormat, directory: 'overlay']]]
-} else if ((target.packMetadata.packFormat as int) >= 18) {
-	fixture.overlays = [entries: [[formats: [min_inclusive: target.packMetadata.packFormat,
-		max_inclusive: target.packMetadata.packFormat], directory: 'overlay']]]
-}
-tasks.register('benchmarkPackIndex', JavaExec) {
-	group = 'verification'
-	description = 'Runs the deterministic, non-gating PackIndex microbenchmark.'
-	classpath = configurations.benchmarkRuntime
-	mainClass = 'com.teenkung.packforge.loader.PackIndexBenchmark'
-	args layout.buildDirectory.dir('benchmark').get().asFile.absolutePath,
-		Base64.encoder.encodeToString(JsonOutput.toJson(fixture).getBytes('UTF-8'))
-}
 if (loaderId == 'fabric') {
 	def entrypoints = [main: ['com.teenkung.packforge.fabric.PackForgeFabric'], client: ['com.teenkung.packforge.fabric.PackForgeFabricClient']]
 	if (loader.modMenuEntrypoint) entrypoints.modmenu = ['com.teenkung.packforge.client.config.PackForgeModMenuApi']
@@ -163,7 +134,3 @@ if (loaderId == 'fabric') {
 }
 
 apply from: rootProject.file('gradle/stonecutter-sources.gradle')
-apply from: rootProject.file('gradle/benchmark-observer.gradle')
-if (providers.gradleProperty('packforge_texture_correctness').map(Boolean::parseBoolean).getOrElse(false)) {
-	apply from: rootProject.file('benchmarks/correctness/build-helper.gradle')
-}
