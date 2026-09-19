@@ -4,9 +4,9 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.teenkung.packforge.client.atlas.AtlasReport;
+import com.teenkung.packforge.client.atlas.AtlasDiagnostics;
 import com.teenkung.packforge.client.atlas.AtlasLoadInvocation;
 import com.teenkung.packforge.client.atlas.AtlasRetry;
-import com.teenkung.packforge.client.atlas.AtlasTimings;
 import com.teenkung.packforge.client.atlas.BoundedSpriteDecode;
 import com.teenkung.packforge.client.atlas.CappedSpriteResourceLoader;
 import com.teenkung.packforge.client.atlas.SpriteMetadataCache;
@@ -21,21 +21,18 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Supplier;
 
 /** Narrow mc26 sprite hooks; vanilla load/stitch control flow remains authoritative. */
 @Mixin(SpriteLoader.class)
 public abstract class SpriteLoaderMixin {
 	@Shadow @Final private Identifier location;
-	@Unique private static final ThreadLocal<Deque<AtlasLoadInvocation>> PACKFORGE_ATLAS_LOADS = ThreadLocal.withInitial(ArrayDeque::new);
 
 	@WrapOperation(
 		method = "loadAndStitch",
@@ -59,7 +56,7 @@ public abstract class SpriteLoaderMixin {
 		if (!plan.atlasRetryApplies(this.location.toString())) {
 			return vanilla;
 		}
-		AtlasLoadInvocation invocation = PACKFORGE_ATLAS_LOADS.get().peek();
+		AtlasLoadInvocation invocation = AtlasLoadInvocation.current();
 		if (invocation == null || invocation.state() != null) {
 			AtlasRetry.logRetryUnavailable(this.location);
 			return vanilla;
@@ -83,37 +80,70 @@ public abstract class SpriteLoaderMixin {
 			atlas,
 			ResourcePackUnboundedBridge.configuredOwner(atlas)
 		);
-		Deque<AtlasLoadInvocation> invocations = PACKFORGE_ATLAS_LOADS.get();
-		invocations.push(invocation);
 		try {
-			CompletableFuture<SpriteLoader.Preparations> future = original.call(resourceManager, atlasId, mipLevel, executor, additional);
+			CompletableFuture<SpriteLoader.Preparations> future = invocation.call(() ->
+				original.call(resourceManager, atlasId, mipLevel, invocation.bind(executor), additional));
 			SpriteMetadataCache.AtlasState state = invocation.state();
-			if (state == null) {
-				return future;
-			}
+			AtlasDiagnostics diagnostics = invocation.diagnostics();
 			if (future == null) {
 				SpriteMetadataCache.fail(state, null);
+				if (diagnostics != null) diagnostics.close();
 				return null;
 			}
-			future.whenComplete((ignored, error) -> {
+			future.whenComplete((preparations, error) -> {
 				if (error != null) {
 					SpriteMetadataCache.fail(state, null);
-				} else {
+					if (diagnostics != null) diagnostics.close();
+				} else if (state != null) {
 					AtlasReport.logAtlas(atlas, state);
 					SpriteMetadataCache.finish(state);
 				}
-				AtlasTimings.logAtlas(atlas);
+				if (error == null && diagnostics != null) {
+					preparations.readyForUpload().whenComplete((ignored, mipError) -> diagnostics.close());
+				}
 			});
 			return future;
 		} catch (RuntimeException | Error failure) {
 			SpriteMetadataCache.fail(invocation.state(), null);
+			if (invocation.diagnostics() != null) invocation.diagnostics().close();
 			throw failure;
-		} finally {
-			invocations.removeFirstOccurrence(invocation);
-			if (invocations.isEmpty()) {
-				PACKFORGE_ATLAS_LOADS.remove();
-			}
 		}
+	}
+
+	@WrapOperation(method = "loadAndStitch", at = @At(value = "INVOKE", target =
+		"Ljava/util/concurrent/CompletableFuture;supplyAsync(Ljava/util/function/Supplier;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;"))
+	private CompletableFuture<List<SpriteSource.Loader>> packforge$timeSources(
+		Supplier<List<SpriteSource.Loader>> supplier, Executor executor,
+		Operation<CompletableFuture<List<SpriteSource.Loader>>> original
+	) {
+		AtlasLoadInvocation invocation = AtlasLoadInvocation.current();
+		AtlasDiagnostics diagnostics = invocation == null ? null : invocation.diagnostics();
+		if (diagnostics == null) return original.call(supplier, executor);
+		return original.call((Supplier<List<SpriteSource.Loader>>) () -> {
+			AtlasDiagnostics.Sample sample = AtlasDiagnostics.start();
+			Throwable failure = null;
+			try { return supplier.get(); }
+			catch (RuntimeException | Error error) { failure = error; throw error; }
+			finally { diagnostics.stage("source_enumeration", sample, failure); }
+		}, executor);
+	}
+
+	@WrapOperation(method = "stitch", at = @At(value = "INVOKE", target =
+		"Ljava/util/concurrent/CompletableFuture;runAsync(Ljava/lang/Runnable;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;"))
+	private CompletableFuture<Void> packforge$timeMipChain(Runnable command, Executor executor, Operation<CompletableFuture<Void>> original) {
+		AtlasLoadInvocation invocation = AtlasLoadInvocation.current();
+		AtlasDiagnostics diagnostics = invocation == null ? null : invocation.diagnostics();
+		if (diagnostics == null) return original.call(command, executor);
+		long submitted = System.nanoTime();
+		CompletableFuture<Void> future = original.call((Runnable) () -> {
+			AtlasDiagnostics.Sample sample = AtlasDiagnostics.start();
+			Throwable failure = null;
+			try { command.run(); }
+			catch (RuntimeException | Error error) { failure = error; throw error; }
+			finally { diagnostics.stage("mip_chain_work", sample, failure); }
+		}, executor);
+		future.whenComplete((ignored, error) -> diagnostics.wallStage("mip_chain_ready", submitted, error));
+		return future;
 	}
 
 	@WrapMethod(method = "stitch")
@@ -123,19 +153,21 @@ public abstract class SpriteLoaderMixin {
 		Executor executor,
 		Operation<SpriteLoader.Preparations> original
 	) {
-		SpriteMetadataCache.AtlasState state = SpriteMetadataCache.findState(this.location, sprites);
-		if (state == null) {
-			return original.call(sprites, mipLevel, executor);
+		AtlasLoadInvocation invocation = AtlasLoadInvocation.current();
+		AtlasDiagnostics diagnostics = invocation == null ? null : invocation.diagnostics();
+		AtlasDiagnostics.Sample sample = diagnostics == null ? null : AtlasDiagnostics.start();
+		Throwable failure = null;
+		try {
+			SpriteMetadataCache.AtlasState state = SpriteMetadataCache.findState(this.location, sprites);
+			if (state == null) return original.call(sprites, mipLevel, executor);
+			return AtlasRetry.stitch(this.location, sprites, mipLevel, executor,
+				(originalSprites, originalMipLevel, originalExecutor) -> original.call(originalSprites, originalMipLevel, originalExecutor), state);
+		} catch (RuntimeException | Error error) {
+			failure = error;
+			throw error;
+		} finally {
+			if (diagnostics != null) diagnostics.stage("stitch", sample, failure);
 		}
-		return AtlasRetry.stitch(
-			this.location,
-			sprites,
-			mipLevel,
-			executor,
-			(originalSprites, originalMipLevel, originalExecutor) ->
-				original.call(originalSprites, originalMipLevel, originalExecutor),
-			state
-		);
 	}
 
 	@WrapMethod(method = "runSpriteSuppliers")
@@ -145,7 +177,7 @@ public abstract class SpriteLoaderMixin {
 		Executor executor,
 		Operation<CompletableFuture<List<SpriteContents>>> original
 	) {
-		AtlasLoadInvocation invocation = PACKFORGE_ATLAS_LOADS.get().peek();
+		AtlasLoadInvocation invocation = AtlasLoadInvocation.current();
 		if (invocation != null && invocation.resourcePackUnboundedOwner()) {
 			return original.call(resourceLoader, loaders, executor);
 		}
@@ -155,14 +187,19 @@ public abstract class SpriteLoaderMixin {
 			return original.call(resourceLoader, loaders, executor);
 		}
 
-		long startNs = AtlasTimings.start();
-		String atlas = invocation == null ? "unknown" : invocation.atlas().toString();
+		AtlasDiagnostics diagnostics = invocation == null ? null : invocation.diagnostics();
+		long startNs = diagnostics == null ? 0 : System.nanoTime();
+		SpriteResourceLoader observedLoader = diagnostics == null ? resourceLoader : diagnostics.wrap(resourceLoader);
+		List<SpriteSource.Loader> observedSuppliers = diagnostics == null ? loaders : diagnostics.observeLoaders(loaders);
 		CompletableFuture<List<SpriteContents>> future = plan.decodeEnabled()
-			? BoundedSpriteDecode.decode(loaders, executor, plan, loader -> loader.get(resourceLoader))
-			: original.call(resourceLoader, loaders, executor);
-		return plan.phaseTimingsEnabled()
-			? future.whenComplete((ignored, error) -> AtlasTimings.recordDecode(atlas, startNs))
-			: future;
+			? BoundedSpriteDecode.decode(observedSuppliers, executor, plan, loader -> loader.get(observedLoader))
+			: original.call(observedLoader, observedSuppliers, executor);
+		if (diagnostics != null) {
+			future.whenComplete((ignored, error) -> diagnostics.decodeFinished(startNs, error));
+		}
+		// Return the owned decode future: cancelling a dependent timing future
+		// would not cancel decoding or dispose images produced after cancellation.
+		return future;
 	}
 
 	private boolean packforge$resourcePackUnboundedOwnsAtlas() {

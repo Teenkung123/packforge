@@ -4,7 +4,6 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import com.teenkung.packforge.loader.ReloadLifecycle;
-import com.teenkung.packforge.loader.RuntimeResourceHash;
 import com.teenkung.packforge.startup.StartupStatus;
 import com.teenkung.packforge.startup.StartupTimings;
 import net.minecraft.server.packs.PackResources;
@@ -35,16 +34,12 @@ public abstract class ReloadableResourceManagerMixin {
 		if (context.features().startupTimingActiveAtStart()) {
 			StartupTimings.event("resource_reload_start");
 		}
-		ReloadableResourceManager manager = (ReloadableResourceManager) (Object) this;
 		try {
 			ReloadInstance instance;
 			try (ReloadExecutionContext.Scope ignored = ReloadExecutionContext.bind(context)) {
 				instance = original.call(preparationExecutor, reloadExecutor, initialStage, packs);
 			}
 			instance.done().whenComplete((result, error) -> {
-				if (error == null && ReloadExecutionContext.isCurrent(context)) {
-					RuntimeResourceHash.report(manager, context.reloadId());
-				}
 				ReloadLifecycle.finishReload(context, error);
 				if (context.features().startupStatusOverlayEnabled() && context.features().startupTimingActiveAtStart()) {
 					StartupStatus.update(error == null ? "Finishing" : "Failed", "client resources");

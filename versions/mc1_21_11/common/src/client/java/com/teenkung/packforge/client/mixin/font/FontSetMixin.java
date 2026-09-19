@@ -1,7 +1,9 @@
 package com.teenkung.packforge.client.mixin.font;
 
 import com.mojang.blaze3d.font.GlyphProvider;
-import com.teenkung.packforge.client.font.FontOptimizationState;
+import com.teenkung.packforge.client.font.FontPreparedSelection;
+import com.teenkung.packforge.client.font.FontReloadDiagnostics;
+import com.teenkung.packforge.client.font.FontSelectionRegistry;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.IntList;
 import net.minecraft.client.gui.font.FontOption;
@@ -36,9 +38,9 @@ public abstract class FontSetMixin {
 		long startNs = System.nanoTime();
 		boolean optimized = false;
 		try {
-			FontOptimizationState.Selection selection = FontOptimizationState.currentSelection(options);
+			FontPreparedSelection selection = FontSelectionRegistry.currentSelection(options);
 			if (selection == null) {
-				selection = FontOptimizationState.currentSelection(providers, options);
+				selection = FontSelectionRegistry.currentSelection(providers, options);
 			}
 			if (selection == null) return;
 			this.allProviders = providers;
@@ -49,7 +51,7 @@ public abstract class FontSetMixin {
 			optimized = true;
 			ci.cancel();
 		} finally {
-			FontOptimizationState.recordFontSet(System.nanoTime() - startNs, optimized);
+			FontReloadDiagnostics.recordFontSetCreate(System.nanoTime() - startNs, optimized);
 		}
 	}
 }

@@ -4,27 +4,27 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.teenkung.packforge.client.font.FontPreparationBundle;
+import com.teenkung.packforge.client.font.FontPreparationCoordinator;
 import com.teenkung.packforge.client.font.FontReloadDiagnostics;
 import com.teenkung.packforge.client.font.FontSelectionRegistry;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.Options;
+import com.teenkung.packforge.config.FeatureFlags;
+import com.teenkung.packforge.loader.ReloadExecutionContext;
 import net.minecraft.client.gui.font.FontManager;
 import net.minecraft.client.gui.font.FontOption;
 import net.minecraft.client.gui.font.FontSet;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.Coerce;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraft.util.profiling.ProfilerFiller;
+import org.spongepowered.asm.mixin.injection.Coerce;
+import org.spongepowered.asm.mixin.Mixin;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
 @Mixin(FontManager.class)
 public abstract class FontManagerMixin {
@@ -43,16 +43,46 @@ public abstract class FontManagerMixin {
 		}
 	}
 
-	@Inject(method = "prepare", at = @At("RETURN"), cancellable = true)
-	private void packforge$prepareProviderSelection(ResourceManager manager, Executor executor, CallbackInfoReturnable<CompletableFuture<?>> cir) {
-		if (!FontSelectionRegistry.preparationHooksEnabled()) {
-			return;
-		}
+	@WrapMethod(method = "prepare")
+	private CompletableFuture<?> packforge$prepareProviderSelection(ResourceManager manager, Executor executor,
+		Operation<CompletableFuture<?>> original) {
+		if (!FontSelectionRegistry.preparationHooksEnabled()) return original.call(manager, executor);
 		Set<FontOption> options = packforge$fontOptions(Minecraft.getInstance().options);
-		CompletableFuture<?> original = cir.getReturnValue();
-		cir.setReturnValue(original.thenCompose(preparation -> FontSelectionRegistry.prepareAsync(preparation, options, executor)));
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		boolean selection = context == null ? FeatureFlags.fontPrepareProviderSelectionEnabled()
+			: context.features().fontPrepareProviderSelectionEnabled();
+		FontPreparationCoordinator coordinator = selection && context != null ? new FontPreparationCoordinator(context, options) : null;
+		Executor preparationExecutor = coordinator == null ? executor : coordinator.executor(executor);
+		boolean priority = selection && context != null;
+		if (priority) context.beginFontPreparation();
+		try {
+			return original.call(manager, preparationExecutor).thenCompose(preparation ->
+				FontSelectionRegistry.prepareAsync(preparation, options, preparationExecutor, coordinator))
+				.whenComplete((ignored, error) -> {
+					try {
+						if (error != null && coordinator != null) coordinator.close();
+					} finally {
+						if (priority) context.endFontPreparation();
+					}
+				});
+		} catch (Throwable error) {
+			try {
+				if (coordinator != null) coordinator.close();
+			} catch (RuntimeException | Error cleanup) {
+				if (cleanup != error) error.addSuppressed(cleanup);
+			} finally {
+				if (priority) context.endFontPreparation();
+			}
+			throw error;
+		}
 	}
 
+	@WrapMethod(method = "finalizeProviderLoading")
+	private void packforge$coordinateWarmup(List<GlyphProvider.Conditional> providers,
+		GlyphProvider.Conditional fallback, Operation<Void> original) {
+		FontPreparationCoordinator coordinator = FontPreparationCoordinator.current();
+		if (coordinator == null || !coordinator.finalizeProviders(providers, fallback)) original.call(providers, fallback);
+	}
 	@WrapMethod(method = "apply")
 	private void packforge$apply(
 		@Coerce Object preparation,
@@ -65,8 +95,8 @@ public abstract class FontManagerMixin {
 			original.call(preparation, profiler);
 		} finally {
 			FontPreparationBundle bundle = FontSelectionRegistry.currentBundle();
-			FontReloadDiagnostics.finishApply(preparation, bundle);
-			FontSelectionRegistry.clear();
+			try { FontReloadDiagnostics.finishApply(preparation, bundle); }
+			finally { FontSelectionRegistry.clear(); }
 		}
 	}
 

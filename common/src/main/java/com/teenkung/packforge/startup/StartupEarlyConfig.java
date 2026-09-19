@@ -87,7 +87,7 @@ public final class StartupEarlyConfig {
 		boolean startupSkipWithSmoothBoot
 	) {
 		static Settings defaults() {
-			return new Settings(false, true, true, true, 0, 4, true);
+			return new Settings(false, false, true, false, 0, 4, true);
 		}
 	}
 

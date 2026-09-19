@@ -1,0 +1,66 @@
+import dev.kikugie.stonecutter.build.StonecutterBuildExtension
+
+// Apply at the END of gradle/node.gradle. Uses Stonecutter 0.9.8 public task maps:
+// prepare[set]: root, source, destination; generate[set]: Gradle Sync.
+// Native prepare owns preprocessing/incrementality; generate already depends on its output.
+def target = rootProject.packforgeRegistry.targets.find { it.key == project.name }
+def loader = project.parent.name
+def adapter = target?.apiAdapter
+if (!(adapter in ['mc1_20_1', 'mc1_21_1', 'mc1_21_4', 'mc1_21_8', 'mc1_21_11', 'mc26']) ||
+	target.platforms[loader] == null) {
+	throw new GradleException("Unsupported template node ${project.path}")
+}
+def cutter = extensions.getByType(StonecutterBuildExtension)
+def unbaked = adapter in ['mc1_21_4', 'mc1_21_8', 'mc1_21_11']
+[
+	['ResourceLocation', 'Identifier', adapter in ['mc1_21_11', 'mc26']],
+	['ModList.get().isLoaded', 'ModList.isLoaded', adapter == 'mc26'],
+	['init(Minecraft.getInstance(), this.width, this.height)', 'init(this.width, this.height)', adapter == 'mc1_21_11'],
+	['net.minecraft.client.renderer.block.model.BlockModel', 'net.minecraft.client.resources.model.UnbakedModel', unbaked],
+	[', BlockModel>', ', UnbakedModel>', unbaked],
+	['packforge$batchModels', 'packforge$loadBlockModels', adapter == 'mc1_20_1'],
+	['packforge$batchModels', 'packforge$batch', adapter == 'mc1_21_4'],
+	['packforge$batchModels', 'packforge$loadModels', adapter in ['mc1_21_8', 'mc1_21_11']]
+].findAll { it[2] }.each { replacement ->
+	cutter.replacements.string(true) { spec -> spec.replace(replacement[0], replacement[1]) }
+}
+
+def mainGroups = ['all/main']
+if (loader == 'forge') mainGroups += 'forge/main'
+def clientGroups = []
+if (adapter != 'mc1_20_1') clientGroups += 'all/client'
+if (adapter != 'mc26') clientGroups += 'legacy/client'
+if (adapter.startsWith('mc1_21_')) clientGroups += 'v1_21/client'
+def groupsBySourceSet = loader == 'fabric'
+	? [main: mainGroups, client: clientGroups]
+	: [main: mainGroups + clientGroups]
+def templateRoot = rootProject.file('src')
+// Stonecutter creates its task maps during project evaluation.
+afterEvaluate {
+	groupsBySourceSet.each { sourceSetName, groups ->
+		def cache = layout.buildDirectory.dir("stonecutter-cache/packforge/${sourceSetName}")
+		def cacheRoot = cache.get().asFile
+		def output = layout.buildDirectory.dir("generated/packforge-stonecutter/${sourceSetName}")
+		def prepare = cutter.tasks.prepare.getOrThrow(sourceSetName)
+		prepare.configure {
+			root.set(templateRoot)
+			source.setFrom(fileTree(templateRoot) { include groups.collect { "${it}/java/**/*.java" } })
+			destination.set(cache)
+		}
+		def generate = cutter.tasks.generate.getOrThrow(sourceSetName)
+		generate.configure {
+			into(output)
+			// Prepare stores changed files only. Keep unchanged template inputs too,
+			// without accepting the plugin's unrelated default branch source root.
+			exclude { detail -> !detail.file.toPath().startsWith(cacheRoot.toPath()) && !detail.file.toPath().startsWith(templateRoot.toPath()) }
+			from(templateRoot) {
+				include groups.collect { "${it}/java/**/*.java" }
+				exclude { detail -> !detail.directory && new File(cacheRoot, detail.relativePath.pathString).isFile() }
+			}
+			duplicatesStrategy = DuplicatesStrategy.FAIL
+		}
+		groups.each { group ->
+			sourceSets[sourceSetName].java.srcDir(generate.map { new File(it.destinationDir, "${group}/java") })
+		}
+	}
+}

@@ -123,7 +123,7 @@ public final class FontReloadDiagnostics {
 		int memoMisses,
 		int uniqueStacks
 	) {
-		private static final Snapshot EMPTY = new Snapshot(0, 0, Map.of(), 0L, 0, 0, 0);
+		static final Snapshot EMPTY = new Snapshot(0, 0, Map.of(), 0L, 0, 0, 0);
 	}
 
 	private FontReloadDiagnostics() {}

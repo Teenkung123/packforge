@@ -4,6 +4,8 @@ import com.mojang.blaze3d.font.GlyphInfo;
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.teenkung.packforge.client.mixin.font.FontManagerPreparationAccessor;
 import com.teenkung.packforge.config.ReloadFeatureSnapshot;
+import com.teenkung.packforge.config.OptimizationPlan;
+import com.teenkung.packforge.config.PackForgeConfig;
 import com.teenkung.packforge.loader.ReloadExecutionContext;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
@@ -76,18 +78,34 @@ class FontSelectionRegistryTest {
 	}
 
 	@Test
-	void repeatedResetClearsPreparedAndApplyingState() {
+	void retirementAndRepeatedResetClearPreparedState() {
 		ResourceLocation id = id("reset");
 		Preparation preparation = new Preparation(Map.of(id, List.of()));
 		ReloadExecutionContext context = ReloadExecutionContext.startForTesting(fontFeatures());
 		try {
 			FontSelectionRegistry.prepareAsync(preparation, Set.of(), Runnable::run).join();
+			ReloadExecutionContext.finish(context);
 			FontSelectionRegistry.resetForReload();
 			FontSelectionRegistry.resetForReload();
 			FontSelectionRegistry.beginApply(preparation);
 			assertNull(FontSelectionRegistry.currentBundle());
 		} finally {
 			FontSelectionRegistry.resetForReload();
+			ReloadExecutionContext.finish(context);
+		}
+	}
+
+	@Test
+	void resetDoesNotDiscardAnUnretiredPreparation() {
+		Preparation preparation = new Preparation(Map.of(id("live"), List.of()));
+		ReloadExecutionContext context = ReloadExecutionContext.startForTesting(fontFeatures());
+		try {
+			FontSelectionRegistry.prepareAsync(preparation, Set.of(), Runnable::run).join();
+			FontSelectionRegistry.resetForReload();
+			FontSelectionRegistry.beginApply(preparation);
+			assertNotNull(FontSelectionRegistry.currentBundle());
+		} finally {
+			FontSelectionRegistry.clear();
 			ReloadExecutionContext.finish(context);
 		}
 	}
@@ -102,7 +120,7 @@ class FontSelectionRegistryTest {
 			false, false, false, 1, false, false, false, false, true, false,
 			false, false, 1, false, 1, false, 16, Set.of(), false, 1,
 			false, false, false, false, false, false, false, 0, Thread.NORM_PRIORITY, true,
-			false, false, false, false, 1
+			false, false, false, false, 1, false, 128, OptimizationPlan.capture(PackForgeConfig.get())
 		);
 	}
 

@@ -46,7 +46,7 @@ public final class ReloadListenerTelemetry {
 					LoaderTimings.recordListenerPrepare(context, canonical, System.nanoTime() - startNs);
 				}
 				if (status) {
-					ReloadStatus.prepareFinished(context);
+					ReloadStatus.prepareFinished(context, canonical);
 				}
 			}
 		};
@@ -76,7 +76,7 @@ public final class ReloadListenerTelemetry {
 					ReloadStatus.resourceApplied(context, canonical);
 				}
 				if (status) {
-					ReloadStatus.applyFinished(context);
+					ReloadStatus.applyFinished(context, canonical);
 				}
 			}
 		};
@@ -88,7 +88,7 @@ public final class ReloadListenerTelemetry {
 			return original;
 		}
 		String canonical = canonicalName(listenerName);
-		boolean detailed = context.features().taskExecutorWrappingEnabled();
+		boolean detailed = context.features().taskExecutorWrappingEnabled() || context.features().loadingStatusOverlayEnabled();
 		return command -> {
 			Runnable task = detailed ? prepare(context, canonical, command) : command;
 			original.execute(ReloadExecutionContext.bindRunnable(context, task));
@@ -101,7 +101,7 @@ public final class ReloadListenerTelemetry {
 			return original;
 		}
 		String canonical = canonicalName(listenerName);
-		boolean detailed = context.features().taskExecutorWrappingEnabled();
+		boolean detailed = context.features().taskExecutorWrappingEnabled() || context.features().loadingStatusOverlayEnabled();
 		return command -> {
 			Runnable task = detailed ? apply(context, canonical, command) : command;
 			original.execute(ReloadExecutionContext.bindRunnable(context, task));
@@ -139,7 +139,7 @@ public final class ReloadListenerTelemetry {
 					StartupTimings.recordDuration("prepare " + readableStartupName(canonical), System.nanoTime() - startNs);
 				}
 				if (status && features.loadingStatusOverlayEnabled()) {
-					ReloadStatus.prepareFinished(context);
+					ReloadStatus.prepareFinished(context, canonical);
 				}
 			}
 		};
@@ -181,7 +181,7 @@ public final class ReloadListenerTelemetry {
 					ReloadStatus.resourceApplied(context, canonical);
 				}
 				if (status && features.loadingStatusOverlayEnabled()) {
-					ReloadStatus.applyFinished(context);
+					ReloadStatus.applyFinished(context, canonical);
 				}
 			}
 		};
@@ -189,7 +189,7 @@ public final class ReloadListenerTelemetry {
 
 	/**
 	 * Observes one StateFactory future without replacing it.  This keeps the
-	 * default path at listener granularity and leaves task submission entirely
+	 * listener completion accounting independent of detailed timings and leaves task submission entirely
 	 * under Minecraft's original executors.
 	 */
 	public static CompletableFuture<?> observeListenerFuture(
@@ -203,12 +203,11 @@ public final class ReloadListenerTelemetry {
 		}
 		var features = context.features();
 		String canonical = canonicalName(listenerName);
-		boolean detailed = features.taskExecutorWrappingEnabled();
 		boolean status = features.statusTrackingEnabled();
-		if (startedNs == 0L && (detailed || !status)) {
+		if (startedNs == 0L && !status) {
 			return future;
 		}
-		if (!detailed && status) {
+		if (status) {
 			ReloadStatus.listenerStarted(context, canonical);
 			if (features.startupStatusOverlayEnabled() && features.startupTimingActiveAtStart()) {
 				StartupStatus.update("Loading", readableStartupName(canonical));
@@ -218,11 +217,11 @@ public final class ReloadListenerTelemetry {
 			if (startedNs != 0L) {
 				LoaderTimings.recordListenerWall(context, canonical, System.nanoTime() - startedNs);
 			}
-			if (!detailed && status) {
+			if (status) {
 				if (error == null) {
 					ReloadStatus.resourceApplied(context, canonical);
 				}
-				ReloadStatus.listenerFinished(context);
+				ReloadStatus.listenerFinished(context, canonical);
 			}
 		});
 		return future;

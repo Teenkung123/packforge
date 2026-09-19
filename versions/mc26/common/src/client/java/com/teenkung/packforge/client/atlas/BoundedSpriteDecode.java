@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /** Bounded, ordered sprite decoding for the 26.x SpriteLoader adapter. */
@@ -55,38 +56,52 @@ public final class BoundedSpriteDecode {
 		Plan plan,
 		Function<? super I, ? extends SpriteContents> decoder
 	) {
-		CompletableFuture<List<SpriteContents>> mapped = OrderedAsync.map(
+		return decode(inputs, executor, plan, decoder, SpriteContents::close);
+	}
+
+	static <I, O> CompletableFuture<List<O>> decode(
+		List<? extends I> inputs,
+		Executor executor,
+		Plan plan,
+		Function<? super I, ? extends O> decoder,
+		Consumer<? super O> disposer
+	) {
+		// Decode costs vary with image dimensions and compression. Claim one loader
+		// at a time so a slow image cannot hold the rest of a contiguous batch.
+		// OrderedAsync still submits only its bounded set of reusable workers.
+		CompletableFuture<List<O>> mapped = OrderedAsync.map(
 			inputs,
 			executor,
 			plan.workerBudget(),
-			plan.chunkSize(),
+			1,
 			decoder,
-			BoundedSpriteDecode::close
+			disposer
 		);
-		return filterAndPropagateCancellation(mapped);
+		return filterAndPropagateCancellation(mapped, disposer);
 	}
 
-	private static CompletableFuture<List<SpriteContents>> filterAndPropagateCancellation(
-		CompletableFuture<List<SpriteContents>> mapped
+	private static <O> CompletableFuture<List<O>> filterAndPropagateCancellation(
+		CompletableFuture<List<O>> mapped,
+		Consumer<? super O> disposer
 	) {
-		CompletableFuture<List<SpriteContents>> filtered = new CompletableFuture<>();
+		CompletableFuture<List<O>> filtered = new CompletableFuture<>();
 		mapped.whenComplete((decoded, error) -> {
 			if (error != null) {
 				filtered.completeExceptionally(error);
 				return;
 			}
 
-			List<SpriteContents> nonNull;
+			List<O> nonNull;
 			try {
 				nonNull = decoded.stream().filter(Objects::nonNull).toList();
 			} catch (Throwable throwable) {
-				closeAll(decoded);
+				closeAll(decoded, disposer);
 				filtered.completeExceptionally(throwable);
 				return;
 			}
 
 			if (!filtered.complete(nonNull)) {
-				closeAll(decoded);
+				closeAll(decoded, disposer);
 			}
 		});
 		filtered.whenComplete((ignored, error) -> {
@@ -97,17 +112,13 @@ public final class BoundedSpriteDecode {
 		return filtered;
 	}
 
-	private static void close(SpriteContents sprite) {
-		sprite.close();
-	}
-
-	private static void closeAll(List<SpriteContents> sprites) {
-		for (SpriteContents sprite : sprites) {
+	private static <O> void closeAll(List<O> sprites, Consumer<? super O> disposer) {
+		for (O sprite : sprites) {
 			if (sprite == null) {
 				continue;
 			}
 			try {
-				sprite.close();
+				disposer.accept(sprite);
 			} catch (Throwable throwable) {
 				PackForge.LOGGER.error("Failed to close a decoded sprite after cancellation", throwable);
 			}

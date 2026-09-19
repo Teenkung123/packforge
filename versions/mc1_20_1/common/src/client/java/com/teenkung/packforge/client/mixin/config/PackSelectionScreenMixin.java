@@ -4,6 +4,7 @@ import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.client.config.PackForgeConfigScreen;
 import com.teenkung.packforge.client.config.ResourcePackButtonLayout;
 import com.teenkung.packforge.client.config.ResourcePackButtonLayoutTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -48,11 +49,12 @@ public abstract class PackSelectionScreenMixin extends Screen {
 		if (this.minecraft == null || !this.packDir.equals(this.minecraft.getResourcePackDirectory())) {
 			return;
 		}
-		this.packforge$configButton = this.addRenderableWidget(new PackForgeConfigButton(
-			this.doneButton.getX() + this.doneButton.getWidth() + 8,
-			this.doneButton.getY(),
-			button -> this.minecraft.setScreen(new PackForgeConfigScreen((Screen) (Object) this))
-		));
+			this.packforge$configButton = this.addRenderableWidget(new PackForgeConfigButton(
+				this.doneButton.getX() + this.doneButton.getWidth() + 8,
+				this.doneButton.getY(),
+				this.minecraft.getResourceManager().getResource(PACKFORGE_CONFIG_COG).isPresent(),
+				button -> this.minecraft.setScreen(new PackForgeConfigScreen((Screen) (Object) this))
+			));
 		this.packforge$configButton.setTooltip(Tooltip.create(
 			Component.translatable("packforge.config.resource_pack_button")
 		));
@@ -159,14 +161,22 @@ public abstract class PackSelectionScreenMixin extends Screen {
 
 	@Unique
 	private static final class PackForgeConfigButton extends Button {
-		private PackForgeConfigButton(int x, int y, OnPress onPress) {
+		private final boolean iconAvailable;
+
+		private PackForgeConfigButton(int x, int y, boolean iconAvailable, OnPress onPress) {
 			super(x, y, 20, 20, Component.empty(), onPress, DEFAULT_NARRATION);
+			this.iconAvailable = iconAvailable;
 		}
 
 		@Override
 		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 			super.renderWidget(graphics, mouseX, mouseY, partialTick);
-			graphics.blit(PACKFORGE_CONFIG_COG, getX() + 2, getY() + 2, 0.0F, 0.0F, 16, 16, 16, 16);
+			Minecraft minecraft = Minecraft.getInstance();
+			if (this.iconAvailable) {
+				graphics.blit(PACKFORGE_CONFIG_COG, getX() + 2, getY() + 2, 0.0F, 0.0F, 16, 16, 16, 16);
+			} else {
+				graphics.drawCenteredString(minecraft.font, "PF", getX() + getWidth() / 2, getY() + 6, 0xFFFFFFFF);
+			}
 		}
 	}
 }

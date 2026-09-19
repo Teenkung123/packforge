@@ -1,5 +1,6 @@
 package com.teenkung.packforge.client.config;
 
+import com.teenkung.packforge.config.OptimizationPlan;
 import com.teenkung.packforge.config.PackForgeCapabilities;
 import com.teenkung.packforge.config.PackForgeCapability;
 import com.teenkung.packforge.config.PackForgeConfig;
@@ -220,12 +221,25 @@ public final class PackForgeConfigScreenModel {
 	}
 
 	public static List<OptionSpec> availableOptions() {
-		return availableOptions(PackForgeCapabilities.available());
+		return availableOptions(PackForgeCapabilities.available(), PackForgeCapabilities.target());
 	}
 
 	public static List<OptionSpec> availableOptions(Set<PackForgeCapability> capabilities) {
+		return availableOptions(capabilities, PackForgeCapabilities.target());
+	}
+
+	public static List<OptionSpec> availableOptions(Set<PackForgeCapability> capabilities, String target) {
 		Objects.requireNonNull(capabilities, "capabilities");
-		return OPTIONS.stream().filter(option -> option.supported(capabilities)).toList();
+		Objects.requireNonNull(target, "target");
+		boolean mc26Preparation = target.equals("mc26") || target.startsWith("mc26_");
+		return OPTIONS.stream()
+			.filter(option -> option.supported(capabilities))
+			// These batch sizes have no effect on the mc26 preparation adapters.
+			.filter(option -> !mc26Preparation || switch (option.id()) {
+				case "atlas_mip_batch_size", "atlas_decode_batch_size", "model_parse_batch_size" -> false;
+				default -> true;
+			})
+			.toList();
 	}
 
 	public static List<Category> availableCategories(Set<PackForgeCapability> capabilities) {
@@ -245,6 +259,62 @@ public final class PackForgeConfigScreenModel {
 		return true;
 	}
 
+	/** Immutable preview. Nothing is written or enabled until its changes are applied. */
+	public record RecommendedChange(BooleanOption option, boolean before, boolean after) {
+		public void apply(PackForgeConfig.Cfg target) {
+			option.set(target, after);
+		}
+	}
+
+	public static List<RecommendedChange> recommendedChanges(PackForgeConfig.Cfg source) {
+		return recommendedChanges(source, availableOptions());
+	}
+
+	public static PackForgeConfig.Cfg previewRecommendations(PackForgeConfig.Cfg source, List<RecommendedChange> changes) {
+		PackForgeConfig.Cfg preview = PackForgeConfig.copyOf(source);
+		for (RecommendedChange change : changes) change.apply(preview);
+		return preview;
+	}
+
+	public static List<RecommendedChange> recommendedChanges(PackForgeConfig.Cfg source, List<OptionSpec> available) {
+		Objects.requireNonNull(source, "source");
+		List<RecommendedChange> changes = new ArrayList<>();
+		for (OptionSpec spec : available) {
+			if (!(spec instanceof BooleanOption option)) continue;
+			Boolean recommended = switch (option.id()) {
+				case "reload_optimizer", "loader_index", "font_provider_selection", "cpu_mip_preparation" -> true;
+				case "loader_zip_pool", "resource_read_reuse", "font_bitmap_cache", "atlas_decode_batching",
+					"model_adaptive_batching", "model_duplicate_cache", "loader_timings", "reload_listener_timings",
+					"shader_stall_diagnostics", "font_reload_diagnostics", "atlas_phase_timings", "model_parse_timings",
+					"startup_timings", "startup_executor_tuning", "startup_async_data", "startup_async_class_scan",
+					"startup_async_font_atlas" -> false;
+				default -> null;
+			};
+			if (recommended != null && option.get(source) != recommended) {
+				changes.add(new RecommendedChange(option, option.get(source), recommended));
+			}
+		}
+		return List.copyOf(changes);
+	}
+
+	/** Policy status for controls whose capability describes that setting itself. */
+	public static OptimizationPlan.Decision optimizationDecision(PackForgeConfig.Cfg source, OptionSpec option) {
+		return hasIndependentDecision(option) ? OptimizationPlan.capture(source).decision(option.capability()) : null;
+	}
+
+	static OptimizationPlan.Decision optimizationDecision(OptimizationPlan plan, OptionSpec option) {
+		return hasIndependentDecision(option) ? plan.decision(option.capability()) : null;
+	}
+
+	private static boolean hasIndependentDecision(OptionSpec option) {
+		if (!(option instanceof BooleanOption)) return false;
+		return switch (option.id()) {
+			// These borrow another feature's capability solely for availability.
+			case "reload_optimizer", "large_atlas_fixer", "atlas_retry_disable_with_iris", "startup_skip_smooth_boot" -> false;
+			default -> true;
+		};
+	}
+
 	private static List<OptionSpec> buildOptions() {
 		List<OptionSpec> options = new ArrayList<>();
 
@@ -254,6 +324,10 @@ public final class PackForgeConfigScreenModel {
 			cfg -> cfg.loaderIndexEnabled, (cfg, value) -> cfg.loaderIndexEnabled = value));
 		options.add(bool("loader_zip_pool", Category.RELOAD, "pack_index", PackForgeCapability.ZIP_READ_POOL, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.loaderZipPoolEnabled, (cfg, value) -> cfg.loaderZipPoolEnabled = value));
+		options.add(bool("resource_read_reuse", Category.RELOAD, "pack_index", PackForgeCapability.RESOURCE_READ_REUSE, ApplyScope.RESOURCE_RELOAD,
+			cfg -> cfg.resourceReadReuseEnabled, (cfg, value) -> cfg.resourceReadReuseEnabled = value));
+		options.add(integer("optimization_memory_mib", Category.RELOAD, "advanced", PackForgeCapability.RESOURCE_READ_REUSE, ApplyScope.RESOURCE_RELOAD,
+			1, 128, cfg -> cfg.optimizationMemoryMiB, (cfg, value) -> cfg.optimizationMemoryMiB = value));
 		options.add(bool("loading_status_overlay", Category.RELOAD, "reload_ui", PackForgeCapability.LOADING_STATUS_OVERLAY, ApplyScope.RESOURCE_RELOAD,
 			cfg -> cfg.loadingStatusOverlayEnabled, (cfg, value) -> cfg.loadingStatusOverlayEnabled = value));
 		options.add(bool("loading_fade_out_disabled", Category.RELOAD, "reload_ui", PackForgeCapability.LOADING_FADE_CONTROL, ApplyScope.RESOURCE_RELOAD,
@@ -307,8 +381,8 @@ public final class PackForgeConfigScreenModel {
 			1, 10, cfg -> cfg.atlasRetryMaxAttempts, (cfg, value) -> cfg.atlasRetryMaxAttempts = value));
 		options.add(bool("atlas_retry_disable_with_iris", Category.ATLAS, "atlas_retry", PackForgeCapability.ATLAS_RETRY, ApplyScope.GAME_RESTART,
 			cfg -> cfg.forceDisablePartIIIWithIris, (cfg, value) -> cfg.forceDisablePartIIIWithIris = value));
-		options.add(bool("atlas_mip_parallel", Category.ATLAS, "atlas_mipmaps", PackForgeCapability.ATLAS_MIP_PARALLEL, ApplyScope.RESOURCE_RELOAD,
-			cfg -> cfg.atlasMipParallelEnabled, (cfg, value) -> cfg.atlasMipParallelEnabled = value));
+		options.add(bool("cpu_mip_preparation", Category.ATLAS, "atlas_mipmaps", PackForgeCapability.ATLAS_MIP_PARALLEL, ApplyScope.RESOURCE_RELOAD,
+			cfg -> cfg.cpuMipPreparationEnabled, (cfg, value) -> cfg.cpuMipPreparationEnabled = value));
 		options.add(integer("atlas_mip_batch_size", Category.ATLAS, "atlas_mipmaps", PackForgeCapability.ATLAS_MIP_PARALLEL, ApplyScope.RESOURCE_RELOAD,
 			16, 4096, cfg -> cfg.atlasMipBatchSize, (cfg, value) -> cfg.atlasMipBatchSize = value));
 

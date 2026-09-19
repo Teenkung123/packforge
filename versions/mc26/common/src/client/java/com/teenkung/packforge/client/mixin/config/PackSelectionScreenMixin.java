@@ -8,6 +8,7 @@ import com.teenkung.packforge.client.config.ResourcePackButtonLayoutTracker;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.SpriteIconButton;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.packs.PackSelectionScreen;
 import net.minecraft.network.chat.Component;
@@ -30,6 +31,9 @@ public abstract class PackSelectionScreenMixin extends Screen {
 	@Unique
 	private static final Identifier PACKFORGE_CONFIG_COG =
 		Identifier.fromNamespaceAndPath("packforge", "config_cog");
+	@Unique
+	private static final Identifier PACKFORGE_CONFIG_COG_TEXTURE =
+		Identifier.fromNamespaceAndPath("packforge", "textures/gui/sprites/config_cog.png");
 	@Shadow @Final private Path packDir;
 	@Shadow private Button doneButton;
 	@Unique private Button packforge$configButton;
@@ -45,14 +49,23 @@ public abstract class PackSelectionScreenMixin extends Screen {
 		if (this.minecraft == null || !this.packDir.equals(this.minecraft.getResourcePackDirectory())) {
 			return;
 		}
-		Button configButton = SpriteIconButton.builder(
-			Component.translatable("packforge.config.resource_pack_button"),
-			pressed -> MinecraftGuiCompat.setScreen(this.minecraft, new PackForgeConfigScreen((Screen) (Object) this)),
-			true
-		).size(20, 20)
-			.sprite(PACKFORGE_CONFIG_COG, 16, 16)
-			.withTootip()
-			.build();
+		Button configButton;
+		if (this.minecraft.getResourceManager().getResource(PACKFORGE_CONFIG_COG_TEXTURE).isPresent()) {
+			configButton = SpriteIconButton.builder(
+				Component.translatable("packforge.config.resource_pack_button"),
+				pressed -> MinecraftGuiCompat.setScreen(this.minecraft, new PackForgeConfigScreen((Screen) (Object) this)),
+				true
+			).size(20, 20)
+				.sprite(PACKFORGE_CONFIG_COG, 16, 16)
+				.withTootip()
+				.build();
+		} else {
+			configButton = Button.builder(
+				Component.literal("PF"),
+				pressed -> MinecraftGuiCompat.setScreen(this.minecraft, new PackForgeConfigScreen((Screen) (Object) this))
+			).size(20, 20).build();
+		}
+		configButton.setTooltip(Tooltip.create(Component.translatable("packforge.config.resource_pack_button")));
 		configButton.setX(this.doneButton.getRight() + 8);
 		configButton.setY(this.doneButton.getY());
 		this.packforge$configButton = this.addRenderableWidget(configButton);

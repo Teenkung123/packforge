@@ -1,9 +1,11 @@
 {
 	"required": true,
 	"package": "com.teenkung.packforge.mixin",
+	"plugin": "com.teenkung.packforge.mixin.compat.OptimizationMixinPlugin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"loader.FilePackResourcesMixin",
+		"loader.ZipIoSupplierReadReuseMixin",
 		"loader.SharedZipFileAccessAccessor",
 		"loader.SharedZipFileAccessMixin",
 		"observe.ReloadableResourceManagerMixin",

@@ -34,6 +34,7 @@ public final class PackForgeConfigScreen extends Screen {
 	private Button doneButton;
 	private String filter = "";
 	private String saveError = "";
+	private List<PackForgeConfigScreenModel.RecommendedChange> recommendations;
 	private PackForgeConfigScreenModel.Category activeCategory;
 
 	public PackForgeConfigScreen(Screen parent) {
@@ -44,6 +45,10 @@ public final class PackForgeConfigScreen extends Screen {
 
 	@Override
 	protected void init() {
+		if (recommendations != null) {
+			initRecommendations();
+			return;
+		}
 		searchBox = new EditBox(this.font, this.width / 2 - 150, 24, 300, 20, Component.translatable("packforge.config.search"));
 		searchBox.setHint(Component.translatable("packforge.config.search"));
 		searchBox.setValue(filter);
@@ -54,9 +59,13 @@ public final class PackForgeConfigScreen extends Screen {
 		addRenderableWidget(searchBox);
 
 		addCategoryButtons();
-		list = new ConfigList(this.minecraft, this.width, this.height - 118, 78, 26);
+		list = new ConfigList(this.minecraft, this.width, this.height - 142, 78, 26);
 		addRenderableWidget(list);
 		rebuildList();
+		addRenderableWidget(Button.builder(Component.translatable("packforge.config.recommended"), button -> {
+			recommendations = PackForgeConfigScreenModel.recommendedChanges(draft.working(), availableOptions);
+			rebuildWidgets();
+		}).bounds(this.width / 2 - 154, this.height - 58, 308, 20).build());
 
 		addRenderableWidget(Button.builder(Component.translatable("packforge.config.reset_all"), button -> {
 			draft.resetAll(availableOptions);
@@ -69,15 +78,50 @@ public final class PackForgeConfigScreen extends Screen {
 		addRenderableWidget(Button.builder(Component.translatable("packforge.config.cancel"), button -> closeWithoutSaving())
 			.bounds(this.width / 2 - 50, this.height - 32, 100, 20).build());
 		if (!saveError.isEmpty()) {
-			addRenderableOnly(new StringWidget(0, this.height - 54, this.width, 12,
+			addRenderableOnly(new StringWidget(0, this.height - 74, this.width, 12,
 				Component.translatable("packforge.config.save_error", saveError).withStyle(ChatFormatting.RED), this.font));
 		}
 		addRenderableOnly(new StringWidget(0, 8, this.width, 12, this.title, this.font));
 		updateDoneButton();
 	}
 
+	private void initRecommendations() {
+		addRenderableOnly(new StringWidget(0, 8, this.width, 16,
+			Component.translatable("packforge.config.recommended.preview"), this.font));
+		addRenderableOnly(new StringWidget(0, 28, this.width, 16,
+			Component.translatable("packforge.config.recommended.note"), this.font));
+		list = new ConfigList(this.minecraft, this.width, this.height - 100, 52, 26);
+		addRenderableWidget(list);
+		var preview = PackForgeConfigScreenModel.previewRecommendations(draft.working(), recommendations);
+		for (PackForgeConfigScreenModel.RecommendedChange change : recommendations) {
+			var text = Component.translatable("packforge.config.recommended.change",
+				Component.translatable(change.option().titleKey()), booleanText(change.before()), booleanText(change.after()));
+			SectionEntry entry = new SectionEntry(text, this.font);
+			entry.label.setTooltip(Tooltip.create(text.copy().append("\n").append(description(change.option(), preview))));
+			list.add(entry);
+		}
+		if (recommendations.isEmpty()) {
+			list.add(new SectionEntry(Component.translatable("packforge.config.recommended.empty"), this.font));
+		}
+		addRenderableWidget(Button.builder(Component.translatable("packforge.config.cancel"), button -> cancelRecommendations())
+			.bounds(this.width / 2 - 154, this.height - 32, 150, 20).build());
+		addRenderableWidget(Button.builder(Component.translatable("packforge.config.recommended.apply"), button -> {
+			for (PackForgeConfigScreenModel.RecommendedChange change : recommendations) change.apply(draft.working());
+			cancelRecommendations();
+		}).bounds(this.width / 2 + 4, this.height - 32, 150, 20).build()).active = !recommendations.isEmpty();
+	}
+
+	private void cancelRecommendations() {
+		recommendations = null;
+		rebuildWidgets();
+	}
+
 	@Override
 	public void onClose() {
+		if (recommendations != null) {
+			cancelRecommendations();
+			return;
+		}
 		closeWithoutSaving();
 	}
 
@@ -176,6 +220,22 @@ public final class PackForgeConfigScreen extends Screen {
 			.withStyle(value ? ChatFormatting.GREEN : ChatFormatting.RED);
 	}
 
+	private Component description(PackForgeConfigScreenModel.OptionSpec option) {
+		return description(option, draft.working());
+	}
+
+	private Component description(PackForgeConfigScreenModel.OptionSpec option, PackForgeConfig.Cfg values) {
+		var text = Component.translatable(option.descriptionKey()).append("\n")
+			.append(Component.translatable(option.applyScope().translationKey()));
+		var decision = PackForgeConfigScreenModel.optimizationDecision(values, option);
+		if (decision != null && option instanceof PackForgeConfigScreenModel.BooleanOption toggle) {
+			text.append("\n").append(Component.translatable("packforge.config.requested_effective",
+				booleanText(toggle.get(values)), booleanText(decision.effective()), Component.translatable("packforge.config.owner." + decision.owner().name().toLowerCase(Locale.ROOT))));
+			if (!decision.reason().isEmpty()) text.append("\n").append(Component.literal(decision.reason()));
+		}
+		return text;
+	}
+
 	private final class OptionEntry extends ConfigEntry {
 		private final PackForgeConfigScreenModel.OptionSpec option;
 		private final StringWidget label;
@@ -185,7 +245,7 @@ public final class PackForgeConfigScreen extends Screen {
 		OptionEntry(PackForgeConfigScreenModel.OptionSpec option, Font font) {
 			this.option = option;
 			this.label = new StringWidget(0, 0, 260, 20, Component.translatable(option.titleKey()), font);
-			this.label.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey()).append("\n").append(Component.translatable(option.applyScope().translationKey()))));
+			this.label.setTooltip(Tooltip.create(description(option)));
 			this.control = createControl(option, font);
 			this.reset = Button.builder(Component.translatable("packforge.config.reset"), button -> {
 				draft.reset(option);
@@ -200,9 +260,9 @@ public final class PackForgeConfigScreen extends Screen {
 				Button button = Button.builder(booleanText(option.get(draft.working())), widget -> {
 					boolean value = !option.get(draft.working());
 					option.set(draft.working(), value);
-					widget.setMessage(booleanText(value));
+					rebuildList();
 				}).size(120, 20).build();
-				button.setTooltip(Tooltip.create(Component.translatable(spec.descriptionKey())));
+				button.setTooltip(Tooltip.create(description(spec)));
 				return button;
 			}
 			if (spec instanceof PackForgeConfigScreenModel.IntegerOption option) {
@@ -313,6 +373,7 @@ public final class PackForgeConfigScreen extends Screen {
 		SectionEntry(Component title, Font font) {
 			this.label = new StringWidget(0, 0, 260, 20, title, font);
 			this.textWidth = font.width(title);
+			this.label.setTooltip(Tooltip.create(title));
 		}
 
 		@Override
@@ -339,7 +400,8 @@ public final class PackForgeConfigScreen extends Screen {
 		}
 
 		private void place() {
-			label.setX(getContentXMiddle() - textWidth / 2);
+			label.setWidth(Math.min(textWidth, Math.max(1, getContentRight() - getContentX())));
+			label.setX(getContentXMiddle() - label.getWidth() / 2);
 			label.setY(getContentY() + 5);
 		}
 	}

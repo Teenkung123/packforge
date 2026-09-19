@@ -61,6 +61,9 @@ public final class ReloadStatus {
 			error == null ? "Finishing" : "Failed",
 			error == null ? "applying resources" : "resource reload"
 		);
+		if (current && error == null) {
+			initialUiResources.reloadSucceeded();
+		}
 		ReloadExecutionContext.finish(context);
 	}
 
@@ -70,7 +73,7 @@ public final class ReloadStatus {
 
 	static void prepareStarted(ReloadExecutionContext context, String listenerName) {
 		if (context != null) {
-			context.metrics().prepareStarted(readableListener(listenerName));
+			context.metrics().prepareStarted(context.metrics().readableListener(listenerName));
 		}
 	}
 
@@ -84,13 +87,19 @@ public final class ReloadStatus {
 		}
 	}
 
+	static void prepareFinished(ReloadExecutionContext context, String listenerName) {
+		if (context != null) {
+			context.metrics().prepareFinished(context.metrics().readableListener(listenerName));
+		}
+	}
+
 	public static void applyStarted(String listenerName) {
 		applyStarted(ReloadExecutionContext.current(), listenerName);
 	}
 
 	static void applyStarted(ReloadExecutionContext context, String listenerName) {
 		if (context != null) {
-			context.metrics().applyStarted(readableListener(listenerName));
+			context.metrics().applyStarted(context.metrics().readableListener(listenerName));
 		}
 	}
 
@@ -104,15 +113,27 @@ public final class ReloadStatus {
 		}
 	}
 
+	static void applyFinished(ReloadExecutionContext context, String listenerName) {
+		if (context != null) {
+			context.metrics().applyFinished(context.metrics().readableListener(listenerName));
+		}
+	}
+
 	static void listenerStarted(ReloadExecutionContext context, String listenerName) {
 		if (context != null) {
-			context.metrics().listenerStarted(readableListener(listenerName));
+			context.metrics().listenerStarted(context.metrics().readableListener(listenerName));
 		}
 	}
 
 	static void listenerFinished(ReloadExecutionContext context) {
 		if (context != null) {
 			context.metrics().listenerFinished();
+		}
+	}
+
+	static void listenerFinished(ReloadExecutionContext context, String listenerName) {
+		if (context != null) {
+			context.metrics().listenerFinished(context.metrics().readableListener(listenerName));
 		}
 	}
 
@@ -135,18 +156,33 @@ public final class ReloadStatus {
 		return context != null && context.metrics().isActive();
 	}
 
+	/** Feedback fallback is allowed only for a requested overlay displaced by an external owner. */
+	public static boolean externalFeedbackEnabled() {
+		ReloadExecutionContext context = ReloadExecutionContext.current();
+		return context != null && context.features().externalFeedbackEnabled();
+	}
+
 	public static boolean isComplete() {
 		ReloadExecutionContext context = ReloadExecutionContext.visible();
 		return context != null && context.metrics().isComplete();
 	}
 
 	public static String line(float progress) {
-		int percent = Math.max(0, Math.min(100, Math.round(progress * 100.0f)));
 		ReloadExecutionContext context = ReloadExecutionContext.visible();
 		long elapsedMs = context == null ? 0L : context.metrics().elapsedNs() / 1_000_000L;
-		return "Loading resources - " + percent + "% - " + elapsedMs + "ms";
+		String elapsed = elapsedMs / 1_000L + "." + (elapsedMs % 1_000L) / 100L + "s";
+		if (context == null) return "Loading resources - " + elapsed;
+		ReloadMetrics.StatusSnapshot snapshot = context.metrics().statusSnapshot();
+		String completion;
+		if (snapshot.complete()) {
+			completion = "Failed".equals(snapshot.phase()) ? "failed" : "complete";
+		} else {
+			completion = snapshot.completedListeners() + (snapshot.completedListeners() == 1 ? " stage complete" : " stages complete");
+		}
+		return "Loading resources - " + completion + " - " + elapsed;
 	}
 
+	/** Retained for older adapters; an estimate cannot reach 100 before completion. */
 	public static float displayProgress(float progress) {
 		float normalized = Math.max(0.0F, Math.min(1.0F, progress));
 		return isComplete() ? 1.0F : Math.min(0.99F, normalized);
@@ -154,25 +190,13 @@ public final class ReloadStatus {
 
 	public static String detailLine() {
 		ReloadExecutionContext context = ReloadExecutionContext.visible();
-		if (context == null) {
-			return "Starting resource reload";
+		if (context == null) return "Starting resource reload";
+		ReloadMetrics.StatusSnapshot snapshot = context.metrics().statusSnapshot();
+		String detail = snapshot.phase() + " " + snapshot.detail();
+		if (snapshot.activeCount() > 1) {
+			detail += " (" + snapshot.activeCount() + " active)";
 		}
-		ReloadMetrics metrics = context.metrics();
-		String currentPhase = metrics.phase();
-		String currentDetail = metrics.detail();
-		int prepare = metrics.activePrepareTasks();
-		int apply = metrics.activeApplyTasks();
-		int listeners = metrics.activeListeners();
-		if (prepare > 1 && "Preparing".equals(currentPhase)) {
-			return currentPhase + " " + currentDetail + " (" + prepare + " tasks)";
-		}
-		if (apply > 1 && "Applying".equals(currentPhase)) {
-			return currentPhase + " " + currentDetail + " (" + apply + " tasks)";
-		}
-		if (listeners > 1 && "Loading".equals(currentPhase)) {
-			return currentPhase + " " + currentDetail + " (" + listeners + " listeners)";
-		}
-		return currentPhase + " " + currentDetail;
+		return detail;
 	}
 
 	public static ReloadSummary consumeSummaryToast() {
@@ -189,9 +213,59 @@ public final class ReloadStatus {
 		initialUiResources.reset();
 	}
 
-	private static String readableListener(String listenerName) {
+	static String readableListener(String listenerName) {
 		if (listenerName == null || listenerName.isBlank()) {
 			return "resources";
+		}
+		// Fabric may append a debug label to vanilla listener identifiers.
+		int separator = listenerName.indexOf(' ');
+		String identifier = separator < 0 ? listenerName : listenerName.substring(0, separator);
+		switch (identifier) {
+			case "minecraft:languages": return "languages";
+			case "minecraft:textures": return "textures";
+			case "minecraft:models": return "models";
+			case "minecraft:sounds": return "sounds";
+			case "minecraft:fonts": return "fonts";
+		}
+		String simpleIdentifier = identifier;
+		int dot = simpleIdentifier.lastIndexOf('.');
+		if (dot >= 0 && dot + 1 < simpleIdentifier.length()) {
+			simpleIdentifier = simpleIdentifier.substring(dot + 1);
+		}
+		switch (simpleIdentifier) {
+			case "class_378": return "fonts";
+			case "class_1076": return "languages";
+			case "class_1060": return "textures";
+			case "class_1144": return "sounds";
+			case "class_1092": return "models";
+			case "class_324": return "block colors";
+			case "class_325": return "item colors";
+			case "class_1069": return "grass colors";
+			case "class_1070": return "foliage colors";
+			case "class_10831": return "dry foliage colors";
+			case "class_4044": return "painting textures";
+			case "class_4074": return "mob-effect textures";
+			case "class_1071": return "skins";
+			case "class_4008": return "splash text";
+			case "class_1142": return "music manager";
+			case "class_6877": return "periodic notifications";
+			case "class_5407": return "GPU warnlist";
+			case "class_5599": return "entity models";
+			case "class_824": return "block entity dispatcher";
+			case "class_756": return "block entity renderer";
+			case "class_776": return "block renderer";
+			case "class_918": return "item renderer";
+			case "class_898": return "entity renderer";
+			case "class_4599": return "render buffers";
+			case "class_1124": return "search registry";
+			case "class_702": return "particles";
+			case "class_8658": return "GUI sprites";
+			case "class_9443": return "map decorations";
+			case "class_9955": return "clouds";
+			case "class_10201": return "equipment assets";
+			case "class_11327": return "waypoint styles";
+			case "class_761": return "level renderer";
+			case "class_757", "class_10151", "GameRenderer", "ShaderManager": return "shader loader";
 		}
 		return switch (listenerName) {
 			case "AtlasManager" -> "texture atlases";

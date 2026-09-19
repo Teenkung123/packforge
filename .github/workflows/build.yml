@@ -10,20 +10,34 @@ permissions:
   contents: read
 
 jobs:
+  registry_matrix:
+    name: Derive registry target matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    outputs:
+      target_matrix: ${{ steps.matrix.outputs.target_matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release tooling and derive targets
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s scripts -p 'test_prepare_modrinth_release.py' -v
+          target_matrix="$(python scripts/prepare-modrinth-release.py --matrix targets)"
+          printf 'target_matrix=%s\n' "$target_matrix" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.target }}
+    needs: registry_matrix
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      matrix:
-        target:
-          - mc26_1_to_26_2
-          - mc1_21_1
-          - mc1_21_4
-          - mc1_21_8
-          - mc1_21_11
-          - mc1_20_1
+      matrix: ${{ fromJSON(needs.registry_matrix.outputs.target_matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -40,16 +54,18 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-            platform/forge/.gradle/mavenizer
-          key: packforge-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+            build/nodes/forge/*/minecraftforge/forgegradle/mavenizer
+          key: packforge-nodes-v1-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('gradle/minecraft-targets.json', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle') }}
           restore-keys: |
-            packforge-${{ runner.os }}-${{ matrix.target }}-
+            packforge-nodes-v1-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Build, test, and verify exact artifacts
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
           chmod +x gradlew
           for attempt in 1 2 3; do
-            if ./gradlew buildTarget -Ppackforge_target=${{ matrix.target }} --no-daemon --stacktrace; then
+            if ./gradlew :buildTarget -Ppackforge_target="$TARGET" --configure-on-demand --no-daemon --stacktrace; then
               exit 0
             fi
             if [[ "$attempt" -eq 3 ]]; then
@@ -84,4 +100,4 @@ jobs:
 
       - name: Run close, rename, and delete test on Windows
         shell: pwsh
-        run: .\gradlew.bat -p platform/fabric -Ppackforge_target=mc1_21_1 test --tests com.teenkung.packforge.loader.ZipReadPoolTest --no-daemon --stacktrace
+        run: .\gradlew.bat :common:test --tests com.teenkung.packforge.loader.ZipReadPoolTest --configure-on-demand --no-daemon --stacktrace

@@ -1,0 +1,4 @@
+plugins.apply 'dev.kikugie.stonecutter'
+
+stonecutter.active 'mc26_1_to_26_2' /* [SC] DO NOT EDIT */
+apply from: 'build.gradle'

@@ -41,6 +41,9 @@ replay_*.log
 *.jfr
 /resources/
 
-# local agent settings and source archive
-/.claude/
+# local source archive
 /PackForge.zip
+
+# generated Python tooling caches
+__pycache__/
+*.py[cod]

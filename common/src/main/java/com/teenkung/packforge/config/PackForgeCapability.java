@@ -3,6 +3,7 @@ package com.teenkung.packforge.config;
 /** Exact identifiers consumed from generated packforge-capabilities.properties. */
 public enum PackForgeCapability {
 	RESOURCE_PACK_INDEX,
+	RESOURCE_READ_REUSE,
 	ZIP_READ_POOL,
 	LOADER_TIMINGS,
 	RELOAD_LISTENER_TIMINGS,

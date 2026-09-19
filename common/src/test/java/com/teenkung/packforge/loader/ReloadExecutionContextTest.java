@@ -1,10 +1,13 @@
 package com.teenkung.packforge.loader;
 
 import com.teenkung.packforge.config.ReloadFeatureSnapshot;
+import com.teenkung.packforge.config.OptimizationPlan;
+import com.teenkung.packforge.config.PackForgeConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -15,11 +18,54 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReloadExecutionContextTest {
+	@Test
+	void fontScratchPriorityWaitsForEveryPreparationAndStaysWithItsReload() {
+		ReloadExecutionContext older = ReloadExecutionContext.startForTesting(snapshot(false, false, Set.of(), 1));
+		assertTrue(older.fontPreparationPending());
+		older.beginFontPreparation();
+		older.beginFontPreparation();
+		older.endFontPreparation();
+		assertTrue(older.fontPreparationPending());
+		ReloadExecutionContext newer = ReloadExecutionContext.startForTesting(snapshot(false, false, Set.of(), 1));
+		older.endFontPreparation();
+		assertFalse(older.fontPreparationPending());
+		assertTrue(newer.fontPreparationPending());
+		newer.beginFontPreparation();
+		newer.endFontPreparation();
+		newer.endFontPreparation();
+		assertFalse(newer.fontPreparationPending());
+	}
+
+	@Test
+	void retirementDetachesCachesBeforeCallbacksAndStillClosesAfterFailure() throws Exception {
+		ReloadExecutionContext context = ReloadExecutionContext.startForTesting(snapshot(false, false, Set.of(), 1, true));
+		ReloadReadCache cache = context.readCache();
+		Object owner = new Object();
+		byte[] bytes = {1, 2, 3};
+		try (var first = cache.open(owner, "resource.json", bytes.length, true, () -> new ByteArrayInputStream(bytes))) {
+			assertEquals(1, first.read());
+		}
+		var borrowed = cache.open(owner, "resource.json", bytes.length, true, () -> new ByteArrayInputStream(bytes));
+		RuntimeException failure = new IllegalStateException("retirement callback");
+		context.preparationBudget().onRetire(() -> {
+			assertFalse(Thread.holdsLock(context));
+			assertNull(context.readCache());
+			throw failure;
+		});
+		assertSame(failure, assertThrows(IllegalStateException.class, () -> ReloadExecutionContext.finish(context)));
+		assertNull(context.readCache());
+		assertTrue(context.preparationBudget().used() > 0);
+		assertEquals(1, borrowed.read());
+		borrowed.close();
+		assertEquals(0, context.preparationBudget().used());
+	}
+
 	@BeforeEach
 	void resetBefore() {
 		ReloadStatus.resetForTesting();
@@ -195,12 +241,16 @@ class ReloadExecutionContextTest {
 	}
 
 	private static ReloadFeatureSnapshot snapshot(boolean listenerTimings, boolean summary, Set<String> exclusions, int workers) {
+		return snapshot(listenerTimings, summary, exclusions, workers, false);
+	}
+
+	private static ReloadFeatureSnapshot snapshot(boolean listenerTimings, boolean summary, Set<String> exclusions, int workers, boolean readReuse) {
 		return new ReloadFeatureSnapshot(
 			true, true, true, false, true, listenerTimings, true, true, false, summary,
 			true, true, true, 64, false, false, false, false, true, false,
 			false, false, 128, false, 128, true, 256, exclusions, false, 2,
 			false, false, false, false, true, true, true, workers, 4, true,
-			false, false, false, false, ReloadFeatureSnapshot.boundedWorkerBudget(workers, 1)
+			false, false, false, false, ReloadFeatureSnapshot.boundedWorkerBudget(workers, 1), readReuse, 128, OptimizationPlan.capture(PackForgeConfig.get())
 		);
 	}
 }

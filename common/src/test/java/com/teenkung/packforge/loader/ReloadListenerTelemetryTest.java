@@ -28,6 +28,70 @@ class ReloadListenerTelemetryTest {
 	}
 
 	@Test
+	void applyDoesNotMarkReadinessForResourceKeysAlone() {
+		ReloadStatus.start();
+		ReloadListenerTelemetry.apply("minecraft:shaders", () -> {}, false, true).run();
+		assertFalse(ReloadStatus.isStatusTextReady());
+		ReloadListenerTelemetry.apply("minecraft:fonts", () -> {}, false, true).run();
+
+		assertFalse(ReloadStatus.isStatusTextReady());
+	}
+
+	@Test
+	void applyMarksReadinessForIntermediaryFontListenerName() {
+		ReloadStatus.start();
+		ReloadListenerTelemetry.apply("Shader Loader", () -> {}, false, true).run();
+		assertFalse(ReloadStatus.isStatusTextReady());
+		ReloadListenerTelemetry.apply("class_378", () -> {}, false, true).run();
+
+		assertTrue(ReloadStatus.isStatusTextReady());
+	}
+
+	@Test
+	void readableLabelsCoverIntermediaryVanillaListenerNames() {
+		assertEquals("fonts", ReloadStatus.readableListener("class_378"));
+		assertEquals("languages", ReloadStatus.readableListener("class_1076"));
+		assertEquals("textures", ReloadStatus.readableListener("class_1060"));
+		assertEquals("sounds", ReloadStatus.readableListener("class_1144"));
+		assertEquals("models", ReloadStatus.readableListener("class_1092"));
+		assertEquals("entity models", ReloadStatus.readableListener("class_5599"));
+		assertEquals("block renderer", ReloadStatus.readableListener("class_776"));
+		assertEquals("GUI sprites", ReloadStatus.readableListener("class_8658"));
+		assertEquals("map decorations", ReloadStatus.readableListener("class_9443"));
+		assertEquals("clouds", ReloadStatus.readableListener("class_9955"));
+		assertEquals("equipment assets", ReloadStatus.readableListener("class_10201"));
+		assertEquals("dry foliage colors", ReloadStatus.readableListener("class_10831"));
+		assertEquals("waypoint styles", ReloadStatus.readableListener("class_11327"));
+		assertEquals("painting textures", ReloadStatus.readableListener("class_4044"));
+		assertEquals("shader loader", ReloadStatus.readableListener("class_757"));
+		assertEquals(
+			"shader loader",
+			ReloadStatus.readableListener("net.minecraft.client.renderer.ShaderManager Reload Listener")
+		);
+	}
+
+	@Test
+	void successfulCurrentReloadProvidesSafeReadinessFallback() {
+		ReloadStatus.start();
+		ReloadListenerTelemetry.apply("loader-specific-font-listener", () -> {}, false, true).run();
+		ReloadListenerTelemetry.apply("loader-specific-shader-listener", () -> {}, false, true).run();
+		assertFalse(ReloadStatus.isStatusTextReady());
+
+		ReloadStatus.finish(null, false);
+
+		assertTrue(ReloadStatus.isStatusTextReady());
+	}
+
+	@Test
+	void failedCurrentReloadDoesNotProvideReadinessFallback() {
+		ReloadStatus.start();
+
+		ReloadStatus.finish(new IllegalStateException("expected"), false);
+
+		assertFalse(ReloadStatus.isStatusTextReady());
+	}
+
+	@Test
 	void failedApplyAlwaysClosesTaskWithoutMarkingItApplied() {
 		ReloadStatus.start();
 		AtomicInteger calls = new AtomicInteger();

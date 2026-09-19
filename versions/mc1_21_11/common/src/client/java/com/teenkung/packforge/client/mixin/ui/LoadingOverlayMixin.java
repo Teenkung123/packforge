@@ -1,13 +1,12 @@
 package com.teenkung.packforge.client.mixin.ui;
 
+import com.teenkung.packforge.client.ui.ReloadSummaryToast;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.loader.ReloadStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.gui.screens.LoadingOverlay;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Final;
@@ -26,11 +25,7 @@ public abstract class LoadingOverlayMixin {
 
 	@Inject(method = "render", at = @At("TAIL"))
 	private void packforge$drawStatus(GuiGraphics graphics, int mouseX, int mouseY, float tickDelta, CallbackInfo ci) {
-		ReloadStatus.ReloadSummary summary = ReloadStatus.consumeSummaryToast();
-		if (summary != null) {
-			String message = "Pack took " + summary.elapsedMs() + "ms to complete" + (summary.success() ? "" : " with errors");
-			SystemToast.addOrUpdate(this.minecraft.getToastManager(), new SystemToast.SystemToastId(), Component.literal("PackForge reload"), Component.literal(message));
-		}
+		ReloadSummaryToast.showPending();
 		if (!ReloadStatus.isStatusTextReady() || !FeatureFlags.loadingStatusOverlayEnabled() || !ReloadStatus.isActive()) return;
 		Font font = this.minecraft.font;
 		int x = graphics.guiWidth() / 2;

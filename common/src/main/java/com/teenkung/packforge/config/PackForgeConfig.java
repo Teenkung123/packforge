@@ -8,7 +8,6 @@ import com.teenkung.packforge.PackForge;
 import com.teenkung.packforge.platform.PackForgeServices;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -17,21 +16,25 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public final class PackForgeConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	private static final int CURRENT_VERSION = 12;
+	// Version 15 changes only the missing atlas-cap default; explicit saved choices remain intact.
+	private static final int CURRENT_VERSION = 15;
 	private static volatile Cfg INSTANCE;
 
 	public static final class Cfg {
 		public int configVersion = CURRENT_VERSION;
 		public boolean reloadOptimizerEnabled = true;
+		public boolean resourceReadReuseEnabled = false;
+		public int optimizationMemoryMiB = 128;
 		public boolean largeAtlasFixerEnabled = true;
 		public boolean loaderIndexEnabled = true;
 		public boolean loaderZipPoolEnabled = false;
 		public boolean loaderTimingsEnabled = false;
 		public boolean reloadListenerTimingsEnabled = false;
-		public boolean shaderApplyStallDiagnosticsEnabled = true;
+		public boolean shaderApplyStallDiagnosticsEnabled = false;
 		public boolean immediatelyFastFontAtlasCompatEnabled = true;
 		public boolean loadingStatusOverlayEnabled = true;
 		public boolean loadingScreenFadeOutDisabled = false;
@@ -41,6 +44,8 @@ public final class PackForgeConfig {
 		public boolean fontPrepareProviderSelectionEnabled = true;
 		public boolean fontBitmapProviderCacheEnabled = false;
 		public boolean atlasPhaseTimingsEnabled = false;
+		public boolean cpuMipPreparationEnabled = true;
+		/** Legacy migration alias. Runtime CPU preparation uses cpuMipPreparationEnabled. */
 		public boolean atlasMipParallelEnabled = false;
 		public int atlasMipBatchSize = 128;
 		public boolean atlasDecodeBatchingEnabled = false;
@@ -50,7 +55,8 @@ public final class PackForgeConfig {
 		public boolean modelParseTimingEnabled = false;
 		public boolean modelAdaptiveBatchingEnabled = false;
 		public boolean modelDuplicateParseCacheEnabled = false;
-		public boolean atlasCapEnabled = true;
+		/** Reserved until a validated atlas-cap implementation is admitted; original sprite dimensions stay preserved. */
+		public boolean atlasCapEnabled = false;
 		public int atlasCapPx = 256;
 		public List<String> atlasExcludeIds = new ArrayList<>(List.of("minecraft:gui"));
 		public boolean atlasRetryEnabled = false;
@@ -65,9 +71,9 @@ public final class PackForgeConfig {
 		public boolean atlasSplitModelCoherence = true;
 		public boolean atlasSplitDiagnostics = true;
 		public boolean startupOptimizerEnabled = false;
-		public boolean startupTimingsEnabled = true;
+		public boolean startupTimingsEnabled = false;
 		public boolean startupStatusOverlayEnabled = true;
-		public boolean startupExecutorTuningEnabled = true;
+		public boolean startupExecutorTuningEnabled = false;
 		public int startupWorkerThreads = 0;
 		public int startupThreadPriority = 4;
 		public boolean startupSkipWithSmoothBoot = true;
@@ -100,35 +106,35 @@ public final class PackForgeConfig {
 		Path file = configFile();
 		Cfg cfg = new Cfg();
 		boolean shouldSave = false;
+		boolean writable = true;
 		try {
 			if (Files.exists(file)) {
-				try (Reader r = Files.newBufferedReader(file)) {
-					JsonObject root = JsonParser.parseReader(r).getAsJsonObject();
-					Cfg parsed = GSON.fromJson(root, Cfg.class);
-					if (parsed != null) {
-						cfg = parsed;
-					}
+				JsonObject root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+				validateKnownFields(root);
+				cfg = GSON.fromJson(root, Cfg.class);
+				writable = cfg.configVersion <= CURRENT_VERSION;
+				if (writable) {
 					shouldSave = applyMissingDefaults(cfg, root);
+				} else {
+					PackForge.LOGGER.warn("PackForge config version {} is newer than supported {}; preserving file", cfg.configVersion, CURRENT_VERSION);
 				}
 			} else {
 				shouldSave = true;
 			}
-		} catch (IOException e) {
-			PackForge.LOGGER.error("Failed to load packforge config; using defaults", e);
-		} catch (RuntimeException e) {
-			PackForge.LOGGER.error("Failed to parse packforge config; using defaults", e);
-			shouldSave = true;
+		} catch (IOException | RuntimeException e) {
+			PackForge.LOGGER.error("Failed to load packforge config; preserving file and using defaults", e);
+			cfg = new Cfg();
+			writable = false;
 		}
 		shouldSave |= sanitize(cfg);
 		INSTANCE = cfg;
-		if (shouldSave) {
+		if (writable && shouldSave) {
 			save();
 		}
 	}
 
 	public static synchronized void save() {
 		Cfg cfg = get();
-		cfg.configVersion = CURRENT_VERSION;
 		sanitize(cfg);
 		write(cfg);
 	}
@@ -139,7 +145,6 @@ public final class PackForgeConfig {
 	 */
 	public static synchronized SaveResult applyAndSave(Cfg replacement) {
 		Cfg candidate = copyOf(replacement);
-		candidate.configVersion = CURRENT_VERSION;
 		sanitize(candidate);
 		SaveResult result = write(candidate);
 		if (result.successful()) {
@@ -152,6 +157,8 @@ public final class PackForgeConfig {
 		Cfg copy = new Cfg();
 		copy.configVersion = source.configVersion;
 		copy.reloadOptimizerEnabled = source.reloadOptimizerEnabled;
+		copy.resourceReadReuseEnabled = source.resourceReadReuseEnabled;
+		copy.optimizationMemoryMiB = source.optimizationMemoryMiB;
 		copy.largeAtlasFixerEnabled = source.largeAtlasFixerEnabled;
 		copy.loaderIndexEnabled = source.loaderIndexEnabled;
 		copy.loaderZipPoolEnabled = source.loaderZipPoolEnabled;
@@ -167,6 +174,7 @@ public final class PackForgeConfig {
 		copy.fontPrepareProviderSelectionEnabled = source.fontPrepareProviderSelectionEnabled;
 		copy.fontBitmapProviderCacheEnabled = source.fontBitmapProviderCacheEnabled;
 		copy.atlasPhaseTimingsEnabled = source.atlasPhaseTimingsEnabled;
+		copy.cpuMipPreparationEnabled = source.cpuMipPreparationEnabled;
 		copy.atlasMipParallelEnabled = source.atlasMipParallelEnabled;
 		copy.atlasMipBatchSize = source.atlasMipBatchSize;
 		copy.atlasDecodeBatchingEnabled = source.atlasDecodeBatchingEnabled;
@@ -208,9 +216,31 @@ public final class PackForgeConfig {
 		Path temporaryFile = null;
 		try {
 			Files.createDirectories(file.getParent());
+			JsonObject output = new JsonObject();
+			if (cfg.configVersion > CURRENT_VERSION) {
+				throw new IOException("Cannot save a config from a newer PackForge version");
+			}
+			if (Files.exists(file)) {
+				byte[] original = Files.readAllBytes(file);
+				output = JsonParser.parseString(new String(original, StandardCharsets.UTF_8)).getAsJsonObject();
+				int version = output.has("configVersion") ? output.get("configVersion").getAsInt() : 0;
+				if (version > CURRENT_VERSION) {
+					throw new IOException("Cannot overwrite a config from a newer PackForge version");
+				}
+				validateKnownFields(output);
+				if (version < CURRENT_VERSION) {
+					Path backup = Files.createTempFile(file.getParent(), "packforge-v" + version + "-", ".json.bak");
+					Files.write(backup, original);
+				}
+			}
+			cfg.configVersion = CURRENT_VERSION;
+			JsonObject known = GSON.toJsonTree(cfg).getAsJsonObject();
+			for (String key : known.keySet()) {
+				output.add(key, known.get(key));
+			}
 			temporaryFile = Files.createTempFile(file.getParent(), "packforge-", ".json.tmp");
 			try (Writer w = Files.newBufferedWriter(temporaryFile, StandardCharsets.UTF_8)) {
-				GSON.toJson(cfg, w);
+				GSON.toJson(output, w);
 			}
 			try {
 				Files.move(temporaryFile, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -218,7 +248,7 @@ public final class PackForgeConfig {
 				Files.move(temporaryFile, file, StandardCopyOption.REPLACE_EXISTING);
 			}
 			return SaveResult.success();
-		} catch (IOException e) {
+		} catch (IOException | RuntimeException e) {
 			PackForge.LOGGER.error("Failed to save packforge config", e);
 			if (temporaryFile != null) {
 				try {
@@ -227,7 +257,7 @@ public final class PackForgeConfig {
 					PackForge.LOGGER.debug("Failed to remove temporary PackForge config {}", temporaryFile, cleanupException);
 				}
 			}
-			return SaveResult.failure(e);
+			return SaveResult.failure(e instanceof IOException io ? io : new IOException("Invalid existing config; preserving file", e));
 		}
 	}
 
@@ -235,14 +265,52 @@ public final class PackForgeConfig {
 		return PackForgeServices.platform().configDirectory().resolve("packforge.json");
 	}
 
+	private static void validateKnownFields(JsonObject root) {
+		JsonObject schema = GSON.toJsonTree(new Cfg()).getAsJsonObject();
+		for (String name : schema.keySet()) {
+			if (!root.has(name)) continue;
+			var value = root.get(name);
+			var expected = schema.get(name);
+			if (expected.isJsonArray()) {
+				if (!value.isJsonArray()) throw new IllegalArgumentException("Expected string list for " + name);
+				for (var entry : value.getAsJsonArray()) {
+					if (!entry.isJsonPrimitive() || !entry.getAsJsonPrimitive().isString()) {
+						throw new IllegalArgumentException("Expected string entries for " + name);
+					}
+				}
+			} else if (expected.getAsJsonPrimitive().isBoolean()) {
+				if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean()) {
+					throw new IllegalArgumentException("Expected boolean for " + name);
+				}
+			} else {
+				if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+					throw new IllegalArgumentException("Expected integer for " + name);
+				}
+				try {
+					value.getAsBigDecimal().intValueExact();
+				} catch (ArithmeticException exception) {
+					throw new IllegalArgumentException("Expected integer for " + name, exception);
+				}
+			}
+		}
+	}
+
 	private static boolean applyMissingDefaults(Cfg cfg, JsonObject root) {
 		Cfg defaults = new Cfg();
 		boolean changed = false;
+		if (!root.has("cpuMipPreparationEnabled")) {
+			// Preserve the old effective request, including its master switches. A
+			// saved true mip alias behind a disabled atlas fixer must remain off.
+			cfg.cpuMipPreparationEnabled = legacyCpuMipPreparation(cfg, PackForgeCapabilities.available(), PackForgeCapabilities.target());
+			changed = true;
+		}
 
 		if (!root.has("configVersion") || cfg.configVersion != CURRENT_VERSION) {
 			cfg.configVersion = CURRENT_VERSION;
 			changed = true;
 		}
+		if (!root.has("resourceReadReuseEnabled")) { cfg.resourceReadReuseEnabled = defaults.resourceReadReuseEnabled; changed = true; }
+		if (!root.has("optimizationMemoryMiB")) { cfg.optimizationMemoryMiB = defaults.optimizationMemoryMiB; changed = true; }
 		if (!root.has("loaderIndexEnabled")) { cfg.loaderIndexEnabled = defaults.loaderIndexEnabled; changed = true; }
 		if (!root.has("reloadOptimizerEnabled")) { cfg.reloadOptimizerEnabled = defaults.reloadOptimizerEnabled; changed = true; }
 		if (!root.has("largeAtlasFixerEnabled")) { cfg.largeAtlasFixerEnabled = defaults.largeAtlasFixerEnabled; changed = true; }
@@ -304,6 +372,20 @@ public final class PackForgeConfig {
 		return changed;
 	}
 
+	static boolean legacyCpuMipPreparation(Cfg cfg, Set<PackForgeCapability> capabilities, String target) {
+		// Only mc26 implemented this setting before the canonical CPU preparation key.
+		// Adding a backport must not activate an older target's previously inert alias.
+		return target.startsWith("mc26") && legacyCpuMipPreparation(cfg, capabilities);
+	}
+
+	static boolean legacyCpuMipPreparation(Cfg cfg, Set<PackForgeCapability> capabilities) {
+		return capabilities.contains(PackForgeCapability.ATLAS_MIP_PARALLEL)
+			&& ((cfg.largeAtlasFixerEnabled && cfg.atlasMipParallelEnabled)
+				|| (capabilities.contains(PackForgeCapability.STARTUP_OPTIMIZER)
+					&& capabilities.contains(PackForgeCapability.STARTUP_ASYNC_FONT_ATLAS)
+					&& cfg.startupOptimizerEnabled && cfg.startupAsyncFontAtlasEnabled));
+	}
+
 	private static boolean sanitize(Cfg cfg) {
 		boolean changed = false;
 		if (cfg.atlasExcludeIds == null) {
@@ -335,6 +417,9 @@ public final class PackForgeConfig {
 			cfg.atlasSplitTargets = safeTargets;
 			changed = true;
 		}
+		int oldMemory = cfg.optimizationMemoryMiB;
+		cfg.optimizationMemoryMiB = clamp(cfg.optimizationMemoryMiB, 1, 128);
+		changed |= oldMemory != cfg.optimizationMemoryMiB;
 		int oldTiers = cfg.atlasSplitMaxTiers;
 		cfg.atlasSplitMaxTiers = clamp(cfg.atlasSplitMaxTiers, 1, 4);
 		int oldThreads = cfg.startupWorkerThreads;

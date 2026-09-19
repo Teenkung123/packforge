@@ -39,6 +39,7 @@ public final class PackForgeConfigScreen extends Screen {
 	private int firstVisible;
 	private int visibleRows;
 	private int filteredCount;
+	private List<PackForgeConfigScreenModel.RecommendedChange> recommendations;
 
 	public PackForgeConfigScreen(Screen parent) {
 		super(Component.translatable("packforge.config.title"));
@@ -48,6 +49,10 @@ public final class PackForgeConfigScreen extends Screen {
 
 	@Override
 	protected void init() {
+		if (recommendations != null) {
+			addRenderableWidget(new StringWidget(0, 28, this.width, 20,
+				Component.translatable("packforge.config.recommended.note"), this.font));
+		} else {
 		this.searchBox = new EditBox(this.font, this.width / 2 - 150, 24, 300, 20,
 			Component.translatable("packforge.config.search"));
 		this.searchBox.setHint(Component.translatable("packforge.config.search"));
@@ -59,9 +64,10 @@ public final class PackForgeConfigScreen extends Screen {
 		});
 		addRenderableWidget(this.searchBox);
 		addCategoryButtons();
+		}
 
 		int contentTop = 78;
-		int contentBottom = this.height - 42;
+		int contentBottom = this.height - 68;
 		this.visibleRows = Math.max(1, (contentBottom - contentTop) / ROW_HEIGHT);
 		List<PackForgeConfigScreenModel.OptionSpec> filtered = filteredOptions();
 		this.filteredCount = filtered.size();
@@ -71,21 +77,30 @@ public final class PackForgeConfigScreen extends Screen {
 		int left = (this.width - contentWidth) / 2;
 		int end = Math.min(filtered.size(), this.firstVisible + this.visibleRows);
 		for (int index = this.firstVisible; index < end; index++) {
-			addOptionRow(filtered.get(index), left, contentTop + (index - this.firstVisible) * ROW_HEIGHT, contentWidth);
+			int y = contentTop + (index - this.firstVisible) * ROW_HEIGHT;
+			if (recommendations == null) addOptionRow(filtered.get(index), left, y, contentWidth);
+			else addRecommendationRow(filtered.get(index), left, y, contentWidth);
 		}
 		if (filtered.isEmpty()) {
 			addRenderableWidget(new StringWidget(left, contentTop, contentWidth, 20,
-				Component.translatable("packforge.config.empty"), this.font));
+				Component.translatable(recommendations == null ? "packforge.config.empty" : "packforge.config.recommended.empty"), this.font));
 		}
 
-		addRenderableWidget(Button.builder(Component.translatable("packforge.config.reset_all"), button -> {
+		if (recommendations == null) {
+			addRenderableWidget(Button.builder(Component.translatable("packforge.config.recommended"), button -> {
+				recommendations = PackForgeConfigScreenModel.recommendedChanges(draft.working(), availableOptions);
+				firstVisible = 0;
+				rebuild();
+			}).bounds(this.width / 2 - 154, this.height - 54, 308, 20).build());
+			addRenderableWidget(Button.builder(Component.translatable("packforge.config.reset_all"), button -> {
 			this.draft.resetAll(this.availableOptions);
 			this.invalidInputs.clear();
 			rebuild();
 		}).bounds(this.width / 2 - 154, this.height - 28, 100, 20).build());
-		addRenderableWidget(Button.builder(Component.translatable("packforge.config.cancel"), button -> closeWithoutSaving())
+		}
+		addRenderableWidget(Button.builder(Component.translatable("packforge.config.cancel"), button -> onClose())
 			.bounds(this.width / 2 - 50, this.height - 28, 100, 20).build());
-		this.doneButton = addRenderableWidget(Button.builder(Component.translatable("packforge.config.done"), button -> apply())
+		this.doneButton = addRenderableWidget(Button.builder(Component.translatable(recommendations == null ? "packforge.config.done" : "packforge.config.recommended.apply"), button -> apply())
 			.bounds(this.width / 2 + 54, this.height - 28, 100, 20).build());
 		updateDoneButton();
 	}
@@ -110,6 +125,7 @@ public final class PackForgeConfigScreen extends Screen {
 	}
 
 	private List<PackForgeConfigScreenModel.OptionSpec> filteredOptions() {
+		if (recommendations != null) return recommendations.stream().map(change -> (PackForgeConfigScreenModel.OptionSpec) change.option()).toList();
 		List<PackForgeConfigScreenModel.OptionSpec> result = new ArrayList<>();
 		for (PackForgeConfigScreenModel.OptionSpec option : this.availableOptions) {
 			if (option.category() == this.activeCategory && matches(option)) {
@@ -117,6 +133,31 @@ public final class PackForgeConfigScreen extends Screen {
 			}
 		}
 		return result;
+	}
+
+	private void addRecommendationRow(PackForgeConfigScreenModel.OptionSpec option, int left, int y, int width) {
+		var change = recommendations.stream().filter(item -> item.option() == option).findFirst().orElseThrow();
+		var text = Component.translatable("packforge.config.recommended.change", Component.translatable(option.titleKey()),
+			booleanText(change.before()), booleanText(change.after()));
+		var preview = PackForgeConfigScreenModel.previewRecommendations(draft.working(), recommendations);
+		addRenderableWidget(new StringWidget(left, y, width, 20, text, this.font))
+			.setTooltip(Tooltip.create(text.copy().append("\n").append(description(option, preview))));
+	}
+
+	private Component description(PackForgeConfigScreenModel.OptionSpec option) {
+		return description(option, draft.working());
+	}
+
+	private Component description(PackForgeConfigScreenModel.OptionSpec option, PackForgeConfig.Cfg values) {
+		var text = Component.translatable(option.descriptionKey()).append("\n")
+			.append(Component.translatable(option.applyScope().translationKey()));
+		var decision = PackForgeConfigScreenModel.optimizationDecision(values, option);
+		if (decision != null && option instanceof PackForgeConfigScreenModel.BooleanOption toggle) {
+			text.append("\n").append(Component.translatable("packforge.config.requested_effective",
+				booleanText(toggle.get(values)), booleanText(decision.effective()), Component.translatable("packforge.config.owner." + decision.owner().name().toLowerCase(Locale.ROOT))));
+			if (!decision.reason().isEmpty()) text.append("\n").append(Component.literal(decision.reason()));
+		}
+		return text;
 	}
 
 	private boolean matches(PackForgeConfigScreenModel.OptionSpec option) {
@@ -134,8 +175,7 @@ public final class PackForgeConfigScreen extends Screen {
 		Component labelText = Component.translatable(option.sectionKey()).append(": ")
 			.append(Component.translatable(option.titleKey()));
 		StringWidget label = new StringWidget(left, y, labelWidth, 20, labelText, this.font);
-		label.setTooltip(Tooltip.create(Component.translatable(option.descriptionKey()).append("\n")
-			.append(Component.translatable(option.applyScope().translationKey()))));
+		label.setTooltip(Tooltip.create(description(option)));
 		addRenderableWidget(label);
 
 		AbstractWidget control = createControl(option, left + labelWidth + 4, y);
@@ -154,9 +194,9 @@ public final class PackForgeConfigScreen extends Screen {
 			Button button = Button.builder(booleanText(option.get(this.draft.working())), widget -> {
 				boolean value = !option.get(this.draft.working());
 				option.set(this.draft.working(), value);
-				widget.setMessage(booleanText(value));
+				rebuild();
 			}).bounds(x, y, CONTROL_WIDTH, 20).build();
-			button.setTooltip(Tooltip.create(Component.translatable(spec.descriptionKey())));
+			button.setTooltip(Tooltip.create(description(spec)));
 			return button;
 		}
 		if (spec instanceof PackForgeConfigScreenModel.IntegerOption option) {
@@ -201,6 +241,11 @@ public final class PackForgeConfigScreen extends Screen {
 	}
 
 	private void apply() {
+		if (recommendations != null) {
+			for (var change : recommendations) change.apply(draft.working());
+			cancelRecommendations();
+			return;
+		}
 		if (!this.invalidInputs.isEmpty()) {
 			return;
 		}
@@ -220,7 +265,14 @@ public final class PackForgeConfigScreen extends Screen {
 
 	@Override
 	public void onClose() {
+		if (recommendations != null) { cancelRecommendations(); return; }
 		closeWithoutSaving();
+	}
+
+	private void cancelRecommendations() {
+		recommendations = null;
+		firstVisible = 0;
+		rebuild();
 	}
 
 	@Override
@@ -239,7 +291,7 @@ public final class PackForgeConfigScreen extends Screen {
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		renderBackground(graphics);
 		super.render(graphics, mouseX, mouseY, partialTick);
-		graphics.drawCenteredString(this.font, this.title, this.width / 2, 8, 0xFFFFFFFF);
+		graphics.drawCenteredString(this.font, recommendations == null ? this.title : Component.translatable("packforge.config.recommended.preview"), this.width / 2, 8, 0xFFFFFFFF);
 		if (this.filteredCount > this.visibleRows) {
 			String range = (this.firstVisible + 1) + "-" + Math.min(this.filteredCount, this.firstVisible + this.visibleRows)
 				+ " / " + this.filteredCount;
@@ -247,7 +299,7 @@ public final class PackForgeConfigScreen extends Screen {
 		}
 		if (!this.saveError.isEmpty()) {
 			graphics.drawCenteredString(this.font, Component.translatable("packforge.config.save_error", this.saveError),
-				this.width / 2, this.height - 42, 0xFFFF5555);
+				this.width / 2, this.height - 68, 0xFFFF5555);
 		}
 	}
 

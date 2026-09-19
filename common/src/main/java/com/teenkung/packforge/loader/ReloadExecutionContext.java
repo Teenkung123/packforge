@@ -1,5 +1,7 @@
 package com.teenkung.packforge.loader;
 
+import com.teenkung.packforge.PackForge;
+import com.teenkung.packforge.concurrent.PreparationBudget;
 import com.teenkung.packforge.config.ReloadFeatureSnapshot;
 
 import java.util.Objects;
@@ -12,15 +14,23 @@ public final class ReloadExecutionContext {
 	private static final AtomicReference<ReloadExecutionContext> CURRENT = new AtomicReference<>();
 	private static final AtomicReference<ReloadExecutionContext> LAST_COMPLETED = new AtomicReference<>();
 	private static final ThreadLocal<ReloadExecutionContext> BOUND = new ThreadLocal<>();
+	private static final PreparationBudget PREPARATION_MEMORY = new PreparationBudget();
 
 	private final long reloadId;
 	private final ReloadFeatureSnapshot features;
 	private final ReloadMetrics metrics;
+	private final PreparationBudget.Scope preparationBudget;
+	private ReloadReadCache readCache;
+	private boolean preparationRetired;
+	private boolean fontPreparationExpected;
+	private int activeFontPreparations;
 
 	private ReloadExecutionContext(long reloadId, ReloadFeatureSnapshot features) {
 		this.reloadId = reloadId;
 		this.features = features;
 		this.metrics = new ReloadMetrics();
+		this.preparationBudget = PREPARATION_MEMORY.openScope(features.optimizationMemoryMiB() * 1024L * 1024L);
+		this.fontPreparationExpected = features.fontPrepareProviderSelectionEnabled();
 	}
 
 	public static ReloadExecutionContext start(long reloadId) {
@@ -30,7 +40,8 @@ public final class ReloadExecutionContext {
 	public static ReloadExecutionContext start(long reloadId, ReloadFeatureSnapshot features) {
 		ReloadExecutionContext context = new ReloadExecutionContext(reloadId, features);
 		LAST_COMPLETED.set(null);
-		CURRENT.set(context);
+		ReloadExecutionContext previous = CURRENT.getAndSet(context);
+		if (previous != null) previous.retirePreparation();
 		return context;
 	}
 
@@ -89,17 +100,77 @@ public final class ReloadExecutionContext {
 			return false;
 		}
 		context.metrics.finishStatus();
-		if (CURRENT.compareAndSet(context, null)) {
+		boolean finished = CURRENT.compareAndSet(context, null);
+		if (finished) {
 			LAST_COMPLETED.set(context);
-			return true;
 		}
-		return false;
+		context.retirePreparation();
+		return finished;
 	}
 
 	static void resetForTesting() {
-		CURRENT.set(null);
-		LAST_COMPLETED.set(null);
+		ReloadExecutionContext current = CURRENT.getAndSet(null);
+		ReloadExecutionContext completed = LAST_COMPLETED.getAndSet(null);
+		if (current != null) current.retirePreparation();
+		if (completed != null) completed.retirePreparation();
 		BOUND.remove();
+	}
+
+	/** Shared global accounting remains charged until outstanding owners release it. */
+	public PreparationBudget.Scope preparationBudget() {
+		return preparationBudget;
+	}
+
+	/** Give font planning first access to scratch memory; other work continues normally. */
+	public synchronized boolean fontPreparationPending() {
+		return fontPreparationExpected || activeFontPreparations > 0;
+	}
+
+	public synchronized void beginFontPreparation() {
+		fontPreparationExpected = false;
+		activeFontPreparations++;
+	}
+
+	public synchronized void endFontPreparation() {
+		if (activeFontPreparations > 0) activeFontPreparations--;
+	}
+
+	/** Returns no cache when disabled or when this generation has retired. */
+	public synchronized ReloadReadCache readCache() {
+		if (preparationRetired || !features.resourceReadReuseEnabled() || preparationBudget.isRetired()) return null;
+		if (readCache == null) readCache = new ReloadReadCache(preparationBudget, features.loaderTimingsEnabled());
+		return readCache;
+	}
+
+	private void retirePreparation() {
+		ReloadReadCache retiredCache;
+		synchronized (this) {
+			if (preparationRetired) return;
+			preparationRetired = true;
+			retiredCache = readCache;
+			readCache = null;
+		}
+		ReloadReadCache.Statistics readStatistics = retiredCache != null && features.loaderTimingsEnabled()
+			? retiredCache.statistics() : null;
+		Throwable failure = null;
+		try {
+			preparationBudget.retire();
+		} catch (RuntimeException | Error error) {
+			failure = error;
+		}
+		if (retiredCache != null) {
+			try {
+				retiredCache.close();
+			} catch (RuntimeException | Error error) {
+				if (failure == null) failure = error;
+				else if (failure != error) failure.addSuppressed(error);
+			}
+		}
+		if (failure instanceof RuntimeException exception) throw exception;
+		if (failure instanceof Error error) throw error;
+		if (readStatistics != null) {
+			PackForge.LOGGER.info("PackForge resource read reuse: reload={} statistics={}", reloadId, readStatistics);
+		}
 	}
 
 	public long reloadId() {

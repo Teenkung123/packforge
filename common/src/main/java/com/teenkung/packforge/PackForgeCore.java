@@ -1,6 +1,7 @@
 package com.teenkung.packforge;
 
 import com.teenkung.packforge.config.FeatureFlags;
+import com.teenkung.packforge.config.OptimizationPlan;
 import com.teenkung.packforge.config.PackForgeCapabilities;
 import com.teenkung.packforge.config.PackForgeConfig;
 import com.teenkung.packforge.platform.PackForgeServices;
@@ -24,6 +25,13 @@ public final class PackForgeCore {
 		StartupStatus.update("Loading", "PackForge config");
 		long configStartNs = System.nanoTime();
 		PackForgeConfig.load();
+		OptimizationPlan plan = OptimizationPlan.capture(PackForgeConfig.get());
+		plan.decisions().forEach((stage, decision) -> {
+			if (decision.requested() && !decision.effective()) {
+				PackForge.LOGGER.info("PackForge stage {}: requested=true effective=false owner={} reason={}",
+					stage, decision.owner(), decision.reason());
+			}
+		});
 		StartupTimings.recordDuration("packforge_config_load", System.nanoTime() - configStartNs);
 		StartupTimings.event("packforge_config_loaded");
 		PackForge.LOGGER.info("PackForge capabilities: target={} available={} unavailable={}",

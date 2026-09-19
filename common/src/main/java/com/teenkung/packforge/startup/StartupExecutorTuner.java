@@ -3,6 +3,7 @@ package com.teenkung.packforge.startup;
 import com.teenkung.packforge.config.FeatureFlags;
 import com.teenkung.packforge.config.PackForgeConfig;
 import com.teenkung.packforge.platform.PackForgeCompat;
+import com.teenkung.packforge.platform.OptimizationCompatibility;
 import com.teenkung.packforge.platform.PackForgeServices;
 
 public final class StartupExecutorTuner {
@@ -37,6 +38,7 @@ public final class StartupExecutorTuner {
 	}
 
 	private static boolean startupExecutorTuningEnabled() {
+		if (OptimizationCompatibility.current().quickPackPresent()) return false;
 		if (PackForgeConfig.isLoaded()) {
 			return FeatureFlags.startupExecutorTuningEnabled();
 		}
