@@ -197,7 +197,42 @@ jobs:
           java-version: "25"
 
       - name: Install virtual display
-        run: sudo apt-get update && sudo apt-get install -y xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb x11-utils mesa-utils \
+            libgl1-mesa-dri libglx-mesa0 libegl1 \
+            libx11-xcb1 libxcb-glx0 libxcb-xkb1 libxkbcommon-x11-0 \
+            libvulkan1 mesa-vulkan-drivers
+
+      - name: Start GLX-capable software display
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DISPLAY=:99
+          Xvfb "$DISPLAY" -screen 0 1280x720x24 +extension GLX +render -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          xvfb_pid=$!
+          echo "DISPLAY=$DISPLAY" >> "$GITHUB_ENV"
+          echo "LIBGL_ALWAYS_SOFTWARE=1" >> "$GITHUB_ENV"
+          echo "MESA_LOADER_DRIVER_OVERRIDE=llvmpipe" >> "$GITHUB_ENV"
+          echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
+          echo "SDL_VIDEODRIVER=x11" >> "$GITHUB_ENV"
+          for attempt in {1..20}; do
+            if DISPLAY="$DISPLAY" xdpyinfo >/dev/null 2>&1; then
+              break
+            fi
+            if ! kill -0 "$xvfb_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/xvfb.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          if ! DISPLAY="$DISPLAY" xdpyinfo >/dev/null 2>&1; then
+            cat "$RUNNER_TEMP/xvfb.log"
+            exit 1
+          fi
+          DISPLAY="$DISPLAY" LIBGL_ALWAYS_SOFTWARE=1 MESA_LOADER_DRIVER_OVERRIDE=llvmpipe glxinfo -B
 
       - name: Restore target-scoped runtime cache
         uses: actions/cache@v4
@@ -253,7 +288,42 @@ jobs:
           java-version: "25"
 
       - name: Install virtual display
-        run: sudo apt-get update && sudo apt-get install -y xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb x11-utils mesa-utils \
+            libgl1-mesa-dri libglx-mesa0 libegl1 \
+            libx11-xcb1 libxcb-glx0 libxcb-xkb1 libxkbcommon-x11-0 \
+            libvulkan1 mesa-vulkan-drivers
+
+      - name: Start GLX-capable software display
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DISPLAY=:99
+          Xvfb "$DISPLAY" -screen 0 1280x720x24 +extension GLX +render -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          xvfb_pid=$!
+          echo "DISPLAY=$DISPLAY" >> "$GITHUB_ENV"
+          echo "LIBGL_ALWAYS_SOFTWARE=1" >> "$GITHUB_ENV"
+          echo "MESA_LOADER_DRIVER_OVERRIDE=llvmpipe" >> "$GITHUB_ENV"
+          echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
+          echo "SDL_VIDEODRIVER=x11" >> "$GITHUB_ENV"
+          for attempt in {1..20}; do
+            if DISPLAY="$DISPLAY" xdpyinfo >/dev/null 2>&1; then
+              break
+            fi
+            if ! kill -0 "$xvfb_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/xvfb.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          if ! DISPLAY="$DISPLAY" xdpyinfo >/dev/null 2>&1; then
+            cat "$RUNNER_TEMP/xvfb.log"
+            exit 1
+          fi
+          DISPLAY="$DISPLAY" LIBGL_ALWAYS_SOFTWARE=1 MESA_LOADER_DRIVER_OVERRIDE=llvmpipe glxinfo -B
 
       - name: Restore benchmark cache
         uses: actions/cache@v4

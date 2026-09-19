@@ -238,6 +238,14 @@ deadline=$((SECONDS + timeout_seconds))
 expected_reload_count=$((reload_count + 1))
 
 while (( SECONDS < deadline )); do
+  if [[ -f "$log_file" ]] \
+    && grep -Fq 'Failed to create backend OpenGL' "$log_file" \
+    && grep -Fq 'Failed to create backend Vulkan' "$log_file" \
+    && ! grep -Fq 'Using graphics backend ' "$log_file"; then
+    echo "client cannot create either graphics backend; refusing to wait on its error dialog" >&2
+    tail -n 100 "$log_file" >&2
+    exit 1
+  fi
   if fatal_diagnostic_found; then
     echo "fatal client or mixin diagnostic found" >&2
     print_fatal_diagnostics
