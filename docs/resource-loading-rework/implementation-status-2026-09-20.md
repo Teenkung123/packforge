@@ -36,8 +36,11 @@ Private raw logs, manifests, failed attempts, and visual evidence remain under `
 - Build CI: https://github.com/Teenkung123/packforge/actions/runs/35457149690 — passed all nine jobs.
 - Initial runtime CI: https://github.com/Teenkung123/packforge/actions/runs/35457151956 — all 20 older-version, 26.1.2, and 26.2 cells passed. Both hosted 26.3 cells reached Minecraft/SDL but failed to create an OpenGL window (`Couldn't find matching GLX visual`); Vulkan fallback lacked `VK_KHR_surface`. Their corresponding local packaged checks passed. This hosted environment failure is retained rather than counted as a runtime pass.
 - The follow-up CI setup explicitly installs Mesa/X11/Vulkan software drivers, starts a GLX-enabled display, selects software rendering, and checks `glxinfo -B` before launching Minecraft. The smoke controller now fails promptly if both graphics backends fail instead of waiting on a native error dialog. No runtime acceptance checks were removed.
+- Final runtime CI: https://github.com/Teenkung123/packforge/actions/runs/35458730475 — **all 32 jobs passed**, including all 22 runtime cells and the release benchmark. Both Fabric and NeoForge 26.3 packaged runtime checks passed with the corrected display setup. Four other cells initially failed while downloading `commons-lang3:3.16.0` because the NeoForge Maven server returned HTTP 502; retrying only failed jobs passed all four without changing code or weakening assertions.
 - Dry-run Modrinth validation: 17 expected, 17 present, 17 payload-ready, zero errors. The publish workflow also runs its own required build/runtime/benchmark dependencies before uploading.
 - Publication stays behind the explicit `publish_confirmation=true` workflow input. No publication workflow was dispatched.
+
+The final CI graphics and prompt-failure changes are committed as `68e37fd`. Release artifacts are unchanged from the locally verified build. The implementation is ready to play and the publication package is ready for the user's final release decision, subject to the explicit compatibility and evidence limits below.
 
 ## Limits and release decision
 
