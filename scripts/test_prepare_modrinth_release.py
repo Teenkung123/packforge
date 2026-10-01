@@ -3,7 +3,11 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
+import shutil
+import subprocess
 import tempfile
+import textwrap
 import unittest
 import zipfile
 from pathlib import Path
@@ -215,6 +219,88 @@ class ReleasePreparationTests(unittest.TestCase):
             {key: matrix[0][key] for key in ("version_suffix", "release_type", "featured", "game_versions")},
         )
 
+    def test_publish_matrix_orders_legacy_targets_before_modern_targets(self) -> None:
+        registry = release.load_registry(SCRIPT.parents[1] / "gradle" / "minecraft-targets.json")
+        rows = release.matrix(registry, "1.4.1", "publish")["include"]
+
+        self.assertEqual(
+            [
+                ("mc1_20_1", "fabric"),
+                ("mc1_20_1", "forge"),
+                ("mc1_21_1", "fabric"),
+                ("mc1_21_1", "forge"),
+                ("mc1_21_1", "neoforge"),
+                ("mc1_21_4", "fabric"),
+                ("mc1_21_4", "forge"),
+                ("mc1_21_4", "neoforge"),
+                ("mc1_21_8", "fabric"),
+                ("mc1_21_8", "forge"),
+                ("mc1_21_8", "neoforge"),
+                ("mc1_21_11", "fabric"),
+                ("mc1_21_11", "forge"),
+                ("mc1_21_11", "neoforge"),
+                ("mc26_1_to_26_2", "forge"),
+                ("mc26_1_to_26_3", "fabric"),
+                ("mc26_1_to_26_3", "neoforge"),
+            ],
+            [(row["target"], row["loader"]) for row in rows],
+        )
+
+    def test_publish_shell_decoder_preserves_beta_and_empty_stable_suffixes(self) -> None:
+        bash_candidates = [
+            r"C:\Program Files\Git\bin\bash.exe",
+            shutil.which("bash"),
+        ]
+        bash = next((candidate for candidate in bash_candidates if candidate and Path(candidate).is_file()), None)
+        if bash is None:
+            self.skipTest("bash is required to exercise the workflow decoder")
+
+        registry = release.load_registry(SCRIPT.parents[1] / "gradle" / "minecraft-targets.json")
+        publish_matrix = json.dumps(release.matrix(registry, "1.4.1", "publish"))
+        decoder = textwrap.dedent(
+            """
+            set -euo pipefail
+            while IFS= read -r artifact_name; do
+                printf '%s\\n' "$artifact_name"
+            done < <(
+                PUBLISH_MATRIX="$PUBLISH_MATRIX" RELEASE_VERSION="$RELEASE_VERSION" python - <<'PY'
+            import json
+            import os
+
+            matrix = json.loads(os.environ["PUBLISH_MATRIX"])
+            for item in matrix["include"]:
+                version = os.environ["RELEASE_VERSION"] + item["version_suffix"]
+                print(f"packforge-{item['loader']}-{version}-mc{item['minecraft']}.jar")
+            PY
+            )
+            """
+        )
+        environment = os.environ.copy()
+        environment.update(
+            PUBLISH_MATRIX=publish_matrix,
+            RELEASE_VERSION="1.4.1",
+        )
+        result = subprocess.run(
+            [bash, "-c", decoder],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        artifact_names = result.stdout.splitlines()
+        self.assertEqual(
+            "packforge-fabric-1.4.1-beta.1-mc1.20.1.jar",
+            artifact_names[0],
+        )
+        self.assertEqual(
+            [
+                "packforge-forge-1.4.1-mc26.1-26.2.jar",
+                "packforge-fabric-1.4.1-mc26.1-26.3.jar",
+                "packforge-neoforge-1.4.1-mc26.1-26.3.jar",
+            ],
+            artifact_names[-3:],
+        )
+
     def test_forge_loader_classifiers_are_checked(self) -> None:
         registry = fixture_registry(loader="forge")
         with tempfile.TemporaryDirectory() as temporary:
@@ -290,8 +376,13 @@ class ReleasePreparationTests(unittest.TestCase):
         self.assertIn("matrix: ${{ fromJSON(needs.registry_matrix.outputs.target_matrix) }}", build)
         self.assertNotIn("- mc26_1_to_26_2", build)
         self.assertIn("release_matrix:", publish)
-        self.assertIn("matrix: ${{ fromJSON(needs.release_matrix.outputs.publish_matrix) }}", publish)
+        self.assertIn("publish_matrix: ${{ steps.matrix.outputs.publish_matrix }}", publish)
         self.assertIn("needs: [release_matrix, build]", publish)
+        publish_job = publish[publish.index("  publish:"):]
+        self.assertIn("PUBLISH_MATRIX: ${{ needs.release_matrix.outputs.publish_matrix }}", publish_job)
+        self.assertIn("while IFS= read -r artifact_name", publish_job)
+        self.assertNotIn("strategy:", publish_job)
+        self.assertNotIn("matrix: ${{", publish_job)
         self.assertNotIn("runtime-smoke:", publish)
         self.assertNotIn("  benchmark:", publish)
 

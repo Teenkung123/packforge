@@ -46,6 +46,7 @@ FABRIC_DEPENDENCY_PROJECTS = {
 }
 INTRINSIC_FABRIC_DEPENDENCIES = {"fabricloader", "minecraft", "java"}
 VALID_MATURITIES = {"release", "beta", "alpha"}
+PUBLISH_LOADER_ORDER = {"fabric": 0, "forge": 1, "neoforge": 2}
 
 
 def load_registry(path: pathlib.Path) -> dict[str, Any]:
@@ -217,6 +218,28 @@ def expected_artifacts(registry: dict[str, Any], version: str) -> list[dict[str,
     if len(names) != len(set(names)):
         raise ValueError("registry produces duplicate release artifact names")
     return result
+
+
+def publish_order(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return artifacts in the order used by the sequential Modrinth publish."""
+
+    def sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
+        artifact_minecraft = item["minecraft"]
+        if "-" in artifact_minecraft:
+            lower, upper = artifact_minecraft.split("-", 1)
+        else:
+            lower, upper = artifact_minecraft, artifact_minecraft
+
+        loader_order = PUBLISH_LOADER_ORDER.get(item["loader"], len(PUBLISH_LOADER_ORDER))
+        return (
+            _version_tuple(upper),
+            _version_tuple(lower),
+            loader_order,
+            item["target"],
+            item["name"],
+        )
+
+    return sorted(items, key=sort_key)
 
 
 def _hashes(path: pathlib.Path) -> dict[str, str]:
@@ -440,7 +463,7 @@ def matrix(registry: dict[str, Any], version: str, kind: str) -> dict[str, Any]:
         return {"include": [{"target": target["key"]} for target in registry["targets"]]}
     if kind != "publish":
         raise ValueError(f"unsupported matrix kind: {kind}")
-    items = expected_artifacts(registry, version)
+    items = publish_order(expected_artifacts(registry, version))
     return {
         "include": [
             {

@@ -6,7 +6,7 @@ on:
       release_version:
         description: Base PackForge version from gradle.properties
         required: true
-        default: "1.4"
+        default: "1.4.1"
       changelog:
         description: Release notes shown on Modrinth
         required: true
@@ -151,15 +151,11 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish ${{ matrix.loader }} ${{ matrix.minecraft }} (${{ matrix.release_type }})
+    name: Publish Modrinth release in deterministic order
     if: ${{ inputs.publish_confirmation == true }}
     needs: [release_matrix, build]
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: true
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.release_matrix.outputs.publish_matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -189,43 +185,38 @@ jobs:
             sha256sum -c SHA256SUMS
           )
 
-      - name: Prepare Modrinth version metadata
-        id: release
+      - name: Publish artifacts in deterministic registry order
         shell: bash
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
-          VERSION_SUFFIX: ${{ matrix.version_suffix }}
-          LOADER: ${{ matrix.loader }}
-          MINECRAFT_ARTIFACT: ${{ matrix.minecraft }}
           CHANGELOG: ${{ inputs.changelog }}
+          PUBLISH_MATRIX: ${{ needs.release_matrix.outputs.publish_matrix }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: |
           set -euo pipefail
-          version="${RELEASE_VERSION}${VERSION_SUFFIX}"
-          file="build/libs/packforge-${LOADER}-${version}-mc${MINECRAFT_ARTIFACT}.jar"
-          if [[ ! -f "$file" ]]; then
-            echo "Expected artifact not found: $file"
-            find build/libs -maxdepth 1 -type f -print
+          if [[ -z "$MODRINTH_TOKEN" ]]; then
+            echo "The MODRINTH_TOKEN repository secret is not configured."
             exit 1
           fi
 
-          python scripts/prepare-modrinth-release.py \
-            --release-version "$RELEASE_VERSION" \
-            --artifact "$file" \
-            --write-payload modrinth-version.json \
-            --changelog "$CHANGELOG"
+          while IFS= read -r artifact_name; do
+            artifact_file="build/libs/$artifact_name"
+            payload_file="modrinth-version.json"
 
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "file=$file" >> "$GITHUB_OUTPUT"
+            if [[ ! -f "$artifact_file" ]]; then
+              echo "Expected artifact not found: $artifact_file"
+              find build/libs -maxdepth 1 -type f -print
+              exit 1
+            fi
 
-      - name: Check for an existing identical version
-        id: existing
-        shell: bash
-        env:
-          ARTIFACT_FILE: ${{ steps.release.outputs.file }}
-          PAYLOAD_FILE: modrinth-version.json
-        run: |
-          set -euo pipefail
-          python - <<'PY'
+            python scripts/prepare-modrinth-release.py \
+              --release-version "$RELEASE_VERSION" \
+              --artifact "$artifact_file" \
+              --write-payload "$payload_file" \
+              --changelog "$CHANGELOG"
+
+            existing_state="$(
+              ARTIFACT_FILE="$artifact_file" PAYLOAD_FILE="$payload_file" python - <<'PY'
           import hashlib
           import json
           import os
@@ -280,45 +271,38 @@ jobs:
                   raise SystemExit(
                       f"Existing {artifact.name} differs in: {', '.join(failures)}"
                   )
-              print(f"Identical Modrinth version already exists: {version['id']}")
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"found={'true' if found else 'false'}\n")
+              print("identical")
+          else:
+              print("missing")
           PY
+            )"
 
-      - name: Publish through the Modrinth API
-        if: steps.existing.outputs.found != 'true'
-        shell: bash
-        env:
-          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          ARTIFACT_FILE: ${{ steps.release.outputs.file }}
-        run: |
-          if [[ -z "$MODRINTH_TOKEN" ]]; then
-            echo "The MODRINTH_TOKEN repository secret is not configured."
-            exit 1
-          fi
+            if [[ "$existing_state" == "identical" ]]; then
+              echo "Identical Modrinth version already exists for $artifact_file; skipping upload."
+              continue
+            fi
 
-          http_status="$(curl \
-            --silent \
-            --show-error \
-            --retry 3 \
-            --retry-all-errors \
-            --output modrinth-response.json \
-            --write-out '%{http_code}' \
-            --request POST \
-            --header "Authorization: $MODRINTH_TOKEN" \
-            --header "User-Agent: Teenkung123/PackForge-GitHub-Actions/1.0" \
-            --form 'data=@modrinth-version.json;type=application/json' \
-            --form "artifact=@${ARTIFACT_FILE};type=application/java-archive" \
-            'https://api.modrinth.com/v2/version')"
+            http_status="$(curl \
+              --silent \
+              --show-error \
+              --retry 3 \
+              --retry-all-errors \
+              --output modrinth-response.json \
+              --write-out '%{http_code}' \
+              --request POST \
+              --header "Authorization: $MODRINTH_TOKEN" \
+              --header "User-Agent: Teenkung123/PackForge-GitHub-Actions/1.0" \
+              --form "data=@${payload_file};type=application/json" \
+              --form "artifact=@${artifact_file};type=application/java-archive" \
+              'https://api.modrinth.com/v2/version')"
 
-          if [[ "$http_status" -lt 200 || "$http_status" -ge 300 ]]; then
-            echo "Modrinth API returned HTTP $http_status:"
-            python -m json.tool modrinth-response.json || sed -n '1,120p' modrinth-response.json
-            exit 1
-          fi
+            if [[ "$http_status" -lt 200 || "$http_status" -ge 300 ]]; then
+              echo "Modrinth API returned HTTP $http_status:"
+              python -m json.tool modrinth-response.json || sed -n '1,120p' modrinth-response.json
+              exit 1
+            fi
 
-          python - <<'PY'
+            python - <<'PY'
           import json
 
           with open("modrinth-response.json", encoding="utf-8") as response_file:
@@ -326,3 +310,14 @@ jobs:
           files = ", ".join(file["filename"] for file in response.get("files", []))
           print(f"Published Modrinth version {response['id']}: {files}")
           PY
+          done < <(
+            PUBLISH_MATRIX="$PUBLISH_MATRIX" RELEASE_VERSION="$RELEASE_VERSION" python - <<'PY'
+          import json
+          import os
+
+          matrix = json.loads(os.environ["PUBLISH_MATRIX"])
+          for item in matrix["include"]:
+              version = os.environ["RELEASE_VERSION"] + item["version_suffix"]
+              print(f"packforge-{item['loader']}-{version}-mc{item['minecraft']}.jar")
+          PY
+          )
