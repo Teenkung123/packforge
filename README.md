@@ -144,8 +144,6 @@ Notable options include:
 - Atlas size limits and optional stitch retry recovery
 - Model, font, shader, and startup diagnostics on supported versions
 
-Legacy 1.21.x artifacts expose all 21 options in the Reload tab, including loading progress, fade control, reload toasts, listener and shader diagnostics, model parsing, font preparation and bitmap caching, and timing-only atlas decode batching. Minecraft 1.20.1 exposes the same set except font-provider preselection, which has no corresponding vanilla preparation phase in that release.
-
 The Large Atlas Fixer and Startup Optimizer tabs remain exclusive to current 26.x builds. Legacy atlas support records native source/decode/stitch/mipmap/upload work and batches native decode suppliers; it does not enable atlas caps, retry/recovery, UV clamping, parallel mipmap generation, or experimental splitting.
 
 ## Compatibility
@@ -159,8 +157,7 @@ PackForge is designed to work alongside commonly used client optimization and re
 - Lithium
 - Continuity
 - CIT Resewn
-
-Compatibility can depend on the exact Minecraft version, loader, and mod combination. If a combination is not listed, that does not necessarily mean it is incompatible.
+- and more. . .
 
 OptiFine and OptiFabric are not officially supported and have not been fully tested.
 
@@ -177,7 +174,7 @@ Include the following information when possible:
 - Relevant resource-pack and mod list
 - Steps needed to reproduce the problem
 
-Large resource packs do not need to be shared publicly. A private download, reduced test pack, or list of the files that trigger the problem can still be useful.
+Large resource packs do not need to be shared publicly. A private download or list of the files that trigger the problem can still be useful.
 
 ## Open Source And Contributions
 
@@ -189,8 +186,6 @@ Bug reports, compatibility results, documentation improvements, performance meas
 2. Keep changes limited to one feature or fix where practical.
 3. Build and test every Minecraft target affected by the change.
 4. Explain the behavior change and verification performed in the pull request.
-
-Changes to hot resource-loading paths should avoid repeated archive scans, blocking I/O, or unbounded parallel work. Compatibility fixes should preserve vanilla and loader-provided resource hooks whenever possible.
 
 ## Building From Source
 
@@ -204,16 +199,11 @@ Run these commands from the repository root:
 | `.\gradlew.bat buildAllSupported` | Same full build as `build`. |
 | `.\gradlew.bat :buildTarget -Ppackforge_target=mc26_1_to_26_3 --configure-on-demand` | Build, test, and verify the combined 26.1-26.3 Fabric and NeoForge target. |
 | `.\gradlew.bat :verifyExistingArtifacts --configure-on-demand` | Verify existing final JARs without configuring loader builds. |
+| `.\gradlew.bat :clean --configure-on-demand` | Remove current and older build outputs while preserving source, caches, logs, and development clients. |
 
-Final JARs are collected in `build/libs`. The full build includes verification of filenames, Java class versions, mixin compatibility, loader ranges, Minecraft ranges, generated pack metadata, and target capability metadata.
+Final JARs are collected in `build/libs`.
 
-Use the checked-in Gradle 9.5.1 wrapper with Java 25. Java 17/21 target toolchains are resolved automatically. On Linux/macOS use `./gradlew` instead of `.\gradlew.bat`.
-
-The build compiles the Java 17 `common` module and runs its tests once. Stonecutter generates only the small version-dependent templates in `src`; larger implementations stay in `versions`. Loader nodes flatten common classes into their final JARs before remapping. Build plugins and the `verification` module are not shipped.
-
-The daemon and local build cache are enabled, with two workers by default. Configuration cache remains off because Loom's shared mappings artifact currently invalidates it between full builds.
-
-Client runs can use `-Ppackforge_run_directory=<directory>` to keep a development instance separate from the default run folder. This applies only to the selected `packforge_target`.
+See the [Gradle build guide](gradle/README.md) for the build script layout, target selection, and cleanup boundaries.
 
 ## License
 

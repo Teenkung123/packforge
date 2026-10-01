@@ -203,6 +203,8 @@ public final class ArtifactVerifier {
             require(!mainMixins.contains("loader.CompositePackResourcesMixin"), "Removed CompositePackResources mixin registered");
             if (!string(target, "key").equals("mc1_20_1")) require(mainMixins.contains("loader.SharedZipFileAccessMixin"), "Missing SharedZipFileAccess mixin");
             require(clientMixins.contains("config.PackSelectionScreenMixin"), "Missing configuration button mixin");
+            require(clientMixins.contains("observe.LoadingOverlayTraceMixin"), "Missing independent reload trace observer");
+            required(names, BASE + "loader/ReloadTrace.class");
             checkMixins(zip, main, mainMixins, platform);
             checkMixins(zip, client, clientMixins, platform);
             byte[] filePack = bytes(zip, FILE_PACK);
@@ -210,6 +212,8 @@ public final class ArtifactVerifier {
             require(classMajor(filePack, FILE_PACK) == target.get("javaVersion").getAsInt() + 44, "Node-owned FilePackResourcesMixin must use exact target Java");
             OperationAudit audit = inspectOperations(filePack);
             require(audit.count == 5 && audit.targets.equals(operationTargets(target, platform)), "Incorrect @WrapOperation targets: " + audit.targets);
+            OperationAudit directory = inspectOperations(bytes(zip, BASE + "mixin/loader/PathPackResourcesMixin.class"));
+            require(directory.count == 1 && directory.targets.equals(Map.of(DirectoryHookVerifier.TARGET, 1)), "Incorrect directory Files.find hook");
             String constants = new String(filePack, StandardCharsets.ISO_8859_1);
             require(constants.contains(WRAP), "Missing @WrapOperation marker");
             require(!constants.contains("CallbackInfoReturnable") && !constants.contains("Lcom/llamalad7/mixinextras/injector/wrapmethod/WrapMethod;"), "Broad public-method replacement hook");

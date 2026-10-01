@@ -2,13 +2,17 @@ plugins {
     id 'java'
 }
 
-repositories { mavenCentral() }
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.minecraftforge.net/' }
+}
 
 dependencies {
     implementation libs.gson
     implementation libs.asm
     testImplementation platform(libs.junit.bom)
     testImplementation libs.junit.jupiter
+    testImplementation 'net.minecraftforge:JarJarSelector:0.3.19'
     testRuntimeOnly libs.junit.launcher
 }
 
@@ -17,4 +21,18 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
-test { useJUnitPlatform() }
+test {
+    useJUnitPlatform()
+}
+
+tasks.register('verifyDirectoryHooks', JavaExec) {
+    group = 'verification'
+    description = 'Validate the Files.find hook for every advertised game using a JSON map of version to mapped JAR.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.teenkung.packforge.verification.DirectoryHookVerifier'
+    def manifest = providers.gradleProperty('packforge_directory_hook_manifest')
+    args rootProject.file('gradle/minecraft-targets.json').absolutePath
+    doFirst {
+        args manifest.get()
+    }
+}

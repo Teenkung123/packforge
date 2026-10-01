@@ -52,7 +52,8 @@ public final class RegistryValidator {
             Path reload = ownedSource(sources, adapter, "ReloadableResourceManagerMixin.java");
             String text = Files.readString(reload);
             require(Pattern.compile(RELOAD_WRAPPER).matcher(text).find()
-                    && text.contains("original.call(preparationExecutor, reloadExecutor, initialStage, packs)"), reload + " must mirror and forward four createReload arguments before Operation");
+                    && text.replaceAll("\\s+", "").contains("original.call(ReloadExecutionContext.bindPreparationExecutor(context,preparationExecutor),reloadExecutor,initialStage,packs)"),
+                    reload + " must forward all four createReload arguments and bind the supplied outer preparation executor");
         }
         String modern = Files.readString(repository.resolve(MODERN_SPRITE));
         require(Pattern.compile(ATLAS_WRAPPER).matcher(modern).find()

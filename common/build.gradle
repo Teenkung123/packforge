@@ -4,9 +4,13 @@ plugins {
 
 group = rootProject.group
 version = rootProject.version
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+java {
+	toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
 sourceSets.main.java.srcDir('src/client/java')
-repositories { mavenCentral() }
+repositories {
+	mavenCentral()
+}
 
 dependencies {
 	compileOnly libs.gson
@@ -23,4 +27,6 @@ tasks.withType(JavaCompile).configureEach {
 	options.release = 17
 	options.encoding = 'UTF-8'
 }
-tasks.withType(Test).configureEach { useJUnitPlatform() }
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}

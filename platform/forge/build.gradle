@@ -5,10 +5,10 @@ plugins {
 }
 apply from: rootProject.file('gradle/node.gradle')
 def target = packforgeTarget
-def loader = packforgePlatform
-def extras = packforgeMixinExtras
-def mixinExtras = extras.version
-def needsJopt = target.key in ['mc1_21_1', 'mc1_21_4']
+def platformConfig = packforgePlatform
+def mixinExtrasPolicy = packforgeMixinExtras
+def mixinExtrasVersion = mixinExtrasPolicy.version
+def needsJoptSimple = target.key in ['mc1_21_1', 'mc1_21_4']
 // Forge discovers a development mod as one module. Merge compiled outputs only
 // for launches, avoiding cross-project classpath resolution and split packages.
 def developmentMod = tasks.register('prepareDevelopmentMod', Sync) {
@@ -22,7 +22,9 @@ def developmentSources = sourceSets.create('developmentMod') {
 	java.setSrcDirs([])
 	resources.setSrcDirs([])
 	output.classesDirs.setFrom(developmentMod)
-	output.resourcesDir = null
+	// Resources are already merged here. IDEA's dependency model requires a
+	// non-null output; Gradle and Forge deduplicate the shared output directory.
+	output.resourcesDir = developmentMod.map { it.destinationDir }
 	compileClasspath = files()
 	runtimeClasspath = output
 	annotationProcessorPath = files()
@@ -30,7 +32,7 @@ def developmentSources = sourceSets.create('developmentMod') {
 jarJar.register()
 minecraft {
 	mappings channel: 'official', version: target.minecraftVersion
-	dependency "net.minecraftforge:forge:${packforgeRuntimeVersion('packforge_forge_version_override', loader.version)}"
+	dependency "net.minecraftforge:forge:${packforgeRuntimeVersion('packforge_forge_version_override', platformConfig.version)}"
 	runs {
 		client {
 			workingDir = packforgeRunDirectory
@@ -54,19 +56,35 @@ repositories {
 sourceSets.main.resources.exclude 'META-INF/accesstransformer.cfg'
 dependencies {
 	implementation minecraft.dependency
-	if (needsJopt) runtimeOnly 'net.sf.jopt-simple:jopt-simple:5.0.4'
-	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtras}"))
-	runtimeOnly "io.github.llamalad7:mixinextras-forge:${mixinExtras}"
-	jarJar("io.github.llamalad7:mixinextras-forge:${mixinExtras}:${extras.classifier}") {
+	if (needsJoptSimple) {
+		runtimeOnly 'net.sf.jopt-simple:jopt-simple:5.0.4'
+	}
+	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtrasVersion}"))
+	runtimeOnly "io.github.llamalad7:mixinextras-forge:${mixinExtrasVersion}"
+	jarJar("io.github.llamalad7:mixinextras-forge:${mixinExtrasVersion}:${mixinExtrasPolicy.classifier}") {
 		transitive = false
-		jarJar.configure(it) { version = mixinExtras }
+		jarJar.configure(it) {
+			version = mixinExtrasVersion
+		}
 	}
 }
-if (needsJopt) configurations.runtimeClasspath.resolutionStrategy.force 'net.sf.jopt-simple:jopt-simple:5.0.4'
+if (needsJoptSimple) {
+	configurations.runtimeClasspath.resolutionStrategy.force 'net.sf.jopt-simple:jopt-simple:5.0.4'
+}
 tasks.named('jar', Jar) {
 	archiveFileName = packforgeArtifactName.replace('.jar', '-slim.jar')
 	manifest.attributes(['MixinConfigs': "${target.mixinConfigs.main},${target.mixinConfigs.client}"])
 }
-tasks.named('jarJar', Jar) { archiveFileName = packforgeArtifactName }
-tasks.named('assemble') { dependsOn tasks.named('jarJar') }
-ext.packforgeArtifact = tasks.named('jarJar').flatMap { it.archiveFile }
+def releaseJar = tasks.named('jarJar', Jar) {
+	archiveFileName = packforgeArtifactName
+}
+tasks.named('assemble') {
+	dependsOn releaseJar
+}
+ext.packforgeArtifact = releaseJar.flatMap { it.archiveFile }
+
+// Local benchmark tooling is optional and is not part of a clean checkout.
+def benchmarkObserver = rootProject.file('gradle/benchmark-observer.gradle')
+if (benchmarkObserver.isFile()) {
+	apply from: benchmarkObserver
+}

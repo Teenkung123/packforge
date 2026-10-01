@@ -1,16 +1,29 @@
+import java.nio.file.Files
+
 version = providers.gradleProperty('mod_version').get()
 group = providers.gradleProperty('maven_group').get()
 ext.packforgeRegistry = gradle.ext.packforgeRegistry
-repositories { mavenCentral() }
 
-def targets = packforgeRegistry.targets
-def selectedKey = providers.gradleProperty('packforge_target').getOrElse(packforgeRegistry.defaultTarget)
-def selected = targets.find { it.key == selectedKey }
-ext.packforgeSelectedTarget = selectedKey
-if (selected == null) throw new GradleException("Unknown target '${selectedKey}'; valid: ${targets*.key}")
-def nodes = targets.collectMany { target ->
-	target.platforms.keySet().collect { loader -> [target: target, loader: loader, path: ":${loader}:${target.key}"] }
+repositories {
+	mavenCentral()
 }
+
+// The registry owns the release matrix. Runtime aliases use only the selected target.
+def targets = packforgeRegistry.targets
+def selectedTargetKey = providers.gradleProperty('packforge_target').getOrElse(packforgeRegistry.defaultTarget)
+def selectedTarget = targets.find { it.key == selectedTargetKey }
+if (selectedTarget == null) {
+	throw new GradleException("Unknown target '${selectedTargetKey}'; valid: ${targets*.key}")
+}
+ext.packforgeSelectedTarget = selectedTargetKey
+
+def targetProjects = targets.collectMany { target ->
+	target.platforms.keySet().collect { loader ->
+		[target: target, loader: loader, path: ":${loader}:${target.key}"]
+	}
+}
+def selectedTargetProjects = targetProjects.findAll { it.target.key == selectedTargetKey }
+
 configurations {
 	verifierRuntime {
 		canBeConsumed = false
@@ -18,29 +31,45 @@ configurations {
 		attributes.attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME))
 	}
 }
-dependencies { verifierRuntime project(':verification') }
+
+dependencies {
+	verifierRuntime project(':verification')
+}
+
 def verificationClasspath = configurations.verifierRuntime
 def registryFile = file('gradle/minecraft-targets.json')
 def repositoryDirectory = projectDir
 def artifactDirectory = layout.buildDirectory.dir('libs')
 def modVersion = version.toString()
-def registerVerification = { String name, String targetKey, Object collection ->
-	tasks.register(name, JavaExec) {
+
+def registerArtifactVerification = { String taskName, String targetKey, Object artifactCollection ->
+	tasks.register(taskName, JavaExec) {
 		group = 'verification'
+		description = targetKey == null
+			? 'Verifies all supported release JARs in build/libs.'
+			: "Verifies the release JARs for ${targetKey}."
 		classpath = verificationClasspath
 		mainClass = 'com.teenkung.packforge.verification.ArtifactVerifier'
 		args registryFile.absolutePath, artifactDirectory.get().asFile.absolutePath, modVersion
-		if (targetKey != null) args targetKey
-		if (collection != null) dependsOn collection
+		if (targetKey != null) {
+			args targetKey
+		}
+		if (artifactCollection != null) {
+			dependsOn artifactCollection
+		}
 		inputs.file(registryFile)
 		inputs.files(fileTree(artifactDirectory) { include '**/packforge-*.jar' })
 		inputs.property('modVersion', modVersion)
-		outputs.file(layout.buildDirectory.file("verification/${name}.ok"))
-		doLast { outputs.files.singleFile.text = 'verified\n' }
+		outputs.file(layout.buildDirectory.file("verification/${taskName}.ok"))
+		doLast {
+			outputs.files.singleFile.text = 'verified\n'
+		}
 	}
 }
+
 tasks.register('validateTargetRegistry', JavaExec) {
 	group = 'verification'
+	description = 'Checks the target registry against source files and supported capabilities.'
 	classpath = verificationClasspath
 	mainClass = 'com.teenkung.packforge.verification.RegistryValidator'
 	args registryFile.absolutePath, repositoryDirectory.absolutePath
@@ -48,20 +77,23 @@ tasks.register('validateTargetRegistry', JavaExec) {
 	inputs.files(fileTree('versions') { include '**/*.java', '**/*.json' })
 	inputs.files(fileTree('src') { include '**/*.java' })
 	outputs.file(layout.buildDirectory.file('verification/registry.ok'))
-	doLast { outputs.files.singleFile.text = 'verified\n' }
+	doLast {
+		outputs.files.singleFile.text = 'verified\n'
+	}
 }
 
 // Provider-backed collection keeps Gradle aware of the final remap/reobf producers.
-def collect = tasks.register('collectPlatformJars', Copy) {
+def collectAllArtifacts = tasks.register('collectPlatformJars', Copy) {
 	group = 'build'
 	description = 'Collects the exact full release matrix into build/libs.'
 	duplicatesStrategy = DuplicatesStrategy.FAIL
-	nodes.each { node ->
-		from(providers.provider { project(node.path).packforgeArtifact })
+	targetProjects.each { targetProject ->
+		from(providers.provider { project(targetProject.path).packforgeArtifact })
 	}
-	into layout.buildDirectory.dir('libs')
-	def expectedNames = nodes.collect { node ->
-		"packforge-${node.loader}-${modVersion}${node.target.platforms[node.loader].versionSuffix}-mc${node.target.artifactMinecraft}.jar".toString()
+	into artifactDirectory
+	def expectedNames = targetProjects.collect { targetProject ->
+		def platformConfig = targetProject.target.platforms[targetProject.loader]
+		"packforge-${targetProject.loader}-${modVersion}${platformConfig.versionSuffix}-mc${targetProject.target.artifactMinecraft}.jar".toString()
 	}.toSet()
 	inputs.property('expectedArtifactNames', expectedNames.sort())
 	doFirst {
@@ -70,43 +102,60 @@ def collect = tasks.register('collectPlatformJars', Copy) {
 		}
 		if (!obsolete.empty) {
 			def archiveBase = layout.buildDirectory.dir('superseded-artifacts').get().asFile.toPath()
-			java.nio.file.Files.createDirectories(archiveBase)
-			def archive = java.nio.file.Files.createTempDirectory(archiveBase, 'release-')
+			Files.createDirectories(archiveBase)
+			def archive = Files.createTempDirectory(archiveBase, 'release-')
 			obsolete.each { previous ->
-				java.nio.file.Files.move(previous.toPath(), archive.resolve(previous.name))
+				Files.move(previous.toPath(), archive.resolve(previous.name))
 			}
 			logger.lifecycle("Preserved ${obsolete.size()} superseded artifacts in ${archive}")
 		}
 	}
 }
-def verifyAll = registerVerification('verifyAllArtifacts', null, collect)
-registerVerification('verifyExistingArtifacts', null, null)
+
+def verifyAllArtifacts = registerArtifactVerification('verifyAllArtifacts', null, collectAllArtifacts)
+registerArtifactVerification('verifyExistingArtifacts', null, null)
+
 tasks.register('buildAllSupported') {
 	group = 'build'
 	description = 'Builds, tests and verifies all supported artifacts.'
-	dependsOn ':common:check', ':verification:test', 'validateTargetRegistry', nodes.collect { "${it.path}:build" }, verifyAll
+	dependsOn ':common:check', ':verification:test', 'validateTargetRegistry'
+	dependsOn targetProjects.collect { "${it.path}:build" }
+	dependsOn verifyAllArtifacts
 }
-tasks.register('build') { group = 'build'; dependsOn tasks.named('buildAllSupported') }
-def selectedNodes = nodes.findAll { it.target.key == selectedKey }
-def collectTarget = tasks.register('collectTargetJars', Copy) {
+
+tasks.register('build') {
+	group = 'build'
+	description = 'Builds the complete supported release matrix.'
+	dependsOn tasks.named('buildAllSupported')
+}
+
+def collectTargetArtifacts = tasks.register('collectTargetJars', Copy) {
+	group = 'build'
+	description = 'Collects the selected target\'s release JARs into build/libs.'
 	duplicatesStrategy = DuplicatesStrategy.FAIL
-	selectedNodes.each { node -> from(providers.provider { project(node.path).packforgeArtifact }) }
+	selectedTargetProjects.each { targetProject ->
+		from(providers.provider { project(targetProject.path).packforgeArtifact })
+	}
 	into artifactDirectory
 }
-def verifyTarget = registerVerification('verifyTargetArtifacts', selectedKey, collectTarget)
+
+def verifyTargetArtifacts = registerArtifactVerification('verifyTargetArtifacts', selectedTargetKey, collectTargetArtifacts)
+
 tasks.register('buildTarget') {
 	group = 'build'
 	description = 'Builds every enabled loader for -Ppackforge_target.'
-	dependsOn ':common:check', ':verification:test', 'validateTargetRegistry', selectedNodes.collect { "${it.path}:build" }, verifyTarget
+	dependsOn ':common:check', ':verification:test', 'validateTargetRegistry'
+	dependsOn selectedTargetProjects.collect { "${it.path}:build" }
+	dependsOn verifyTargetArtifacts
 }
-[fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge'].findAll { loader, label -> selected.platforms[loader] != null }.each { loader, label ->
+
+def loaderLabels = [fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge']
+loaderLabels.findAll { loader, label -> selectedTarget.platforms[loader] != null }.each { loader, label ->
 	tasks.register("run${label}Client") {
 		group = 'run'
-		dependsOn ":${loader}:${selectedKey}:runClient"
+		description = "Runs the ${label} development client for ${selectedTargetKey}."
+		dependsOn ":${loader}:${selectedTargetKey}:runClient"
 	}
 }
-tasks.register('clean', Delete) {
-	group = 'build'
-	delete layout.buildDirectory
-	dependsOn ':common:clean', ':verification:clean'
-}
+
+apply from: 'gradle/clean.gradle'

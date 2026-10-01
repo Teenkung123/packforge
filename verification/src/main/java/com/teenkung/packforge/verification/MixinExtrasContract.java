@@ -84,7 +84,8 @@ final class MixinExtrasContract {
         String path = "META-INF/" + (platform.equals("fabric") ? "jars/" : "jarjar/")
                 + "mixinextras-" + platform + "-" + version + "-slim.jar";
         require(jars.equals(Set.of(path)), "Only the approved slim MixinExtras jar may be nested: " + jars);
-        registration(metadata, platform, path, "io.github.llamalad7", "mixinextras-" + platform, version);
+        registration(metadata, platform, path, "io.github.llamalad7", "mixinextras-" + platform, version,
+                platform.equals("forge") ? minimumRange(version) : null);
         verifyBundle(unzip(read(zip, path)), platform, version);
     }
 
@@ -104,7 +105,8 @@ final class MixinExtrasContract {
                 require(version.equals(manifest.getMainAttributes().getValue("Implementation-Version")), "Incorrect MixinExtras manifest version");
                 String inner = "META-INF/jars/MixinExtras-" + version + ".jar";
                 require(jars(bundle.keySet()).equals(Set.of(inner)), "Incorrect Forge MixinExtras internal library");
-                registration(json(required(bundle, JARJAR)), "forge", inner, "com.github.LlamaLad7", "MixinExtras", version);
+                registration(json(required(bundle, JARJAR)), "forge", inner, "com.github.LlamaLad7", "MixinExtras", version,
+                        minimumRange(version));
                 Map<String, byte[]> core = unzip(required(bundle, inner));
                 Manifest coreManifest = new Manifest(new ByteArrayInputStream(required(core, "META-INF/MANIFEST.MF")));
                 require(version.equals(coreManifest.getMainAttributes().getValue("Implementation-Version")), "Incorrect MixinExtras core version");
@@ -125,7 +127,8 @@ final class MixinExtrasContract {
         require(core.keySet().stream().noneMatch(n -> n.startsWith(PREFIX + "lib/antlr/runtime/")), "Full MixinExtras distribution bundled instead of slim");
     }
 
-    private static void registration(JsonObject metadata, String platform, String path, String group, String artifact, String version) {
+    private static void registration(JsonObject metadata, String platform, String path, String group, String artifact,
+                                     String version, String requiredRange) {
         JsonArray registrations = metadata.getAsJsonArray("jars");
         require(registrations != null && registrations.size() == 1, "Expected exactly one nested jar registration");
         JsonObject entry = registrations.get(0).getAsJsonObject();
@@ -135,10 +138,15 @@ final class MixinExtrasContract {
             JsonObject identifier = entry.getAsJsonObject("identifier");
             JsonObject pin = entry.getAsJsonObject("version");
             require(identifier != null && group.equals(string(identifier, "group")) && artifact.equals(string(identifier, "artifact")), "Incorrect nested jar coordinates");
-            require(pin != null && version.equals(string(pin, "artifactVersion"))
-                    && Set.of("[" + version + "]", "[" + version + ",)").contains(string(pin, "range")), "Incorrect nested jar version registration");
+            require(pin != null && version.equals(string(pin, "artifactVersion")), "Incorrect nested jar artifact version");
+            String range = string(pin, "range");
+            require(requiredRange == null
+                    ? Set.of("[" + version + "]", minimumRange(version)).contains(range)
+                    : requiredRange.equals(range), "Incorrect nested jar version range");
         }
     }
+
+    private static String minimumRange(String version) { return "[" + version + ",)"; }
 
     static Map<String, byte[]> unzip(byte[] bytes) throws IOException {
         Map<String, byte[]> entries = new HashMap<>();

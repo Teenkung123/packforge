@@ -4,13 +4,15 @@ plugins {
 }
 apply from: rootProject.file('gradle/node.gradle')
 def target = packforgeTarget
-def loader = packforgePlatform
-def extras = packforgeMixinExtras
-def mixinExtras = extras.version
+def platformConfig = packforgePlatform
+def mixinExtrasPolicy = packforgeMixinExtras
+def mixinExtrasVersion = mixinExtrasPolicy.version
 neoForge {
-	version = packforgeRuntimeVersion('packforge_neoforge_version_override', loader.version)
+	version = packforgeRuntimeVersion('packforge_neoforge_version_override', platformConfig.version)
 	// Plain adapter tests need the same patched Minecraft API as production compilation.
-	if (target.apiAdapter == 'mc26') addModdingDependenciesTo(sourceSets.test)
+	if (target.apiAdapter == 'mc26') {
+		addModdingDependenciesTo(sourceSets.test)
+	}
 	validateAccessTransformers = false
 	runs {
 		client {
@@ -28,11 +30,20 @@ neoForge {
 	}
 }
 dependencies {
-	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtras}"))
-	if (extras.provider == 'bundled') {
-		jarJar("io.github.llamalad7:mixinextras-neoforge:${mixinExtras}:${extras.classifier}") {
-			version { strictly "[${mixinExtras}]"; prefer mixinExtras }
+	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtrasVersion}"))
+	if (mixinExtrasPolicy.provider == 'bundled') {
+		jarJar("io.github.llamalad7:mixinextras-neoforge:${mixinExtrasVersion}:${mixinExtrasPolicy.classifier}") {
+			version {
+				strictly "[${mixinExtrasVersion}]"
+				prefer mixinExtrasVersion
+			}
 		}
 	}
 }
 ext.packforgeArtifact = tasks.named('jar').flatMap { it.archiveFile }
+
+// Local benchmark tooling is optional and is not part of a clean checkout.
+def benchmarkObserver = rootProject.file('gradle/benchmark-observer.gradle')
+if (benchmarkObserver.isFile()) {
+	apply from: benchmarkObserver
+}

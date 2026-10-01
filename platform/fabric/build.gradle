@@ -4,19 +4,24 @@ plugins {
 	id 'maven-publish'
 }
 
-def targetData = rootProject.packforgeRegistry.targets.find { it.key == project.name }
-apply plugin: targetData.platforms.fabric.mappingMode == 'named' ? 'fabric-loom' : 'net.fabricmc.fabric-loom'
+def targetDefinition = rootProject.packforgeRegistry.targets.find { it.key == project.name }
+def loomPluginId = targetDefinition.platforms.fabric.mappingMode == 'named'
+	? 'fabric-loom'
+	: 'net.fabricmc.fabric-loom'
+apply plugin: loomPluginId
 loom.splitEnvironmentSourceSets()
 apply from: rootProject.file('gradle/node.gradle')
 
 def target = packforgeTarget
-def loader = packforgePlatform
+def platformConfig = packforgePlatform
 def registry = rootProject.packforgeRegistry
-def extras = packforgeMixinExtras
-def fabricMixinVersion = loader.fabricMixinVersion ?: registry.fabricMixinVersion
-def fabricApiVersion = packforgeRuntimeVersion('packforge_fabric_api_version_override', loader.fabricApiVersion)
-def accessWidener = rootProject.file(loader.accessWidener)
-repositories { maven { url = 'https://api.modrinth.com/maven' } }
+def mixinExtrasPolicy = packforgeMixinExtras
+def fabricMixinVersion = platformConfig.fabricMixinVersion ?: registry.fabricMixinVersion
+def fabricApiVersion = packforgeRuntimeVersion('packforge_fabric_api_version_override', platformConfig.fabricApiVersion)
+def accessWidener = rootProject.file(platformConfig.accessWidener)
+repositories {
+	maven { url = 'https://api.modrinth.com/maven' }
+}
 loom {
 	accessWidenerPath = accessWidener
 	mods {
@@ -29,42 +34,58 @@ loom {
 }
 dependencies {
 	minecraft "com.mojang:minecraft:${packforgeRuntimeVersion('packforge_minecraft_version_override', target.minecraftVersion)}"
-	if (loader.mappingMode == 'named') {
+	if (platformConfig.mappingMode == 'named') {
 		mappings loom.officialMojangMappings()
-		modImplementation "net.fabricmc:fabric-loader:${loader.loaderVersion}"
+		modImplementation "net.fabricmc:fabric-loader:${platformConfig.loaderVersion}"
 		compileOnly "net.fabricmc:sponge-mixin:${fabricMixinVersion}"
-		if (loader.modMenuEntrypoint) modCompileOnly "maven.modrinth:modmenu:${loader.modMenuVersion}"
+		if (platformConfig.modMenuEntrypoint) {
+			modCompileOnly "maven.modrinth:modmenu:${platformConfig.modMenuVersion}"
+		}
 	} else {
-		implementation "net.fabricmc:fabric-loader:${loader.loaderVersion}"
-		['asm', 'asm-analysis', 'asm-commons', 'asm-tree', 'asm-util'].each {
-			runtimeOnly "org.ow2.asm:${it}:${registry.fabricAsmVersion}"
+		implementation "net.fabricmc:fabric-loader:${platformConfig.loaderVersion}"
+		['asm', 'asm-analysis', 'asm-commons', 'asm-tree', 'asm-util'].each { asmModule ->
+			runtimeOnly "org.ow2.asm:${asmModule}:${registry.fabricAsmVersion}"
 		}
 		runtimeOnly "net.fabricmc:sponge-mixin:${fabricMixinVersion}"
-		if (loader.modMenuEntrypoint) {
-			compileOnly "maven.modrinth:modmenu:${loader.modMenuVersion}"
+		if (platformConfig.modMenuEntrypoint) {
+			compileOnly "maven.modrinth:modmenu:${platformConfig.modMenuVersion}"
 			add('localRuntime', "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}")
-			add('localRuntime', "maven.modrinth:modmenu:${loader.modMenuVersion}")
+			add('localRuntime', "maven.modrinth:modmenu:${platformConfig.modMenuVersion}")
 		}
 	}
-	if (fabricApiVersion) compileOnly "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
-	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${extras.version}"))
-	if (extras.provider == 'bundled') {
-		include "io.github.llamalad7:mixinextras-fabric:${extras.version}:${extras.classifier}"
+	if (fabricApiVersion) {
+		compileOnly "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
+	}
+	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-fabric:${mixinExtrasPolicy.version}"))
+	if (mixinExtrasPolicy.provider == 'bundled') {
+		include "io.github.llamalad7:mixinextras-fabric:${mixinExtrasPolicy.version}:${mixinExtrasPolicy.classifier}"
 	}
 }
 tasks.named('jar', Jar) {
-	from(rootProject.file('LICENSE')) { rename { "LICENSE_packforge-fabric" } }
+	from(rootProject.file('LICENSE')) {
+		rename { 'LICENSE_packforge-fabric' }
+	}
 }
-def finalJar = tasks.named(loader.mappingMode == 'named' ? 'remapJar' : 'jar')
-finalJar.configure { archiveFileName = packforgeArtifactName }
-ext.packforgeArtifact = finalJar.flatMap { it.archiveFile }
-tasks.named('assemble') { dependsOn finalJar }
+def releaseJar = tasks.named(platformConfig.mappingMode == 'named' ? 'remapJar' : 'jar')
+releaseJar.configure {
+	archiveFileName = packforgeArtifactName
+}
+ext.packforgeArtifact = releaseJar.flatMap { it.archiveFile }
+tasks.named('assemble') {
+	dependsOn releaseJar
+}
 if (target.key == rootProject.packforgeSelectedTarget) {
 	publishing.publications {
 		mavenJava(MavenPublication) {
 			artifactId = 'packforge-fabric'
 			// Keep selected-target Maven coordinates without a dependency on :common.
-			artifact finalJar
+			artifact releaseJar
 		}
 	}
+}
+
+// Local benchmark tooling is optional and is not part of a clean checkout.
+def benchmarkObserver = rootProject.file('gradle/benchmark-observer.gradle')
+if (benchmarkObserver.isFile()) {
+	apply from: benchmarkObserver
 }

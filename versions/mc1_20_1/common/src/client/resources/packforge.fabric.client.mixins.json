@@ -13,6 +13,7 @@
 		"model.ModelManagerMixin",
 		"options.OptionsMixin",
 		"ui.LoadingOverlayMixin",
+		"observe.LoadingOverlayTraceMixin",
 		"ui.MinecraftReloadFeedbackMixin"
 	],
 	"injectors": {

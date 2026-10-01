@@ -47,3 +47,7 @@ replay_*.log
 # generated Python tooling caches
 __pycache__/
 *.py[cod]
+/fabric/
+/forge/
+/neoforge/
+/minecraft/

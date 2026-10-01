@@ -25,7 +25,8 @@
 		"startup.GuiStartupMixin",
 		"startup.MainStartupMixin",
 		"startup.MinecraftStartupMixin",
-		"ui.LoadingOverlayMixin"
+		"ui.LoadingOverlayMixin",
+		"observe.LoadingOverlayTraceMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

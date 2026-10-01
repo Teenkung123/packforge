@@ -1,16 +1,19 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
 plugins {
 	id 'java'
 	alias(libs.plugins.moddev.legacy)
 }
 apply from: rootProject.file('gradle/node.gradle')
 def target = packforgeTarget
-def loader = packforgePlatform
-def extras = packforgeMixinExtras
-def mixinExtras = extras.version
+def platformConfig = packforgePlatform
+def mixinExtrasPolicy = packforgeMixinExtras
+def mixinExtrasVersion = mixinExtrasPolicy.version
 def refmap = 'packforge.refmap.json'
 legacyForge {
 	enable {
-		forgeVersion = packforgeRuntimeVersion('packforge_forge_version_override', loader.version)
+		forgeVersion = packforgeRuntimeVersion('packforge_forge_version_override', platformConfig.version)
 		disableRecompilation = true
 	}
 	runs {
@@ -28,11 +31,14 @@ legacyForge {
 	}
 }
 dependencies {
-	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtras}"))
+	compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinExtrasVersion}"))
 	annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
-	runtimeOnly "io.github.llamalad7:mixinextras-forge:${mixinExtras}"
-	jarJar("io.github.llamalad7:mixinextras-forge:${mixinExtras}:${extras.classifier}") {
-		version { strictly "[${mixinExtras}]"; prefer mixinExtras }
+	runtimeOnly "io.github.llamalad7:mixinextras-forge:${mixinExtrasVersion}"
+	jarJar("io.github.llamalad7:mixinextras-forge:${mixinExtrasVersion}:${mixinExtrasPolicy.classifier}") {
+		version {
+			strictly "[${mixinExtrasVersion},)"
+			prefer mixinExtrasVersion
+		}
 	}
 }
 mixin {
@@ -44,15 +50,23 @@ tasks.named('processResources') {
 	inputs.property('refmap', refmap)
 	doLast {
 		[target.mixinConfigs.main, target.mixinConfigs.client].each { name ->
-			def file = new File(destinationDir, name)
-			def json = new groovy.json.JsonSlurper().parse(file)
-			json.refmap = refmap
-			file.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)) + '\n', 'UTF-8')
+			def mixinFile = new File(destinationDir, name)
+			def mixinMetadata = new JsonSlurper().parse(mixinFile)
+			mixinMetadata.refmap = refmap
+			mixinFile.setText(JsonOutput.prettyPrint(JsonOutput.toJson(mixinMetadata)) + '\n', 'UTF-8')
 		}
 	}
 }
 tasks.named('jar', Jar) {
 	manifest.attributes(['MixinConfigs': "${target.mixinConfigs.main},${target.mixinConfigs.client}"])
 }
-tasks.named('reobfJar') { archiveFileName = packforgeArtifactName }
-ext.packforgeArtifact = tasks.named('reobfJar').flatMap { it.archiveFile }
+def releaseJar = tasks.named('reobfJar') {
+	archiveFileName = packforgeArtifactName
+}
+ext.packforgeArtifact = releaseJar.flatMap { it.archiveFile }
+
+// Local benchmark tooling is optional and is not part of a clean checkout.
+def benchmarkObserver = rootProject.file('gradle/benchmark-observer.gradle')
+if (benchmarkObserver.isFile()) {
+	apply from: benchmarkObserver
+}

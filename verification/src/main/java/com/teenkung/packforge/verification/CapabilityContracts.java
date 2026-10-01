@@ -34,7 +34,7 @@ final class CapabilityContracts {
 
     private static Map<String, Contract> contracts() {
         Map<String, Contract> result = new LinkedHashMap<>();
-        add(result, "RESOURCE_PACK_INDEX", "loader/PackIndex loader/PackIndexCache", "", "loader.FilePackResourcesMixin", "", "");
+        add(result, "RESOURCE_PACK_INDEX", "loader/PackIndex loader/PackIndexCache loader/ReloadDirectoryIndex", "", "loader.FilePackResourcesMixin loader.PathPackResourcesMixin", "", "");
         add(result, "RESOURCE_READ_REUSE", "loader/ReloadReadCache loader/ZipResourceReadReuse concurrent/PreparationBudget", "", "loader.FilePackResourcesMixin loader.ZipIoSupplierReadReuseMixin", "", "");
         add(result, "ZIP_READ_POOL", "loader/ZipFilePools loader/ZipReadPool", "", "loader.FilePackResourcesMixin", "", "");
         add(result, "LOADER_TIMINGS", "loader/LoaderTimings", "", "observe.ReloadableResourceManagerMixin", "", "");

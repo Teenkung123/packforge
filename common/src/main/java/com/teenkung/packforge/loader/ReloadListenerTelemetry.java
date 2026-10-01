@@ -17,7 +17,7 @@ public final class ReloadListenerTelemetry {
 		ReloadExecutionContext context = ReloadExecutionContext.current();
 		return context == null
 			? command
-			: ReloadExecutionContext.bindRunnable(context, prepare(context, canonicalName(listenerName), command));
+			: ReloadExecutionContext.bindPreparationRunnable(context, prepare(context, canonicalName(listenerName), command));
 	}
 
 	public static Runnable apply(String listenerName, Runnable command) {
@@ -91,7 +91,7 @@ public final class ReloadListenerTelemetry {
 		boolean detailed = context.features().taskExecutorWrappingEnabled() || context.features().loadingStatusOverlayEnabled();
 		return command -> {
 			Runnable task = detailed ? prepare(context, canonical, command) : command;
-			original.execute(ReloadExecutionContext.bindRunnable(context, task));
+			original.execute(ReloadExecutionContext.bindPreparationRunnable(context, task));
 		};
 	}
 

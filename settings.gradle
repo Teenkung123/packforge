@@ -1,3 +1,4 @@
+import groovy.json.JsonSlurper
 import org.gradle.util.GradleVersion
 
 pluginManagement {
@@ -19,7 +20,7 @@ plugins {
 	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
-def registry = new groovy.json.JsonSlurper().parse(file('gradle/minecraft-targets.json'))
+def registry = new JsonSlurper().parse(file('gradle/minecraft-targets.json'))
 if (registry.schemaVersion != 1 || !registry.targets ||
 	registry.targets*.key.toSet().size() != registry.targets.size()) {
 	throw new GradleException('Invalid PackForge target registry.')
@@ -29,12 +30,15 @@ gradle.ext.packforgeRegistry = registry
 stonecutter {
 	kotlinController = false
 	centralScript = 'gradle/node.gradle'
+	// Each loader branch uses the shared templates and its own platform build script.
 	create(rootProject) {
 		['fabric', 'forge', 'neoforge'].each { loader ->
 			branch(loader) {
 				registry.targets.findAll { it.platforms[loader] != null }.each { target ->
-					def script = loader == 'forge' && target.minecraftVersion == '1.20.1' ? 'legacy.gradle' : 'build.gradle'
-					version(target.key, target.minecraftVersion).buildscript("../platform/${loader}/${script}")
+					def usesLegacyForge = loader == 'forge' && target.minecraftVersion == '1.20.1'
+					def platformScript = usesLegacyForge ? 'legacy.gradle' : 'build.gradle'
+					version(target.key, target.minecraftVersion)
+						.buildscript("../platform/${loader}/${platformScript}")
 				}
 			}
 		}

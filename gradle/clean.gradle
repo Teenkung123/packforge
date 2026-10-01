@@ -1,0 +1,70 @@
+// Keep cleanup independent of loader plugins so :clean works with configuration on demand.
+def repositoryRoot = rootDir
+def repositoryPath = repositoryRoot.toPath().toRealPath()
+def mainBuildDirectory = layout.buildDirectory
+def loaderNames = ['fabric', 'forge', 'neoforge']
+def moduleProjects = ['common', 'verification'].collect { project(":${it}") }
+def moduleBuildDirectories = moduleProjects.collect { it.layout.buildDirectory }
+
+def generatedDirectories = providers.provider {
+	def directories = [mainBuildDirectory.get().asFile, new File(repositoryRoot, 'out')]
+	moduleBuildDirectories.each { buildDirectory ->
+		directories.add(buildDirectory.get().asFile)
+	}
+	['common', 'verification'].each { module ->
+		directories.add(new File(repositoryRoot, "${module}/out"))
+	}
+	loaderNames.each { loader ->
+		// Older layouts stored outputs beside loader sources or in Stonecutter branches.
+		[
+			"${loader}/build",
+			"${loader}/out",
+			"platform/${loader}/build",
+			"platform/${loader}/out"
+		].each { relativePath ->
+			directories.add(new File(repositoryRoot, relativePath))
+		}
+		def legacyVersions = new File(repositoryRoot, "${loader}/versions")
+		def versionDirectories = legacyVersions.listFiles()?.findAll { it.isDirectory() } ?: []
+		versionDirectories.each { versionDirectory ->
+			directories.add(new File(versionDirectory, 'build'))
+			directories.add(new File(versionDirectory, 'out'))
+		}
+	}
+
+	// Resolve existing links before deletion so outputs cannot escape the repository.
+	directories.each { directory ->
+		def resolvedPath = directory.exists()
+			? directory.toPath().toRealPath()
+			: directory.toPath().toAbsolutePath().normalize()
+		if (resolvedPath == repositoryPath || !resolvedPath.startsWith(repositoryPath)) {
+			throw new GradleException("Refusing to clean a directory outside the project: ${directory}")
+		}
+	}
+	directories
+}
+
+def validateCleanupPaths = tasks.register('validateCleanupPaths') {
+	description = 'Checks that generated output directories stay inside the project.'
+	doLast {
+		generatedDirectories.get()
+	}
+}
+
+// Validate before the module clean tasks run, including when they are called directly.
+moduleProjects.each { module ->
+	module.tasks.withType(Delete).configureEach {
+		if (name == 'clean') {
+			dependsOn validateCleanupPaths
+		}
+	}
+}
+
+tasks.register('clean', Delete) {
+	group = 'build'
+	description = 'Deletes build and IDE outputs, including older loader build directories.'
+	dependsOn validateCleanupPaths
+	dependsOn ':common:clean', ':verification:clean'
+	followSymlinks = false
+	delete generatedDirectories
+}

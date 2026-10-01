@@ -1,0 +1,108 @@
+import groovy.json.JsonOutput
+
+// Metadata is generated from the same registry used to select source files and dependencies.
+def target = packforgeTarget
+def platformConfig = packforgePlatform
+def loaderId = packforgeLoader
+
+def resourceProperties = [
+	version: version.toString(),
+	minecraft_version_range: platformConfig.minecraftVersionRange,
+	forge_version_range: platformConfig.versionRange,
+	neoforge_version_range: platformConfig.versionRange,
+	main_mixin_config: target.mixinConfigs.main,
+	client_mixin_config: target.mixinConfigs.client,
+	mixin_compatibility: target.mixinCompatibility
+].findAll { it.value != null }
+
+def packMetadata = [description: 'PackForge resources']
+if (target.packMetadata.schema == 'single') {
+	packMetadata.pack_format = target.packMetadata.packFormat
+} else {
+	packMetadata.min_format = target.packMetadata.minFormat
+	packMetadata.max_format = target.packMetadata.maxFormat
+}
+
+def capabilityProperties = [
+	"target=${target.key}",
+	"minecraft=${target.artifactMinecraft}",
+	"maturity=${platformConfig.maturity}",
+	"beta=${platformConfig.maturity == 'beta'}",
+	"capabilities=${target.capabilities.join(',')}"
+].join('\n') + '\n'
+
+def generatedResources = [
+	'pack.mcmeta': JsonOutput.prettyPrint(JsonOutput.toJson([pack: packMetadata])) + '\n',
+	'packforge-capabilities.properties': capabilityProperties
+]
+
+if (loaderId == 'fabric') {
+	def entrypoints = [
+		main: ['com.teenkung.packforge.fabric.PackForgeFabric'],
+		client: ['com.teenkung.packforge.fabric.PackForgeFabricClient']
+	]
+	if (platformConfig.modMenuEntrypoint) {
+		entrypoints.modmenu = ['com.teenkung.packforge.client.config.PackForgeModMenuApi']
+	}
+
+	def fabricMetadata = [
+		schemaVersion: 1,
+		id: 'packforge',
+		version: version.toString(),
+		name: 'PackForge',
+		description: 'Faster pack reloads and atlas overflow recovery for large resource packs.',
+		authors: ['Teenkung123'],
+		contact: [
+			homepage: 'https://github.com/Teenkung123/packforge',
+			sources: 'https://github.com/Teenkung123/packforge'
+		],
+		license: 'MIT',
+		icon: 'assets/packforge/icon.png',
+		environment: 'client',
+		entrypoints: entrypoints,
+		mixins: [
+			target.mixinConfigs.main,
+			[config: target.mixinConfigs.client, environment: 'client']
+		],
+		accessWidener: 'packforge.accesswidener',
+		depends: [
+			fabricloader: platformConfig.loaderDependency,
+			minecraft: platformConfig.minecraftDependency,
+			java: ">=${target.javaVersion}"
+		]
+	]
+	if (platformConfig.modMenuEntrypoint) {
+		fabricMetadata.suggests = [modmenu: '*']
+	}
+	generatedResources['fabric.mod.json'] = JsonOutput.prettyPrint(JsonOutput.toJson(fabricMetadata)) + '\n'
+}
+
+tasks.named('processResources', ProcessResources) {
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	exclude 'pack.mcmeta', 'fabric.mod.json'
+	inputs.properties(resourceProperties)
+	inputs.property('generatedMetadata', generatedResources)
+	filesMatching([
+		'META-INF/mods.toml',
+		'META-INF/neoforge.mods.toml',
+		target.mixinConfigs.main,
+		target.mixinConfigs.client
+	]) {
+		expand resourceProperties
+	}
+	doLast {
+		generatedResources.each { relativePath, content ->
+			new File(destinationDir, relativePath).setText(content, 'UTF-8')
+		}
+	}
+}
+
+if (loaderId == 'fabric') {
+	tasks.named('processClientResources', ProcessResources) {
+		duplicatesStrategy = DuplicatesStrategy.FAIL
+		inputs.properties(resourceProperties)
+		filesMatching(target.mixinConfigs.client) {
+			expand resourceProperties
+		}
+	}
+}

@@ -20,7 +20,7 @@ class RegistryValidatorTest {
             + "ZipFile;getEntry(Ljava/lang/String;)Ljava/util/zip/ZipEntry;\n"
             + "ZipFile;entries()Ljava/util/Enumeration;\n".repeat(2)
             + "IoSupplier;create(Ljava/util/zip/ZipFile;Ljava/util/zip/ZipEntry;)\n".repeat(2);
-    private static final String RELOAD = "private ReloadInstance packforge$createReload(Executor preparationExecutor, Executor reloadExecutor, CompletableFuture<Unit> initialStage, List<PackResources> packs, Operation<ReloadInstance> original) { original.call(preparationExecutor, reloadExecutor, initialStage, packs); }";
+    private static final String RELOAD = "private ReloadInstance packforge$createReload(Executor preparationExecutor, Executor reloadExecutor, CompletableFuture<Unit> initialStage, List<PackResources> packs, Operation<ReloadInstance> original) { original.call(ReloadExecutionContext.bindPreparationExecutor(context, preparationExecutor), reloadExecutor, initialStage, packs); }";
     private static final String MODERN = "packforge$associateAtlasState(ResourceManager resourceManager, Identifier atlasId, int mipLevel, Executor executor, Set<MetadataSectionType<?>> additional, Operation<CompletableFuture<SpriteLoader.Preparations>> original) { original.call(resourceManager, atlasId, mipLevel, executor, additional); } private static CompletableFuture<List<SpriteContents>> packforge$decodeBounded(";
     private static final String LEGACY = "method = \"loadAndStitch(Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/resources/ResourceLocation;ILjava/util/concurrent/Executor;Ljava/util/Collection;)Ljava/util/concurrent/CompletableFuture;\"";
     private static final String MODERN_PATH = "versions/mc26/common/src/client/java/com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin.java";
@@ -56,6 +56,8 @@ class RegistryValidatorTest {
                 new String[]{"versions/mc26/FilePackResourcesMixin.java", FILE_PACK.replace("ZipFile;entries()", "ZipFile;other()")},
                 new String[]{"versions/mc26/ReloadableResourceManagerMixin.java", RELOAD.replace("original.call", "wrong.call")},
                 new String[]{"versions/mc26/ReloadableResourceManagerMixin.java", RELOAD.replace("Executor preparationExecutor", "Object preparationExecutor")},
+                new String[]{"versions/mc26/ReloadableResourceManagerMixin.java", RELOAD.replace("bindPreparationExecutor(context, preparationExecutor)", "bindPreparationExecutor(context, otherExecutor)")},
+                new String[]{"versions/mc26/ReloadableResourceManagerMixin.java", RELOAD.replace("ReloadExecutionContext.bindPreparationExecutor(context, preparationExecutor)", "preparationExecutor")},
                 new String[]{MODERN_PATH, MODERN.replace("private static", "private")},
                 new String[]{MODERN_PATH, MODERN.replace("original.call", "wrong.call")},
                 new String[]{LEGACY_PATH, LEGACY.replace("Collection", "List")},

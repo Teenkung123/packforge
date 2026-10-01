@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraftforge.jarjar.selection.JarSelector;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.DynamicTest;
@@ -11,7 +12,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -21,9 +24,11 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -325,7 +330,7 @@ class ArtifactVerifierTest {
         assertThrows(IllegalStateException.class, () -> ClassInventory.expected("unknown/fabric"));
     }
 
-    @Test void legacyModDevExactPinIsAccepted() throws Exception {
+    @Test void legacyModDevExactPinIsRejected() throws Exception {
         JsonObject registry = registry();
         JsonObject target = target(registry, "mc1_20_1");
         var files = fixture(registry, target, "forge");
@@ -333,7 +338,7 @@ class ArtifactVerifierTest {
                 .getAsJsonObject("version").addProperty("range", "[" + string(MixinExtrasContract.policy(registry, target, "forge"), "version") + "]"));
         Path jar = directory.resolve("legacy-mdg.jar");
         write(jar, files);
-        assertDoesNotThrow(() -> verifyArtifact(registry, target, "forge", jar));
+        assertThrows(IllegalStateException.class, () -> verifyArtifact(registry, target, "forge", jar));
     }
 
     @TestFactory Stream<DynamicTest> nestedJarRegistrationMutations() {
@@ -467,6 +472,40 @@ class ArtifactVerifierTest {
                 }));
     }
 
+    @TestFactory Stream<DynamicTest> forgeMixinExtrasRequiresOpenMinimumRanges() {
+        return Stream.of("outer singleton", "outer bounded", "inner singleton", "inner bounded")
+                .map(mutation -> DynamicTest.dynamicTest(mutation, () -> {
+                    JsonObject registry = registry();
+                    JsonObject target = target(registry, "mc1_20_1");
+                    Map<String, byte[]> files = fixture(registry, target, "forge");
+                    String outerPath = "META-INF/jarjar/mixinextras-forge-0.5.4-slim.jar";
+                    String range = mutation.endsWith("singleton") ? "[0.5.4]" : "[0.5.4,0.5.4]";
+                    if (mutation.startsWith("outer")) {
+                        edit(files, "META-INF/jarjar/metadata.json", metadata -> metadata.getAsJsonArray("jars").get(0)
+                                .getAsJsonObject().getAsJsonObject("version").addProperty("range", range));
+                    } else {
+                        Map<String, byte[]> bundle = MixinExtrasContract.unzip(files.get(outerPath));
+                        edit(bundle, "META-INF/jarjar/metadata.json", metadata -> metadata.getAsJsonArray("jars").get(0)
+                                .getAsJsonObject().getAsJsonObject("version").addProperty("range", range));
+                        files.put(outerPath, zipBytes(bundle));
+                    }
+                    Path jar = directory.resolve("invalid-forge-range.jar");
+                    write(jar, files);
+                    assertThrows(IllegalStateException.class, () -> verifyArtifact(registry, target, "forge", jar));
+                }));
+    }
+
+    @Test void forgeJarJarSelectorSelectsTheProviderRequiredByParties() {
+        Node packForge = forgeProvider("packforge", "0.5.4", "[0.5.4,)");
+        assertEquals(Set.of("packforge-outer", "packforge-core"), selected(packForge));
+
+        Node parties = forgeProvider("parties", "0.5.5", "[0.5.5,)");
+        assertEquals(Set.of("parties-outer", "parties-core"), selected(packForge, parties));
+
+        Node exactPackForge = forgeProvider("packforge", "0.5.4", "[0.5.4]");
+        assertThrows(IllegalStateException.class, () -> selected(exactPackForge, parties));
+    }
+
     private static byte[] slimFixture(String platform, String version) {
         Map<String, byte[]> core = new LinkedHashMap<>();
         for (String name : List.of("MixinExtrasBootstrap", "injector/wrapoperation/WrapOperation", "injector/wrapoperation/Operation", "sugar/Local", "ap/MixinExtrasAP")) {
@@ -491,6 +530,51 @@ class ArtifactVerifierTest {
         return zipBytes(bundle);
     }
 
+    private static Set<String> selected(Node... roots) {
+        return JarSelector.detectAndSelect(List.of(roots), Node::resource, Node::nested, Node::name,
+                        failures -> new IllegalStateException(failures.toString()))
+                .stream().map(Node::name).collect(Collectors.toSet());
+    }
+
+    private static Node forgeProvider(String provider, String version, String outerRange) {
+        Node core = new Node(provider + "-core");
+        Node outer = new Node(provider + "-outer");
+        outer.children.put("META-INF/jars/MixinExtras-" + version + ".jar", core);
+        outer.metadata("com.github.LlamaLad7", "MixinExtras", version, "[" + version + ",)",
+                "META-INF/jars/MixinExtras-" + version + ".jar");
+        Node root = new Node(provider + "-root");
+        root.children.put("META-INF/jarjar/mixinextras-forge-" + version + "-slim.jar", outer);
+        root.metadata("io.github.llamalad7", "mixinextras-forge", version, outerRange,
+                "META-INF/jarjar/mixinextras-forge-" + version + "-slim.jar");
+        return root;
+    }
+
+    private static final class Node {
+        private final String name;
+        private final Map<String, Node> children = new LinkedHashMap<>();
+        private final Map<String, byte[]> resources = new LinkedHashMap<>();
+
+        private Node(String name) { this.name = name; }
+
+        private String name() { return name; }
+
+        private Optional<InputStream> resource(Path path) {
+            byte[] bytes = resources.get(path.toString().replace('\\', '/'));
+            return bytes == null ? Optional.empty() : Optional.of(new ByteArrayInputStream(bytes));
+        }
+
+        private Optional<Node> nested(Path path) {
+            return Optional.ofNullable(children.get(path.toString().replace('\\', '/')));
+        }
+
+        private void metadata(String group, String artifact, String version, String range, String path) {
+            resources.put("META-INF/jarjar/metadata.json", ("{\"jars\":[{\"identifier\":{\"group\":\"" + group
+                    + "\",\"artifact\":\"" + artifact + "\"},\"version\":{\"artifactVersion\":\"" + version
+                    + "\",\"range\":\"" + range + "\"},\"path\":\"" + path + "\"}]}")
+                    .getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
     private static byte[] zipBytes(Map<String, byte[]> files) {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -510,7 +594,8 @@ class ArtifactVerifierTest {
         String unchecked = BASE + "platform/PackForgeServices.class";
         files.put(unchecked, clazz(unchecked, 61));
         Set<String> main = new LinkedHashSet<>(List.of("loader.FilePackResourcesMixin"));
-        Set<String> client = new LinkedHashSet<>(List.of("config.PackSelectionScreenMixin"));
+        Set<String> client = new LinkedHashSet<>(List.of("config.PackSelectionScreenMixin", "observe.LoadingOverlayTraceMixin"));
+        files.put(BASE + "loader/ReloadTrace.class", clazz(BASE + "loader/ReloadTrace.class", 61));
         for (String path : List.of(BASE + "PackForgeCore.class", BASE + "client/config/PackForgeConfigScreen.class")) files.put(path, clazz(path, 61));
         if (!string(target, "key").equals("mc1_20_1")) {
             main.add("loader.SharedZipFileAccessMixin");
@@ -537,6 +622,7 @@ class ArtifactVerifierTest {
         put(files, string(configs, "main"), mainConfig.toString());
         put(files, string(configs, "client"), clientConfig.toString());
         files.put(FILE_PACK, operations(major, operationTargets(target, platform), false));
+        files.put(BASE + "mixin/loader/PathPackResourcesMixin.class", operations(major, Map.of(DirectoryHookVerifier.TARGET, 1), false));
         put(files, "main.refmap.json", "{\"mappings\":{\"com/teenkung/packforge/mixin/observe/SimpleReloadInstanceMixin\":{\"<init>\":\"<init>\",\"Lnet/minecraft/server/packs/resources/SimpleReloadInstance$StateFactory;create()V\":\"Lowner;m_1()V\"}}}");
         put(files, "client.refmap.json", "{\"mappings\":{\"com/teenkung/packforge/client/mixin/atlas/SpriteLoaderMixin\":{\"loadAndStitch\":\"Lowner;m_2()V\"}}}");
         put(files, "assets/packforge/lang/en_us.json", "{}");

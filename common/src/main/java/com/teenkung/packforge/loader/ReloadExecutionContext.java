@@ -5,6 +5,7 @@ import com.teenkung.packforge.concurrent.PreparationBudget;
 import com.teenkung.packforge.config.ReloadFeatureSnapshot;
 
 import java.util.Objects;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -14,13 +15,16 @@ public final class ReloadExecutionContext {
 	private static final AtomicReference<ReloadExecutionContext> CURRENT = new AtomicReference<>();
 	private static final AtomicReference<ReloadExecutionContext> LAST_COMPLETED = new AtomicReference<>();
 	private static final ThreadLocal<ReloadExecutionContext> BOUND = new ThreadLocal<>();
+	private static final ThreadLocal<ReloadExecutionContext> PREPARING = new ThreadLocal<>();
 	private static final PreparationBudget PREPARATION_MEMORY = new PreparationBudget();
 
 	private final long reloadId;
 	private final ReloadFeatureSnapshot features;
 	private final ReloadMetrics metrics;
 	private final PreparationBudget.Scope preparationBudget;
+	private final Thread initiatingThread = Thread.currentThread();
 	private ReloadReadCache readCache;
+	private ReloadDirectoryIndex directoryIndex;
 	private boolean preparationRetired;
 	private boolean fontPreparationExpected;
 	private int activeFontPreparations;
@@ -64,7 +68,14 @@ public final class ReloadExecutionContext {
 	 * previous context.</p>
 	 */
 	public static Scope bind(ReloadExecutionContext context) {
-		return new Scope(Objects.requireNonNull(context, "context"), BOUND.get());
+		return new Scope(Objects.requireNonNull(context, "context"), PREPARING.get() == context);
+	}
+
+	/** Only explicitly bound preparation workers may build or borrow a directory index. */
+	static ReloadExecutionContext preparationContext() {
+		ReloadExecutionContext context = PREPARING.get();
+		return context != null && BOUND.get() == context && Thread.currentThread() != context.initiatingThread
+			? context : null;
 	}
 
 	/**
@@ -73,10 +84,28 @@ public final class ReloadExecutionContext {
 	 * cost but do not enable detailed telemetry or task timing.
 	 */
 	public static Runnable bindRunnable(ReloadExecutionContext context, Runnable command) {
+		return bindTask(context, command, false);
+	}
+
+	static Runnable bindPreparationRunnable(ReloadExecutionContext context, Runnable command) {
+		return bindTask(context, command, true);
+	}
+
+	/**
+	 * Bind the executor before vanilla captures it. Older StateFactory lambdas ignore their
+	 * preparation argument and use this outer executor instead of the per-listener wrapper.
+	 */
+	public static Executor bindPreparationExecutor(ReloadExecutionContext context, Executor executor) {
+		Objects.requireNonNull(context, "context");
+		Objects.requireNonNull(executor, "executor");
+		return command -> executor.execute(bindPreparationRunnable(context, command));
+	}
+
+	private static Runnable bindTask(ReloadExecutionContext context, Runnable command, boolean preparation) {
 		Objects.requireNonNull(context, "context");
 		Objects.requireNonNull(command, "command");
 		return () -> {
-			try (Scope ignored = bind(context)) {
+			try (Scope ignored = new Scope(context, preparation)) {
 				command.run();
 			}
 		};
@@ -114,6 +143,7 @@ public final class ReloadExecutionContext {
 		if (current != null) current.retirePreparation();
 		if (completed != null) completed.retirePreparation();
 		BOUND.remove();
+		PREPARING.remove();
 	}
 
 	/** Shared global accounting remains charged until outstanding owners release it. */
@@ -142,13 +172,23 @@ public final class ReloadExecutionContext {
 		return readCache;
 	}
 
+	/** One namespace index for every directory pack using this preparation generation. */
+	public synchronized ReloadDirectoryIndex directoryIndex() {
+		if (preparationRetired || !features.loaderIndexEnabled() || preparationBudget.isRetired()) return null;
+		if (directoryIndex == null) directoryIndex = new ReloadDirectoryIndex(preparationBudget, reloadId);
+		return directoryIndex;
+	}
+
 	private void retirePreparation() {
 		ReloadReadCache retiredCache;
+		ReloadDirectoryIndex retiredDirectoryIndex;
 		synchronized (this) {
 			if (preparationRetired) return;
 			preparationRetired = true;
 			retiredCache = readCache;
 			readCache = null;
+			retiredDirectoryIndex = directoryIndex;
+			directoryIndex = null;
 		}
 		ReloadReadCache.Statistics readStatistics = retiredCache != null && features.loaderTimingsEnabled()
 			? retiredCache.statistics() : null;
@@ -171,6 +211,9 @@ public final class ReloadExecutionContext {
 		if (readStatistics != null) {
 			PackForge.LOGGER.info("PackForge resource read reuse: reload={} statistics={}", reloadId, readStatistics);
 		}
+		if (retiredDirectoryIndex != null && ReloadTrace.isEnabled()) {
+			PackForge.LOGGER.info("PackForge reload trace: id={} directoryIndex={}", reloadId, retiredDirectoryIndex.statistics());
+		}
 	}
 
 	public long reloadId() {
@@ -188,11 +231,15 @@ public final class ReloadExecutionContext {
 	/** Restores the exact task/invocation binding that was active before entry. */
 	public static final class Scope implements AutoCloseable {
 		private final ReloadExecutionContext previous;
+		private final ReloadExecutionContext previousPreparation;
 		private boolean closed;
 
-		private Scope(ReloadExecutionContext context, ReloadExecutionContext previous) {
-			this.previous = previous;
+		private Scope(ReloadExecutionContext context, boolean preparation) {
+			this.previous = BOUND.get();
+			this.previousPreparation = PREPARING.get();
 			BOUND.set(context);
+			if (preparation) PREPARING.set(context);
+			else PREPARING.remove();
 		}
 
 		@Override
@@ -206,6 +253,8 @@ public final class ReloadExecutionContext {
 			} else {
 				BOUND.set(previous);
 			}
+			if (previousPreparation == null) PREPARING.remove();
+			else PREPARING.set(previousPreparation);
 		}
 	}
 }

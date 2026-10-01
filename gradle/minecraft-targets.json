@@ -58,7 +58,7 @@
       ],
       "platforms": {
         "forge": {
-          "maxArtifactBytes": 800000,
+          "maxArtifactBytes": 825000,
           "maturity": "stable",
           "versionSuffix": "",
           "version": "26.1-62.0.0",
@@ -387,7 +387,7 @@
       ],
       "platforms": {
         "fabric": {
-          "maxArtifactBytes": 400000,
+          "maxArtifactBytes": 425000,
           "maturity": "beta",
           "versionSuffix": "-beta.1",
           "loaderVersion": "0.19.2",
