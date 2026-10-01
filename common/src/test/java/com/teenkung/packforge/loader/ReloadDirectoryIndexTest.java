@@ -110,15 +110,19 @@ class ReloadDirectoryIndexTest {
 
     @Test void budgetFailureDiscardsPartialScanAndDoesNotRetry() throws Exception {
         Path root = fixture();
-        PreparationBudget budget = new PreparationBudget(1500);
+        // Allow a partial scan even when the temporary directory has a long absolute path.
+        PreparationBudget budget = new PreparationBudget(2500L + 8L * root.toString().length());
         try (var scope = budget.openScope(); var index = new ReloadDirectoryIndex(scope)) {
             AtomicInteger scans = new AtomicInteger();
             var finder = counting(scans);
-            for (int i = 0; i < 5; i++) assertEquals(vanilla(root), listed(index, root, root, finder));
+            for (int i = 0; i < 2; i++) assertEquals(vanilla(root), listed(index, root, root, finder));
+            long namespaceMemory = budget.used();
+            for (int i = 0; i < 3; i++) assertEquals(vanilla(root), listed(index, root, root, finder));
             assertEquals(6, scans.get(), "one failed whole-namespace scan plus five vanilla calls");
             assertEquals(1, index.statistics().failures());
             assertEquals(0, index.statistics().builds());
-            assertTrue(budget.used() < 1000, "partial paths must release their memory");
+            assertTrue(budget.peak() > namespaceMemory, "the scan must admit paths before exhausting its budget");
+            assertEquals(namespaceMemory, budget.used(), "partial paths must release their memory");
         }
         assertEquals(0, budget.used());
     }
