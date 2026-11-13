@@ -6,14 +6,22 @@ on:
       release_version:
         description: Base PackForge version from gradle.properties
         required: true
-        default: "1.4.1"
+        default: "1.4.2"
       changelog:
-        description: Release notes shown on Modrinth
+        description: Release notes shown on each selected platform
         required: true
         type: string
       publish_confirmation:
         description: Set true only after reviewing the generated release manifest and approving publication
         required: true
+        default: false
+        type: boolean
+      publish_curseforge:
+        description: Also upload the release to CurseForge
+        default: false
+        type: boolean
+      publish_github:
+        description: Also create the latest GitHub release
         default: false
         type: boolean
 
@@ -321,3 +329,85 @@ jobs:
               print(f"packforge-{item['loader']}-{version}-mc{item['minecraft']}.jar")
           PY
           )
+
+  publish_curseforge:
+    name: Publish CurseForge release in Minecraft version order
+    if: ${{ inputs.publish_confirmation && inputs.publish_curseforge }}
+    needs: [release_matrix, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packforge-all-supported
+          path: build/libs
+      - name: Upload older Minecraft builds first
+        working-directory: build/libs
+        env:
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          CHANGELOG: ${{ inputs.changelog }}
+          PUBLISH_MATRIX: ${{ needs.release_matrix.outputs.publish_matrix }}
+        run: |
+          set -euo pipefail
+          : "${CURSEFORGE_TOKEN:?Configure the CURSEFORGE_TOKEN repository secret}"
+          sha256sum -c SHA256SUMS
+          python - <<'PY' > curseforge-uploads.tsv
+          import json
+          import os
+          from pathlib import Path
+
+          loaders = {"fabric": "Fabric", "forge": "Forge", "neoforge": "NeoForge"}
+          for item in json.loads(os.environ["PUBLISH_MATRIX"])["include"]:
+              loader = item["loader"]
+              version = os.environ["RELEASE_VERSION"] + item["version_suffix"]
+              filename = f"packforge-{loader}-{version}-mc{item['minecraft']}.jar"
+              if not Path(filename).is_file():
+                  raise SystemExit(f"Missing CurseForge artifact: {filename}")
+              metadata = {
+                  "changelog": os.environ["CHANGELOG"],
+                  "changelogType": "markdown",
+                  "gameVersionNames": ["Client", loaders[loader], *item["game_versions"]],
+                  "releaseType": item["release_type"],
+              }
+              print(filename, json.dumps(metadata), sep="\t")
+          PY
+          while IFS=$'\t' read -r filename metadata; do
+            printf '%s\n' "$metadata" > curseforge-metadata.json
+            curl --silent --show-error --fail-with-body --max-time 60 \
+              --header "X-Api-Token: $CURSEFORGE_TOKEN" \
+              --form 'metadata=<curseforge-metadata.json;type=application/json' \
+              --form "file=@${filename};type=application/java-archive" \
+              'https://minecraft.curseforge.com/api/projects/1641473/upload-file' \
+              --output curseforge-response.json
+            file_id="$(python -c 'import json; print(json.load(open("curseforge-response.json"))["id"])')"
+            printf 'Published CurseForge file %s: %s\n' "$file_id" "$filename"
+          done < curseforge-uploads.tsv
+
+  publish_github:
+    name: Publish the latest GitHub release
+    if: ${{ inputs.publish_confirmation && inputs.publish_github }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packforge-all-supported
+          path: build/libs
+      - name: Publish verified release JARs and checksums
+        working-directory: build/libs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          CHANGELOG: ${{ inputs.changelog }}
+        run: |
+          set -euo pipefail
+          sha256sum -c SHA256SUMS
+          printf '%s\n' "$CHANGELOG" > release-notes.md
+          gh release create "v$RELEASE_VERSION" packforge-*.jar SHA256SUMS \
+            --target "$GITHUB_SHA" --title "PackForge $RELEASE_VERSION" \
+            --notes-file release-notes.md --latest

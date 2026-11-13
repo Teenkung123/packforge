@@ -58,6 +58,23 @@ class SpriteMipPreparationTest {
     }
 
     @Test
+    void replacementMipTasksCanCompleteWithoutRunningOriginalCommand() {
+        HoldingExecutor executor = new HoldingExecutor();
+        AtomicInteger replacementCalls = new AtomicInteger();
+        CompletableFuture<Void> result = submit(() -> fail("Replacement must not run the vanilla command"), executor,
+            (command, supplied) -> CompletableFuture.allOf(
+                CompletableFuture.runAsync(replacementCalls::incrementAndGet, supplied),
+                CompletableFuture.runAsync(replacementCalls::incrementAndGet, supplied)));
+
+        executor.runOne();
+        assertFalse(result.isDone());
+        executor.runOne();
+        result.join();
+        assertEquals(2, replacementCalls.get());
+        assertEquals(0, context.preparationBudget().used());
+    }
+
+    @Test
     void sourceFailureAfterCommandCompletionRetainsOriginalCause() {
         HoldingExecutor executor = new HoldingExecutor();
         CompletableFuture<Void> source = new CompletableFuture<>();

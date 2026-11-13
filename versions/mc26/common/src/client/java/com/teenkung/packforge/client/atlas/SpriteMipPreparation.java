@@ -166,8 +166,11 @@ public final class SpriteMipPreparation {
             activeWork = work;
         }
         if (failure instanceof CancellationException && activeWork != null) activeWork.future().cancel(false);
-        if (prevented) commandDone.completeExceptionally(failure == null
-            ? new IllegalStateException("Mip executor completed without running its command") : failure);
+        // Another mip hook can replace the vanilla command and report readiness through its own future.
+        if (prevented) {
+            if (failure == null) commandDone.complete(null);
+            else commandDone.completeExceptionally(failure);
+        }
         if (failure == null) sourceDone.complete(null);
         else sourceDone.completeExceptionally(failure);
     }
